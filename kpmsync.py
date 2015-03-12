@@ -20,6 +20,9 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 # ****************************************************************************
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
 try :
     import urllib2
 except ImportError :
@@ -37,45 +40,74 @@ from datetime           import datetime
 from csv                import DictReader
 from xml.etree          import ElementTree
 from rsclib.autosuper   import autosuper
+from roundup_sync       import Attr_RO, Attr_Msg, Syncer, Remote_Attributes
 
-class Problem (autosuper) :
+class Problem (Remote_Attributes) :
 
     def __init__ (self, record) :
         self.record = {}
         for k, v in record.iteritems () :
-            if v is not None :
+            if v is not None and v != str ('') :
                 v = v.decode ('latin1')
-            self.record [k.decode ('latin1')] = v
-        print unicode (self)
+                self.record [k.decode ('latin1')] = v
     # end def __init__
 
-    def __getattr__ (self, name) :
-        try :
-            return self.record [name]
-        except KeyError as exc :
-            raise AttributeError (exc)
-    # end def __getattr__
-
-    def __unicode__ (self) :
-        r = []
-        for k, v in self.record.iteritems () :
-            #if v is None :
-            #    continue
-            r.append ("%(k)s: %(v)s" % locals ())
-        return '\n'.join (r)
-    # end def __unicode__
-    __str__ = __unicode__
-
 # end def Problem
+
+# Numbering is 1-based from manual, we correct this in code rather than
+# trying to get it right in the following table.
+# These are the attributes with duplicate column names in the CSV
+# export. We fix this by adding a ' [Code]' suffix to the first
+# value (which is a key into some table).
+fix_kpm_attr = \
+    ( ( 7, 'Land')
+    , ( 9, 'E-Projekt')
+    , (14, 'Funktionalit\xe4t')
+    , (16, 'Reproduzierbar')
+    , (18, 'Fehlerh\xe4ufigkeit')
+    , (22, 'Ger\xe4tetyp')
+    , (27, 'Ger\xe4tetyp 2')
+    , (32, 'Ger\xe4tetyp 3')
+    , (55, 'L-Status')
+    , (64, 'Verifikation-Status')
+    , (76, 'Modulrelevant')
+    )
+
+def fix_kpm_csv (delimiter, f) :
+    first = f.next ().split (delimiter)
+    for idx, header in fix_kpm_attr :
+        header = header.encode ('latin1')
+        assert first [idx - 1] == first [idx - 2] == header
+        first [idx - 2] = first [idx - 2] + ' [Code]'.encode ('latin1')
+    yield delimiter.join (first)
+    for line in f :
+        yield (line)
+# end def fix_kpm_csv
 
 class Export (autosuper) :
 
     def __init__ (self, f) :
         self.problems = []
-        c = DictReader (f, delimiter = ';')
+        delimiter = str (';')
+        c = DictReader (fix_kpm_csv (delimiter, f), delimiter = delimiter)
         for record in c :
+            if record ['Aktion'] :
+                continue
             self.problems.append (Problem (record))
     # end def __init__
+
+    def sync (self, syncer) :
+        for p in self.problems :
+            syncer.sync (p.Nummer, p)
+    # end def sync
+
+    def __repr__ (self) :
+        r = []
+        for p in self.problems :
+            r.append (str ("PROBLEM"))
+            r.append (repr (p))
+        return str ('\n').join (r)
+    # end def __repr__
 
 # end class Export
 
@@ -91,7 +123,7 @@ class Job (autosuper) :
     states = ('Auftrag angelegt', 'In Arbeit', 'fertiggestellt', 'Fehler')
     types  = ( 'Lieferantenimport'
              , 'Lieferantenexport'
-             , 'Lieferantenexport (stornierte Aufträge)'
+             , 'Lieferantenexport (stornierte Auftr\xe4ge)'
              )
     xmlns  = 'uri:de.volkswagen.kpm.ajax.xmlns'
 
@@ -114,7 +146,6 @@ class Job (autosuper) :
     # end def valid
 
     def parse (self, text) :
-        print "Parsing:", text
         tree = ElementTree.fromstring (text)
         assert tree.tag == self.tag ('ajaxResponse')
         ji = tree [0]
@@ -152,7 +183,8 @@ class Job (autosuper) :
         self.parse (v)
     # end def query
 
-    # FIXME: Is this possible/necessary?
+    # Job deletion not yet supported by application
+    # According to Dr. Dirk Licht (Author "Endbenutzerhandbuch") 2015-03-11
     #def delete (self) :
     #    f = self.kpm.get ('ticket.delete.do', ticketId = self.jobid)
     #    return f.read ()
@@ -163,6 +195,7 @@ class Job (autosuper) :
             return None
         f  = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
         xp = Export (f)
+        return xp
     # end def download
 
     def tag (self, tag) :
@@ -220,10 +253,8 @@ class KPM (autosuper) :
         rq  = urllib2.Request (url, None, self.headers)
         f   = self.opener.open (rq, timeout = self.timeout)
         v   = f.read ()
-        # FIXME:Don't send username/pw with every request; rebuild opener
-        print (self.cookies)
-        #self.opener   = urllib2.build_opener \
-        #    (urllib2.HTTPCookieProcessor (self.cookies))
+        # Doesn NOT work with only the cookie, still need basic auth
+        # So we don't rebuild the opener without BasicAuth.
     # end def login
 
     def get (self, url, ** params) :
@@ -236,10 +267,12 @@ class KPM (autosuper) :
     # end def get
 
     def search (self, **params) :
-        p   = dict (params, columnModel = "V4")
+        p   = dict (params, columnModel = "V4".encode ('latin1'))
         f = self.get ('search.ee.exportJob.do', **p)
         v   = f.read ()
-        self.jobs.append (Job (self, v))
+        j   = Job (self, v)
+        self.jobs.append (j)
+        return j
     # end def search
 
 # end class KPM
@@ -253,15 +286,19 @@ def main () :
         , default = '21 KPM-TEST'
         )
     cmd.add_option \
-        ( "-p", "--password"
+        ( "-j", "--job"
+        , help = "KPM job identifier"
+        )
+    cmd.add_option \
+        ( "-r", "--roundup-url"
+        , help = "Roundup URL for XMLRPC"
+        )
+    cmd.add_option \
+        ( "-P", "--password"
         , help = "KPM login password"
         )
     cmd.add_option \
-        ( "-j", "--job"
-        , help = "KPM job status"
-        )
-    cmd.add_option \
-        ( "-u", "--username"
+        ( "-U", "--username"
         , help = "KPM login user name"
         )
     opt, arg = cmd.parse_args ()
@@ -269,11 +306,17 @@ def main () :
     kpm.login  (username = opt.username, password = opt.password)
     if (opt.job) :
         j = Job (kpm, opt.job)
-        j.query ()
-        print (j)
-        print (repr (j.download ()))
     else :
-        kpm.search (address = opt.address)
+        j = kpm.search (address = opt.address)
+    j.query ()
+    while j.state < 2 :
+        sleep (10)
+        j.query ()
+    xp = j.download ()
+    print (repr (xp))
+    if opt.roundup_url :
+        syncer = Syncer (opt.roundup_url, 'KPM', [], verbose = True)
+        xp.sync (syncer)
 # end def main
 
 if __name__ == '__main__' :
