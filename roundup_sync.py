@@ -20,9 +20,14 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 # ****************************************************************************
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+
 import xmlrpclib
 import json
 from   rsclib.autosuper import autosuper
+from   rsclib.pycompat  import ustr
 
 class Remote_Attributes (autosuper) :
 
@@ -65,7 +70,7 @@ class Remote_Attributes (autosuper) :
 
 class Sync_Attribute (autosuper) :
 
-    def __init__ (self, roundup_name, remote_name) :
+    def __init__ (self, roundup_name, remote_name = None) :
         self.name        = roundup_name
         self.remote_name = remote_name
     # end def __init__
@@ -90,6 +95,26 @@ class Attr_RO (Sync_Attribute) :
 
 # end class Attr_RO
 
+class Attr_Default (Sync_Attribute) :
+    """ A default, only set if the current value is not set.
+        Very useful for required attributes on creation.
+        This is set from the remote attribute and in case this is also
+        not set, a default can be specified in the constructor.
+    """
+
+    def __init__ (self, roundup_name, remote_name = None, default = None) :
+        self.default = default
+        self.__super.__init__ (roundup_name, remote_name)
+    # end def __init__
+
+    def sync (self, syncer, id, remote_attrs) :
+        v = remote_attrs.get (self.remote_name, self.default)
+        if syncer.get (self, id) is None :
+            syncer.set (self, id, v)
+    # end def sync
+
+# end class Attr_Default
+
 class Attr_Msg (Sync_Attribute) :
     """ A Sync attribute that sync the contents of a field of the remote
         tracker to a message in roundup. The message in roundup gets a
@@ -110,21 +135,21 @@ class Attr_Msg (Sync_Attribute) :
         if not v :
             return
         msgs = syncer.get (self, id)
-        for m in sorted (-int (x) for x in msgs) :
-            msg = syncer.getitem (self, 'msg', m)
+        for m in sorted (msgs, key = lambda x: -int (x)) :
+            msg = syncer.getitem ('msg', m)
             cnt = msg ['content']
             if len (cnt) < self.hlen + 1 :
                 continue
             if cnt.startswith (self.headline) and cnt [self.hlen] == '\n' :
-                if cnt [hlen + 1:] == v :
+                if cnt [self.hlen + 1:] == v :
                     return
-        id = syncer.create ('msg', content = v)
-        msgs.append (id)
+        content = '\n'.join ((self.headline, v))
+        newmsg  = syncer.create ('msg', content = content)
+        msgs.append (newmsg)
         syncer.set (self, id, msgs)
     # end def sync
 
 # end class Attr_Msg
-
 
 class Syncer (autosuper) :
     """ Synchronisation Framework
@@ -137,31 +162,44 @@ class Syncer (autosuper) :
     def __init__ (self, url, remote_name, attributes, verbose = 0) :
         self.srv = xmlrpclib.ServerProxy (url, allow_none = True)
         self.attributes  = attributes
+        self.oldvalues   = {}
         self.newvalues   = {}
         self.newcount    = 0
         self.remote_name = remote_name
-        self.schema      = dict (self.srv.schema () ['issue'])
+        schema = self.srv.schema ()
+        self.schema      = dict ((k, dict (schema [k])) for k in schema)
         self.tracker     = self.srv.lookup ('ext_tracker', remote_name)
         self.verbose     = verbose
     # end def __init__
 
     def create (self, cls, ** kw) :
-        return self.srv.create (cls, * ("%s=%s" % (k, repr (v)) for k, v in kw))
+        return self.srv.create \
+            (cls, * (self.format (cls, k, v) for k, v in kw.items ()))
     # end def create
 
+    def format (self, cls, key, value) :
+        t = self.schema [cls][key]
+        if t.startswith ('<roundup.hyperdb.Multilink') :
+            return '%s=%s' % (key, ','.join (value))
+        else :
+            return '%s=%s' % (key, value)
+    # end def format
+
     def get (self, attr, id) :
-        if attr.name not in self.newvalues [id] :
+        if attr.name in self.newvalues [id] :
+            return self.newvalues [id][attr.name]
+        if attr.name not in self.oldvalues [id] :
             if int (id) > 0 :
-                self.newvalues [id][attr.name] = self.srv.display \
+                self.oldvalues [id][attr.name] = self.srv.display \
                     ('issue%s' % id, attr.name) [attr.name]
             else :
-                t = self.schema [attr.name]
-                if t == '<roundup.hyperdb.Multilink>' :
+                t = self.schema ['issue'][attr.name]
+                if t.startswith ('<roundup.hyperdb.Multilink') :
                     v = []
                 else :
                     v = None
-                self.newvalues [id][attr.name] = v
-        return self.newvalues [id][attr.name]
+                self.oldvalues [id][attr.name] = v
+        return self.oldvalues [id][attr.name]
     # end def get
 
     def getitem (self, cls, id) :
@@ -185,43 +223,53 @@ class Syncer (autosuper) :
         """
         issues = self.srv.filter \
             ( 'issue'
-            , []
+            , None
             , dict (ext_id = remote_id, ext_tracker = self.tracker)
             )
         id = None
         do_sync = False
         for i in issues :
-            di = self.srv.display ('issue%s' % i, 'ext_id', 'ext_tracker')
-            if di [ext_id] != remote_id :
+            di = self.srv.display ('issue%s' % i, 'ext_id', 'ext_attributes')
+            if di ['ext_id'] != remote_id :
                 continue
-            if di.ext_attributes != remote_attrs.as_json () :
+            if di ['ext_attributes'] :
+                m = self.getitem ('msg', di ['ext_attributes'])
+                if m ['content'] != remote_attrs.as_json () :
+                    do_sync = True
+            else :
                 do_sync = True
             id = int (i)
-            self.newvalues [id] = di
+            self.newvalues [id] = {}
+            self.oldvalues [id] = di
             break
         else :
             self.newcount += 1
             id = -self.newcount
-            self.newvalues [id] = {}
+            self.oldvalues [id] = {}
             do_sync = True
-        if not do_sync :
-            return
+            self.newvalues [id] = {}
+            self.newvalues [id]['ext_tracker'] = self.tracker
         for a in self.attributes :
             a.sync (self, id, remote_attrs)
         if 'ext_id' not in self.newvalues [id] :
-            self.newvalues [id]['ext_id'] = remote_id
-        self.newvalues [id]['ext_attributes'] = remote_attrs.as_json ()
+            if self.oldvalues [id].get ('ext_id') != remote_id :
+                self.newvalues [id]['ext_id'] = remote_id
+        if 'ext_attributes' not in self.newvalues [id] and do_sync :
+            newmsg = self.create ('msg', content = remote_attrs.as_json ())
+            self.newvalues [id]['ext_attributes'] = newmsg
         if id < 0 :
             if self.verbose :
                 print ("create issue: %s" % self.newvalues [id])
-            #self.create ('issue', self.newvalues [id])
-        else :
+            self.create ('issue', ** self.newvalues [id])
+        elif self.newvalues [id] :
             if self.verbose :
-                print ("set issue: %s" % self.newvalues [id])
-            #self.srv.set \
-            #    ( 'issue%s' % id
-            #    , * ('%s=%s' % (k, repr (v)) for k, v in self.newvalues [id])
-            #    )
+                print ("set issue %s: %s" % (id, self.newvalues [id]))
+            self.srv.set \
+                ( 'issue%s' % id
+                , * ( self.format ('issue', k, v)
+                      for k, v in self.newvalues [id].items ()
+                    )
+                )
     # end def sync
 
 # end class Syncer

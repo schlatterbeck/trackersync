@@ -40,9 +40,48 @@ from datetime           import datetime
 from csv                import DictReader
 from xml.etree          import ElementTree
 from rsclib.autosuper   import autosuper
-from roundup_sync       import Attr_RO, Attr_Msg, Syncer, Remote_Attributes
 
-class Problem (Remote_Attributes) :
+import roundup_sync
+
+kpm_attributes = \
+    ( roundup_sync.Attr_RO
+        ( roundup_name = 'title'
+        , remote_name  = 'Kurztext'
+        )
+    , roundup_sync.Attr_RO
+        ( roundup_name = 'ext_status'
+        , remote_name  = 'Status'
+        )
+    , roundup_sync.Attr_Default
+        ( roundup_name = 'release'
+        , remote_name  = 'Softwarestand (verurs.)'
+        , default      = '?'
+        )
+    , roundup_sync.Attr_Default
+        ( roundup_name = 'part_of'
+        , remote_name  = None
+        , default      = '73897'
+        )
+    , roundup_sync.Attr_Default
+        ( roundup_name = 'category'
+        , remote_name  = None
+        , default      = '273' # zFAS_Series_SW
+        )
+    , roundup_sync.Attr_Msg
+        ( headline     = 'Analyse:'
+        , remote_name  = 'Analyse'
+        )
+    , roundup_sync.Attr_Msg
+        ( headline     = 'Beschreibung:'
+        , remote_name  = 'Problembeschreibung'
+        )
+    , roundup_sync.Attr_Msg
+        ( headline     = 'Lieferantenaussage:'
+        , remote_name  = 'Lieferantenaussage'
+        )
+    )
+
+class Problem (roundup_sync.Remote_Attributes) :
 
     def __init__ (self, record) :
         self.record = {}
@@ -117,7 +156,7 @@ class Job (autosuper) :
 
     dates  = dict \
         (( ('create', 'createdAt')
-        ,  ('start', 'startedAt')
+        ,  ('start',  'startedAt')
         ,  ('finish', 'finishedAt')
         ))
     states = ('Auftrag angelegt', 'In Arbeit', 'fertiggestellt', 'Fehler')
@@ -253,7 +292,7 @@ class KPM (autosuper) :
         rq  = urllib2.Request (url, None, self.headers)
         f   = self.opener.open (rq, timeout = self.timeout)
         v   = f.read ()
-        # Doesn NOT work with only the cookie, still need basic auth
+        # Does NOT work with only the cookie, still need basic auth
         # So we don't rebuild the opener without BasicAuth.
     # end def login
 
@@ -287,19 +326,25 @@ def main () :
         )
     cmd.add_option \
         ( "-j", "--job"
-        , help = "KPM job identifier"
+        , help    = "KPM job identifier"
         )
     cmd.add_option \
         ( "-r", "--roundup-url"
-        , help = "Roundup URL for XMLRPC"
+        , help    = "Roundup URL for XMLRPC"
         )
     cmd.add_option \
         ( "-P", "--password"
-        , help = "KPM login password"
+        , help    = "KPM login password"
         )
     cmd.add_option \
         ( "-U", "--username"
-        , help = "KPM login user name"
+        , help    = "KPM login user name"
+        )
+    cmd.add_option \
+        ( "-v", "--verbose"
+        , help    = "Verbose reporting"
+        , action  = 'store_true'
+        , default = False
         )
     opt, arg = cmd.parse_args ()
     kpm = KPM  ()
@@ -313,9 +358,10 @@ def main () :
         sleep (10)
         j.query ()
     xp = j.download ()
-    print (repr (xp))
+    #print (repr (xp))
     if opt.roundup_url :
-        syncer = Syncer (opt.roundup_url, 'KPM', [], verbose = True)
+        syncer = roundup_sync.Syncer \
+            (opt.roundup_url, 'KPM', kpm_attributes, verbose = opt.verbose)
         xp.sync (syncer)
 # end def main
 
