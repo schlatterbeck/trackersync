@@ -29,10 +29,22 @@ import json
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import ustr
 
-class Remote_Attributes (autosuper) :
+class Remote_Issue (autosuper) :
+    """ This models a remote issue.
+        The default (if sync_attributes is an empty dict) to synchronize
+        *all* attributes for which a Sync_Attribute (see below) is
+        found. In some cases it is necessary to restrict the
+        synchronized attributes, e.g., if the remote tracker doesn't
+        have full permissions for certain issues (e.g. cancelled issues
+        in KPM) so we only get a subset of the attributes in certain
+        situation (e.g. when the remote issue has been closed).
+        Note that when sync_attributes is non-empty we do *not* create a
+        new issue in the local tracker if the remote issue is not found.
+    """
 
-    def __init__ (self, record) :
-        self.record = record
+    def __init__ (self, record, sync_attributes = {}) :
+        self.record     = record
+        self.attributes = sync_attributes
     # end def __init__
 
     def __getattr__ (self, name) :
@@ -66,7 +78,7 @@ class Remote_Attributes (autosuper) :
         return self.record.get (name, default)
     # end def get
 
-# end class Remote_Attributes
+# end class Remote_Issue
 
 class Sync_Attribute (autosuper) :
 
@@ -75,7 +87,7 @@ class Sync_Attribute (autosuper) :
         self.remote_name = remote_name
     # end def __init__
 
-    def sync (self, syncer, id, remote_attrs) :
+    def sync (self, syncer, id, remote_issue) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def sync
 
@@ -87,8 +99,8 @@ class Attr_RO (Sync_Attribute) :
         roundup's attribute if the value has changed.
     """
 
-    def sync (self, syncer, id, remote_attrs) :
-        v = remote_attrs.get (self.remote_name, None)
+    def sync (self, syncer, id, remote_issue) :
+        v = remote_issue.get (self.remote_name, None)
         if syncer.get (self, id) != v :
             syncer.set (self, id, v)
     # end def sync
@@ -107,8 +119,8 @@ class Attr_Default (Sync_Attribute) :
         self.__super.__init__ (roundup_name, remote_name)
     # end def __init__
 
-    def sync (self, syncer, id, remote_attrs) :
-        v = remote_attrs.get (self.remote_name, self.default)
+    def sync (self, syncer, id, remote_issue) :
+        v = remote_issue.get (self.remote_name, self.default)
         if syncer.get (self, id) is None :
             syncer.set (self, id, v)
     # end def sync
@@ -130,8 +142,8 @@ class Attr_Msg (Sync_Attribute) :
         self.__super.__init__ ('messages', remote_name)
     # end def __init__
 
-    def sync (self, syncer, id, remote_attrs) :
-        v = remote_attrs.get (self.remote_name, None)
+    def sync (self, syncer, id, remote_issue) :
+        v = remote_issue.get (self.remote_name, None)
         if not v :
             return
         msgs = syncer.get (self, id)
@@ -159,7 +171,7 @@ class Syncer (autosuper) :
         the name of the external id attribute in the remote.
     """
 
-    def __init__ (self, url, remote_name, attributes, verbose = 0) :
+    def __init__ (self, url, remote_name, attributes, verbose = 0, debug = 0) :
         self.srv = xmlrpclib.ServerProxy (url, allow_none = True)
         self.attributes  = attributes
         self.oldvalues   = {}
@@ -170,6 +182,7 @@ class Syncer (autosuper) :
         self.schema      = dict ((k, dict (schema [k])) for k in schema)
         self.tracker     = self.srv.lookup ('ext_tracker', remote_name)
         self.verbose     = verbose
+        self.debug       = debug
     # end def __init__
 
     def create (self, cls, ** kw) :
@@ -215,7 +228,7 @@ class Syncer (autosuper) :
         self.newvalues [id][attr.name] = value
     # end def set
 
-    def sync (self, remote_id, remote_attrs) :
+    def sync (self, remote_id, remote_issue) :
         """ We try to find issue with the given remote_id and then call
             the sync framework. If no issue with the given remote_id is
             found, a new issue will be created after all attributes have
@@ -234,7 +247,7 @@ class Syncer (autosuper) :
                 continue
             if di ['ext_attributes'] :
                 m = self.getitem ('msg', di ['ext_attributes'])
-                if m ['content'] != remote_attrs.as_json () :
+                if m ['content'] != remote_issue.as_json () :
                     do_sync = True
             else :
                 do_sync = True
@@ -246,21 +259,26 @@ class Syncer (autosuper) :
             self.newcount += 1
             id = -self.newcount
             self.oldvalues [id] = {}
-            do_sync = True
+            # create new issue only if the remote issue has all required
+            # attributes and doesn't restrict them to a subset:
+            do_sync = not remote_issue.attributes
             self.newvalues [id] = {}
             self.newvalues [id]['ext_tracker'] = self.tracker
+        attr = remote_issue.attributes
         for a in self.attributes :
-            a.sync (self, id, remote_attrs)
+            if not attr or a.remote_name in attr :
+                a.sync (self, id, remote_issue)
         if 'ext_id' not in self.newvalues [id] :
             if self.oldvalues [id].get ('ext_id') != remote_id :
                 self.newvalues [id]['ext_id'] = remote_id
         if 'ext_attributes' not in self.newvalues [id] and do_sync :
-            newmsg = self.create ('msg', content = remote_attrs.as_json ())
+            newmsg = self.create ('msg', content = remote_issue.as_json ())
             self.newvalues [id]['ext_attributes'] = newmsg
         if id < 0 :
-            if self.verbose :
-                print ("create issue: %s" % self.newvalues [id])
-            self.create ('issue', ** self.newvalues [id])
+            if not remote_issue.attributes :
+                if self.verbose :
+                    print ("create issue: %s" % self.newvalues [id])
+                self.create ('issue', ** self.newvalues [id])
         elif self.newvalues [id] :
             if self.verbose :
                 print ("set issue %s: %s" % (id, self.newvalues [id]))

@@ -81,14 +81,19 @@ kpm_attributes = \
         )
     )
 
-class Problem (roundup_sync.Remote_Attributes) :
+class Problem (roundup_sync.Remote_Issue) :
 
-    def __init__ (self, record) :
-        self.record = {}
+    def __init__ (self, record, canceled = False) :
+        self.canceled = canceled
+        rec = {}
         for k, v in record.iteritems () :
             if v is not None and v != str ('') :
                 v = v.decode ('latin1')
-                self.record [k.decode ('latin1')] = v
+                rec [k.decode ('latin1')] = v
+        attributes = {}
+        if self.canceled :
+            attributes ['Status'] = True
+        self.__super.__init__ (rec, attributes)
     # end def __init__
 
 # end def Problem
@@ -125,19 +130,35 @@ def fix_kpm_csv (delimiter, f) :
 
 class Export (autosuper) :
 
-    def __init__ (self, f) :
-        self.problems = []
+    def __init__ (self, f, canceled = False) :
+        self.canceled = canceled
+        self.problems = {}
         delimiter = str (';')
         c = DictReader (fix_kpm_csv (delimiter, f), delimiter = delimiter)
         for record in c :
             if record ['Aktion'] :
                 continue
-            self.problems.append (Problem (record))
+            p = Problem (record, canceled = self.canceled)
+            self.problems [p.Nummer] = p
     # end def __init__
 
+    def add (self, problem) :
+        if problem.Nummer in self.problems :
+            raise ValueError, "Duplicate Problem: %s" % problem.Nummer
+        self.problems [problem.Nummer] = problem
+    # end def add
+
+    def delete (self, problem_id) :
+        del self.problems [problem_id]
+    # end def delete
+
+    def get (self, problem_id, default = None) :
+        return self.problems.get (problem_id, default)
+    # end def get
+
     def sync (self, syncer) :
-        for p in self.problems :
-            syncer.sync (p.Nummer, p)
+        for p_id, p in self.problems.iteritems () :
+            syncer.sync (p_id, p)
     # end def sync
 
     def __repr__ (self) :
@@ -230,10 +251,10 @@ class Job (autosuper) :
     ## end def delete
 
     def download (self) :
-        if self.state != 2 :
+        if self.state != 2 or self.type == 0 :
             return None
         f  = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
-        xp = Export (f)
+        xp = Export (f, canceled = self.type == 2)
         return xp
     # end def download
 
@@ -325,6 +346,12 @@ def main () :
         , default = '21 KPM-TEST'
         )
     cmd.add_option \
+        ( "-D", "--debug"
+        , help    = "Debugging"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_option \
         ( "-j", "--job"
         , help    = "KPM job identifier"
         )
@@ -350,19 +377,45 @@ def main () :
     kpm = KPM  ()
     kpm.login  (username = opt.username, password = opt.password)
     if (opt.job) :
-        j = Job (kpm, opt.job)
+        jobs = [Job (kpm, opt.job)]
     else :
-        j = kpm.search (address = opt.address)
-    j.query ()
-    while j.state < 2 :
-        sleep (10)
-        j.query ()
-    xp = j.download ()
-    #print (repr (xp))
+        # get active and canceled issues
+        jobs = [kpm.search (address = opt.address)]
+        jobs.append (kpm.search (address = opt.address, canceled = 'true'))
+    syncer = None
     if opt.roundup_url :
         syncer = roundup_sync.Syncer \
-            (opt.roundup_url, 'KPM', kpm_attributes, verbose = opt.verbose)
-        xp.sync (syncer)
+            (opt.roundup_url, 'KPM', kpm_attributes
+            , verbose = opt.verbose
+            , debug   = opt.debug
+            )
+    for j in jobs :
+        j.query ()
+    old_xp = None
+    for j in jobs :
+        while j.state < 2 :
+            sleep (10)
+            j.query ()
+        xp = j.download ()
+        # Remove duplicates, seems KPM sometimes returns a problem in
+        # both, the normal list and the cancelled problems. In that case
+        # we don't process the cancelled one (as it contains less info)
+        # Note that the code below also works if we have more than two
+        # jobs.
+        if old_xp :
+            for p in xp.problems.keys () :
+                if old_xp.get (p) :
+                    xp.delete (p)
+                else :
+                    old_xp.add (xp.problems [p])
+        else :
+            old_xp = xp
+        if opt.debug :
+            f = open (j.jobid, 'w')
+            f.write (repr (xp))
+            f.close ()
+        if syncer :
+            xp.sync (syncer)
 # end def main
 
 if __name__ == '__main__' :
