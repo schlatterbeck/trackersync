@@ -81,11 +81,13 @@ kpm_attributes = \
         ( headline     = 'Lieferantenaussage:'
         , remote_name  = 'Lieferantenaussage'
         )
+    , roundup_sync.Sync_Attribute_Files ()
     )
 
 class Problem (roundup_sync.Remote_Issue) :
 
-    def __init__ (self, record, canceled = False) :
+    def __init__ (self, kpm, record, canceled = False) :
+        self.kpm      = kpm
         self.canceled = canceled
         rec = {}
         for k, v in record.iteritems () :
@@ -99,14 +101,23 @@ class Problem (roundup_sync.Remote_Issue) :
     # end def __init__
 
     def document_content (self, docid) :
-        raise NotImplementedError ("Needs to be implemented in child class")
+        kpm = self.kpm
+        url = '/'.join ((kpm.base_url, 'problem.base.dokument.download.do'))
+        par = dict (actionCommand='downloadDokumentAsAttachment', dokTs = docid)
+        url = '?'.join ((url, urlencode (par)))
+        rq  = urllib2.Request (url, None, kpm.headers)
+        f   = kpm.opener.open (rq, timeout = kpm.timeout)
+        return f.read ()
     # end def document_contents
 
     def document_ids (self) :
-        docs = self.Dokumente.split ()
-        args = []
-        for doc in docs :
-            args.append (parse_qs (doc) ['docTs'])
+        docs = self.get ('Dokumente')
+        if not docs :
+            return []
+        ids  = []
+        for doc in docs.split () :
+            ids.extend (parse_qs (doc) ['dokTs'])
+        return [i.decode ('latin1') for i in ids]
     # end def document_ids
 
 # end def Problem
@@ -143,7 +154,7 @@ def fix_kpm_csv (delimiter, f) :
 
 class Export (autosuper) :
 
-    def __init__ (self, f, canceled = False) :
+    def __init__ (self, kpm, f, canceled = False) :
         self.canceled = canceled
         self.problems = {}
         delimiter = str (';')
@@ -151,7 +162,7 @@ class Export (autosuper) :
         for record in c :
             if record ['Aktion'] :
                 continue
-            p = Problem (record, canceled = self.canceled)
+            p = Problem (kpm, record, canceled = self.canceled)
             self.problems [p.Nummer] = p
     # end def __init__
 
@@ -267,7 +278,7 @@ class Job (autosuper) :
         if self.state != 2 or self.type == 0 :
             return None
         f  = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
-        xp = Export (f, canceled = self.type == 2)
+        xp = Export (self.kpm, f, canceled = self.type == 2)
         return xp
     # end def download
 

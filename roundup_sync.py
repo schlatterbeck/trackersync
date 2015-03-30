@@ -27,7 +27,7 @@ from __future__ import absolute_import
 import xmlrpclib
 import json
 from   rsclib.autosuper import autosuper
-from   rsclib.pycompat  import ustr
+from   rsclib.pycompat  import ustr, text_type
 
 class Remote_Issue (autosuper) :
     """ This models a remote issue.
@@ -74,12 +74,20 @@ class Remote_Issue (autosuper) :
         return json.dumps (self.record)
     # end def as_json
 
-    def document_contents (self, docid) :
+    def document_content (self, docid) :
         """ This gets a document id (unique for this issue) and
             retrieves and returns the document content.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
-    # end def document_contents
+    # end def document_content
+
+    def document_type (self, docid) :
+        """ Return the mime type of the given document.
+            Note that if the mime type is unknown, this should return
+            'application/octet-stream'.
+        """
+        return 'application/octet-stream'
+    # end def document_type
 
     def document_ids (self) :
         """ This returns a list of document ids for this issue. Note
@@ -193,17 +201,21 @@ class Sync_Attribute_Files (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         fids  = syncer.get (self, id)
-        files = [syncer.getitem ('file', id, 'name') for id in fids]
-        names = dict.fromkeys (f.name for f in files)
-        for docname in remote_issue.document_ids () :
-            if docname not in names :
+        files = [syncer.getitem ('file', i, 'name') for i in fids]
+        names = dict.fromkeys (f ['name'] for f in files)
+        found = False
+        for docid in remote_issue.document_ids () :
+            if docid not in names :
                 newfile = syncer.create \
                     ( 'file'
-                    , name    = docname
-                    , content = remote_issue.document_content ()
+                    , name    = docid
+                    , type    = remote_issue.document_type    (docid)
+                    , content = remote_issue.document_content (docid)
                     )
                 fids.append (newfile)
-        syncer.set (self, id, fids)
+                found = True
+        if found :
+            syncer.set (self, id, fids)
     # end def sync
 
 # end class Sync_Attribute_Files
@@ -239,6 +251,9 @@ class Syncer (autosuper) :
         t = self.schema [cls][key]
         if t.startswith ('<roundup.hyperdb.Multilink') :
             return '%s=%s' % (key, ','.join (value))
+        elif not isinstance (value, text_type) :
+            return xmlrpclib.Binary \
+                (key.encode ('ascii') + '='.encode ('ascii') + value)
         else :
             return '%s=%s' % (key, value)
     # end def format
