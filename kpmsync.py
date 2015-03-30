@@ -31,10 +31,12 @@ try:
     from http.cookiejar import LWPCookieJar
 except ImportError :
     from cookielib      import LWPCookieJar
+    from urlparse       import parse_qs
 try :
-    from urllib.parse   import urlencode
+    from urllib.parse   import urlencode, parse_qs
 except ImportError :
     from urllib         import urlencode
+from time               import sleep
 from optparse           import OptionParser
 from datetime           import datetime
 from csv                import DictReader
@@ -44,38 +46,38 @@ from rsclib.autosuper   import autosuper
 import roundup_sync
 
 kpm_attributes = \
-    ( roundup_sync.Attr_RO
+    ( roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'title'
         , remote_name  = 'Kurztext'
         )
-    , roundup_sync.Attr_RO
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'ext_status'
         , remote_name  = 'Status'
         )
-    , roundup_sync.Attr_Default
+    , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'release'
         , remote_name  = 'Softwarestand (verurs.)'
         , default      = '?'
         )
-    , roundup_sync.Attr_Default
+    , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'part_of'
         , remote_name  = None
         , default      = '73897'
         )
-    , roundup_sync.Attr_Default
+    , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'category'
         , remote_name  = None
-        , default      = '273' # zFAS_Series_SW
+        , default      = '273'
         )
-    , roundup_sync.Attr_Msg
+    , roundup_sync.Sync_Attribute_Message
         ( headline     = 'Analyse:'
         , remote_name  = 'Analyse'
         )
-    , roundup_sync.Attr_Msg
+    , roundup_sync.Sync_Attribute_Message
         ( headline     = 'Beschreibung:'
         , remote_name  = 'Problembeschreibung'
         )
-    , roundup_sync.Attr_Msg
+    , roundup_sync.Sync_Attribute_Message
         ( headline     = 'Lieferantenaussage:'
         , remote_name  = 'Lieferantenaussage'
         )
@@ -95,6 +97,17 @@ class Problem (roundup_sync.Remote_Issue) :
             attributes ['Status'] = True
         self.__super.__init__ (rec, attributes)
     # end def __init__
+
+    def document_content (self, docid) :
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def document_contents
+
+    def document_ids (self) :
+        docs = self.Dokumente.split ()
+        args = []
+        for doc in docs :
+            args.append (parse_qs (doc) ['docTs'])
+    # end def document_ids
 
 # end def Problem
 
@@ -163,7 +176,7 @@ class Export (autosuper) :
 
     def __repr__ (self) :
         r = []
-        for p in self.problems :
+        for p in self.problems.itervalues () :
             r.append (str ("PROBLEM"))
             r.append (repr (p))
         return str ('\n').join (r)
@@ -180,7 +193,7 @@ class Job (autosuper) :
         ,  ('start',  'startedAt')
         ,  ('finish', 'finishedAt')
         ))
-    states = ('Auftrag angelegt', 'In Arbeit', 'fertiggestellt', 'Fehler')
+    states = ('Auftrag angelegt', 'in Arbeit', 'fertiggestellt', 'Fehler')
     types  = ( 'Lieferantenimport'
              , 'Lieferantenexport'
              , 'Lieferantenexport (stornierte Auftr\xe4ge)'
@@ -293,8 +306,12 @@ class KPM (autosuper) :
         , site    = 'https://sso.volkswagen.de'
         , url     = 'kpmweb'
         , timeout = None
+        , verbose = False
+        , debug   = False
         ) :
         self.site     = site
+        self.verbose  = verbose
+        self.debug    = debug
         self.base_url = '/'.join ((site, url))
         self.timeout  = timeout
         self.cookies  = LWPCookieJar ()
@@ -331,6 +348,8 @@ class KPM (autosuper) :
         f = self.get ('search.ee.exportJob.do', **p)
         v   = f.read ()
         j   = Job (self, v)
+        if self.debug :
+            print ("Job-ID: %s" % v)
         self.jobs.append (j)
         return j
     # end def search
@@ -374,7 +393,7 @@ def main () :
         , default = False
         )
     opt, arg = cmd.parse_args ()
-    kpm = KPM  ()
+    kpm = KPM  (verbose = opt.verbose, debug = opt.debug)
     kpm.login  (username = opt.username, password = opt.password)
     if (opt.job) :
         jobs = [Job (kpm, opt.job)]

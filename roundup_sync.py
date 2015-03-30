@@ -74,6 +74,23 @@ class Remote_Issue (autosuper) :
         return json.dumps (self.record)
     # end def as_json
 
+    def document_contents (self, docid) :
+        """ This gets a document id (unique for this issue) and
+            retrieves and returns the document content.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def document_contents
+
+    def document_ids (self) :
+        """ This returns a list of document ids for this issue. Note
+            that the IDs need to be unique for this issue. The IDs are
+            used to decide if a file is already attached to the local
+            issue, no files are compared for the decision. The filenames
+            in roundup are the IDs returned by this method.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def document_ids
+
     def get (self, name, default = None) :
         return self.record.get (name, default)
     # end def get
@@ -93,7 +110,7 @@ class Sync_Attribute (autosuper) :
 
 # end class Sync_Attribute
 
-class Attr_RO (Sync_Attribute) :
+class Sync_Attribute_One_Way (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update
         roundup's attribute if the value has changed.
@@ -105,9 +122,9 @@ class Attr_RO (Sync_Attribute) :
             syncer.set (self, id, v)
     # end def sync
 
-# end class Attr_RO
+# end class Sync_Attribute_One_Way
 
-class Attr_Default (Sync_Attribute) :
+class Sync_Attribute_Default (Sync_Attribute) :
     """ A default, only set if the current value is not set.
         Very useful for required attributes on creation.
         This is set from the remote attribute and in case this is also
@@ -125,9 +142,9 @@ class Attr_Default (Sync_Attribute) :
             syncer.set (self, id, v)
     # end def sync
 
-# end class Attr_Default
+# end class Sync_Attribute_Default
 
-class Attr_Msg (Sync_Attribute) :
+class Sync_Attribute_Message (Sync_Attribute) :
     """ A Sync attribute that sync the contents of a field of the remote
         tracker to a message in roundup. The message in roundup gets a
         unique headline. We search for the *last* message with that
@@ -161,7 +178,35 @@ class Attr_Msg (Sync_Attribute) :
         syncer.set (self, id, msgs)
     # end def sync
 
-# end class Attr_Msg
+# end class Sync_Attribute_Message
+
+class Sync_Attribute_Files (Sync_Attribute) :
+    """ A Sync attribute that sync the files attached to a remote issue
+        to the local issue. See the documentation of
+        remote_issue.document_ids for details of how the documents are
+        checked against local documents.
+    """
+
+    def __init__ (self) :
+        self.__super.__init__ ('files', remote_name = None)
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        fids  = syncer.get (self, id)
+        files = [syncer.getitem ('file', id, 'name') for id in fids]
+        names = dict.fromkeys (f.name for f in files)
+        for docname in remote_issue.document_ids () :
+            if docname not in names :
+                newfile = syncer.create \
+                    ( 'file'
+                    , name    = docname
+                    , content = remote_issue.document_content ()
+                    )
+                fids.append (newfile)
+        syncer.set (self, id, fids)
+    # end def sync
+
+# end class Sync_Attribute_Files
 
 class Syncer (autosuper) :
     """ Synchronisation Framework
@@ -215,13 +260,13 @@ class Syncer (autosuper) :
         return self.oldvalues [id][attr.name]
     # end def get
 
-    def getitem (self, cls, id) :
-        """ Get all attributes of an item of the given cls.
+    def getitem (self, cls, id, *attr) :
+        """ Get all or given list of attributes of an item of the given cls.
             This must not be used for attributes of the issue which we
             are currently syncing. The sync framework keeps a cache of
             to-be-updated attributes, this would bypass the cache.
         """
-        return self.srv.display ('%s%s' % (cls, id))
+        return self.srv.display ('%s%s' % (cls, id), *attr)
     # end def getitem
 
     def set (self, attr, id, value) :
