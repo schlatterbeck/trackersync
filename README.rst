@@ -1,0 +1,139 @@
+.. image:: http://sflogo.sourceforge.net/sflogo.php?group_id=212955&type=7
+    :height: 62
+    :width: 210
+    :alt: SourceForge.net Logo
+    :target: http://sourceforge.net/projects/trackersync
+
+Tracker Sync: Tool for Synchronizing Issue Trackers
+===================================================
+
+:Author: Ralf Schlatterbeck <rsc@runtux.com>
+
+When running an issue tracker -- e.g. for tracking bugs and feature
+requests of a software project -- sooner or later the requirement arises
+that you want to synchronize certain issues with an external issue tracker.
+
+External issue trackers might be run by an external open source project
+where you're monitoring certain issues because bugs you're tracking
+locally depend on fixes of the remote project. Or you're a company
+tracking issues of their customers -- the customer may run their own
+issue tracker and certain issues in the customer's tracker are for you.
+
+This project solves this requirement. Currently the local issue tracker
+(the one *you* are running) is limited to roundup_, an open source issue
+tracker. For the remote tracker we're currently supporting KPMweb, the
+issue tracker run by VW/Audi with access for their suppliers -- if
+you're one of them you know how to access it. Other remote trackers are
+currently being implemented, notably support for jira_.
+
+.. _roundup: http://roundup.sourceforge.net
+.. _jira: https://www.atlassian.com/software/jira
+
+Extending Roundup
+-----------------
+
+For synchronisation with external trackers you need to add a new
+``Class`` and several attributes to your roundup instance. We need a new
+``ext_tracker Class``::
+
+    ext_tracker = Class(db, "ext_tracker", name = String (indexme = 'no')
+        , description = String (indexme = 'no')
+        , url_template = String (indexme = 'no'))
+    ext_tracker.setkey("name")
+
+This ``Class`` tracks information about external trackers. Now we need
+to add some attributes to the ``issue`` class for keeping information
+about the external tracker::
+
+    ...
+    , ext_id = String ()
+    , ext_status = String ()
+    , ext_attributes = Link ("msg")
+    , ext_tracker = Link ("ext_tracker")
+    ...
+
+These attributes are needed for keeping track of the status of the
+remote issue. In particular the ``ext_id`` tracks a unique identifier of
+the remote issue. The ``ext_attributes`` track *all* attributes of the
+remote issue as a json dictionary. If you want to display these
+attributes in your issue, it makes sense to extend the html templates
+``html/issue.item.html`` and ``html/issue.index.html`` in your tracker
+directory.
+
+Running the Sync
+----------------
+
+To configure the synchronisation you can find example configuration
+files in the ``config-example`` subdirectory. Configuration files are in
+python syntax and should end in ``.py``. The attributes to synchronize
+need to be defined. The following attribute definitions are possible:
+
+- ``Sync_Attribute_One_Way`` defines a one-way sync from the remote
+  tracker to your local roundup tracker. It gets two parameters, the
+  name in roundup called ``roundup_name`` and the name in the remote
+  issue tracker called ``remote_name``. An example is the ``title``
+  attribute in roundup which is named ``Kurztext`` in KPMweb. We also
+  want to synchronize the remote ``Status`` to the ``ext_status`` field
+  in roundup.
+- ``Sync_Attribute_Default`` defines a one-way sync from the remote
+  tracker to your local roundup tracker but the attribute in the local
+  roundup tracker is only set if it is still undefined.  In particular
+  this happens when a new issue is created locally.  It gets three
+  parameters, the same two parameters as a ``Sync_Attribute_One_Way``,
+  and a third ``default`` parameter.  If a remote_name is given, the
+  value -- if it is non-empty -- is used. If the remote value is not set
+  or if the ``remote_name`` is specified as ``None``, the ``default``
+  parameter will be used instead. This is useful to define suitable
+  defaults for new issues created in roundup.
+- ``Sync_Attribute_Files`` synchronizes file attachments of the remote
+  issue to the local issue. This is a one-way sync, no file attachments
+  are created in the remote issue. It currently has no parameters. This
+  may change in future versions with a parameter added to this sync
+  attribute to indicate that we want two-way synchronisation of file
+  attributes.
+- ``Sync_Attribute_Message`` synchronizes a field in the remote tracker
+  to a new message in roundup. Whenever the field in the remote issue
+  changes, a new message is created in roundup and linked to the issue.
+  The sync attribute gets two parameters, the ``remote_name`` of the
+  field in the remote issue tracker and a ``headline`` that should be
+  put into the roundup message as the first line. This sync attribute
+  type exists because some issue trackers (notably KPMweb) don't have
+  the notion of a discussion thread with messages added to an issue. In
+  that case communication takes place with fixed fields that can be
+  filled in during the process of resolving an issue, these fields
+  change of time. An example is the analysis of the problem underlying
+  an issue that is specified in the ``Analyse`` field in KPMweb. We
+  synchronize this field to a roundup message with the headline
+  ``Analyse:``.
+
+In addition to the synchronized attributes, the URL of the roundup
+tracker (which includes user name and password), the KPMweb user name
+and password, and the address of the supplier in KPMweb (used as a
+search term) can be specified in the configuration file. These options
+can also be set on the command line. If they are specified in both, the
+configuration file and on the command line, the command line wins.
+
+The configuration file for the KPMweb synchronisation typically lives in
+``/etc/trackersync/kpm_config.py`` but can be overridden on the command
+line.
+
+Resources
+---------
+
+Download the source at https://sourceforge.net/projects/trackersync/
+and install using the standard python setup, e.g.::
+
+ python setup.py install --prefix=/usr/local
+
+Alternatively you may want to install using ``pip``::
+
+ pip install trackersync
+
+Changes
+-------
+
+Version 1.0: Initial Release with kpmsync
+
+Tool for Synchronisation of Issue Trackers
+
+ - First Release version

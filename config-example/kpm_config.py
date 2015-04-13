@@ -26,7 +26,7 @@ from __future__ import absolute_import
 
 """ Example configuration for KPM Sync """
 
-from tracker_sync import roundup_sync
+from trackersync import roundup_sync
 
 KPM_USERNAME = 'user'
 KPM_PASSWORD = 'secret'

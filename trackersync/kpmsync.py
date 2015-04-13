@@ -46,12 +46,12 @@ from xml.etree          import ElementTree
 from rsclib.autosuper   import autosuper
 from rsclib.Config_File import Config_File
 
-from tracker_sync       import roundup_sync
+from trackersync        import roundup_sync
 
 class Config (Config_File) :
 
     config = 'kpm_config'
-    path   = '/etc/tracker_sync'
+    path   = '/etc/trackersync'
 
     def __init__ (self, path = path, config = config) :
         self.__super.__init__ \
@@ -355,7 +355,7 @@ def main () :
     cmd.add_option \
         ( "-c", "--config"
         , help    = "Configuration file"
-        , default = '/etc/tracker_sync/kpm_config.py'
+        , default = '/etc/trackersync/kpm_config.py'
         )
     cmd.add_option \
         ( "-D", "--debug"

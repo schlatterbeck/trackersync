@@ -1,2 +1,5 @@
 *.pyc
 *.pyo
+README.html
+Version.py
+build
