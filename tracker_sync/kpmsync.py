@@ -62,45 +62,6 @@ class Config (Config_File) :
 
 # end class Config
 
-kpm_attributes = \
-    ( roundup_sync.Sync_Attribute_One_Way
-        ( roundup_name = 'title'
-        , remote_name  = 'Kurztext'
-        )
-    , roundup_sync.Sync_Attribute_One_Way
-        ( roundup_name = 'ext_status'
-        , remote_name  = 'Status'
-        )
-    , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'release'
-        , remote_name  = 'Softwarestand (verurs.)'
-        , default      = '?'
-        )
-    , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'part_of'
-        , remote_name  = None
-        , default      = '73897'
-        )
-    , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'category'
-        , remote_name  = None
-        , default      = '273'
-        )
-    , roundup_sync.Sync_Attribute_Message
-        ( headline     = 'Analyse:'
-        , remote_name  = 'Analyse'
-        )
-    , roundup_sync.Sync_Attribute_Message
-        ( headline     = 'Beschreibung:'
-        , remote_name  = 'Problembeschreibung'
-        )
-    , roundup_sync.Sync_Attribute_Message
-        ( headline     = 'Lieferantenaussage:'
-        , remote_name  = 'Lieferantenaussage'
-        )
-    , roundup_sync.Sync_Attribute_Files ()
-    )
-
 class Problem (roundup_sync.Remote_Issue) :
 
     def __init__ (self, kpm, record, canceled = False) :
