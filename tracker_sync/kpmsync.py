@@ -23,6 +23,7 @@
 from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import absolute_import
+import os
 try :
     import urllib2
 except ImportError :
@@ -42,8 +43,23 @@ from datetime           import datetime
 from csv                import DictReader
 from xml.etree          import ElementTree
 from rsclib.autosuper   import autosuper
+from rsclib.Config_File import Config_File
 
-import roundup_sync
+from tracker_sync       import roundup_sync
+
+class Config (Config_File) :
+
+    config = 'kpm_config'
+    path   = '/etc/tracker_sync'
+
+    def __init__ (self, path = path, config = config) :
+        self.__super.__init__ \
+            ( path, config
+            , KPM_ADDRESS = '21 KPM-TEST'
+            )
+    # end def __init__
+
+# end class Config
 
 kpm_attributes = \
     ( roundup_sync.Sync_Attribute_One_Way
@@ -373,7 +389,11 @@ def main () :
     cmd.add_option \
         ( "-a", "--address"
         , help    = "KPM-Address of Supplier"
-        , default = '21 KPM-TEST'
+        )
+    cmd.add_option \
+        ( "-c", "--config"
+        , help    = "Configuration file"
+        , default = '/etc/tracker_sync/kpm_config.py'
         )
     cmd.add_option \
         ( "-D", "--debug"
@@ -383,7 +403,7 @@ def main () :
         )
     cmd.add_option \
         ( "-j", "--job"
-        , help    = "KPM job identifier"
+        , help    = "KPM job identifier (mainly used for debugging)"
         )
     cmd.add_option \
         ( "-r", "--roundup-url"
@@ -404,18 +424,28 @@ def main () :
         , default = False
         )
     opt, arg = cmd.parse_args ()
+    config  = Config.config
+    cfgpath = Config.path
+    if opt.config :
+        cfgpath, config = os.path.split (opt.config)
+        config = os.path.splitext (config) [0]
+    cfg = Config (path = cfgpath, config = config)
     kpm = KPM  (verbose = opt.verbose, debug = opt.debug)
-    kpm.login  (username = opt.username, password = opt.password)
+    username = opt.username    or cfg.KPM_USERNAME
+    password = opt.password    or cfg.KPM_PASSWORD
+    address  = opt.address     or cfg.KPM_ADDRESS
+    url      = opt.roundup_url or cfg.ROUNDUP_URL
+    kpm.login  (username = username, password = password)
     if (opt.job) :
         jobs = [Job (kpm, opt.job)]
     else :
         # get active and canceled issues
-        jobs = [kpm.search (address = opt.address)]
-        jobs.append (kpm.search (address = opt.address, canceled = 'true'))
+        jobs = [kpm.search (address = address)]
+        jobs.append (kpm.search (address = address, canceled = 'true'))
     syncer = None
-    if opt.roundup_url :
+    if url and cfg.get ('KPM_ATTRIBUTES') :
         syncer = roundup_sync.Syncer \
-            (opt.roundup_url, 'KPM', kpm_attributes
+            (url, 'KPM', cfg.KPM_ATTRIBUTES
             , verbose = opt.verbose
             , debug   = opt.debug
             )
