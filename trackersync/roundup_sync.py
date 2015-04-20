@@ -43,6 +43,8 @@ class Remote_Issue (autosuper) :
         new issue in the local tracker if the remote issue is not found.
     """
 
+    multilevel = None
+
     def __init__ (self, record, sync_attributes = {}) :
         self.record     = record
         self.attributes = sync_attributes
@@ -50,12 +52,20 @@ class Remote_Issue (autosuper) :
 
     def __getattr__ (self, name) :
         try :
-            return self.record [name]
+            return self [name]
         except KeyError as exc :
             raise AttributeError (exc)
     # end def __getattr__
 
     def __getitem__ (self, name) :
+        if name is None :
+            raise KeyError (name)
+        if self.multilevel :
+            names = name.split ('.')
+            item  = self.record
+            for n in names :
+                item = item [n]
+            return item
         return self.record [name]
     # end def __getitem__
 
@@ -72,7 +82,9 @@ class Remote_Issue (autosuper) :
     __repr__ = __str__
 
     def as_json (self) :
-        return json.dumps (self.record)
+        """ Only return non-empty values in json dump. """
+        return json.dumps \
+            (dict ((k, v) for k, v in self.record.iteritems () if v))
     # end def as_json
 
     def document_content (self, docid) :
@@ -101,7 +113,10 @@ class Remote_Issue (autosuper) :
     # end def document_ids
 
     def get (self, name, default = None) :
-        return self.record.get (name, default)
+        try :
+            return self [name]
+        except KeyError :
+            return default
     # end def get
 
 # end class Remote_Issue
@@ -188,6 +203,26 @@ class Sync_Attribute_Message (Sync_Attribute) :
     # end def sync
 
 # end class Sync_Attribute_Message
+
+class Sync_Attribute_Default_Message (Sync_Attribute) :
+    """ A default message added as the *only* message whenever the
+        remote tracker doesn't have any message generated.
+        This is used to add at least one message to a new issue in
+        roundup because at least one message is required.
+    """
+    def __init__ (self, message) :
+        self.message = message
+        self.__super.__init__ ('messages', None)
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        msgs = syncer.get (self, id)
+        if not msgs :
+            newmsg  = syncer.create ('msg', content = self.message)
+            msgs.append (newmsg)
+            syncer.set (self, id, msgs)
+    # end def sync
+# end class Sync_Attribute_Default_Message
 
 class Sync_Attribute_Files (Sync_Attribute) :
     """ A Sync attribute that sync the files attached to a remote issue
@@ -343,6 +378,8 @@ class Syncer (autosuper) :
         elif self.newvalues [id] :
             if self.verbose :
                 print ("set issue %s: %s" % (id, self.newvalues [id]))
+            if self.debug :
+                print (self.newvalues [id].items ())
             self.srv.set \
                 ( 'issue%s' % id
                 , * ( self.format ('issue', k, v)

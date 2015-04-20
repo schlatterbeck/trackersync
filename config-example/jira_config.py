@@ -24,51 +24,43 @@
 from __future__ import unicode_literals
 from __future__ import absolute_import
 
-""" Example configuration for KPM Sync """
+""" Example configuration for Jira Sync """
 
 from trackersync import roundup_sync
 
-KPM_USERNAME = 'user'
-KPM_PASSWORD = 'secret'
-KPM_ADDRESS  = '21 KPM-TEST'
-ROUNDUP_URL  = 'http://username:password@localhost:8080/tracker/xmlrpc'
+JIRA_USERNAME = 'test'
+JIRA_PASSWORD = 'test'
+JIRA_URL      = 'http://localhost:9090/rest/api/2'
+ROUNDUP_URL   = 'http://username:password@localhost:8080/tracker/xmlrpc'
+JIRA_ASSIGNEE = 'test'
+TRACKER_NAME  = 'jira-test'
 
-KPM_ATTRIBUTES = \
+JIRA_ATTRIBUTES = \
     ( roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'title'
-        , remote_name  = 'Kurztext'
+        , remote_name  = 'summary'
         )
     , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'ext_status'
-        , remote_name  = 'Status'
+        , remote_name  = 'status.name'
         )
     , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'release'
-        , remote_name  = 'Softwarestand (verurs.)'
+        , remote_name  = None
         , default      = '?'
         )
     , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'part_of'
+        ( roundup_name = 'inherit_ext'
         , remote_name  = None
-        , default      = '73897'
-        )
-    , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'category'
-        , remote_name  = None
-        , default      = '273'
+        , default      = 'yes'
         )
     , roundup_sync.Sync_Attribute_Message
-        ( headline     = 'Analyse:'
-        , remote_name  = 'Analyse'
+        ( headline     = 'Description:'
+        , remote_name  = 'description'
         )
-    , roundup_sync.Sync_Attribute_Message
-        ( headline     = 'Beschreibung:'
-        , remote_name  = 'Problembeschreibung'
+    , roundup_sync.Sync_Attribute_Default_Message
+        ( message      = 'Imported from Jira without messages'
         )
-    , roundup_sync.Sync_Attribute_Message
-        ( headline     = 'Lieferantenaussage:'
-        , remote_name  = 'Lieferantenaussage'
-        )
-    , roundup_sync.Sync_Attribute_Files ()
+    #, roundup_sync.Sync_Attribute_Files ()
     )
 

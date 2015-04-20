@@ -86,7 +86,7 @@ class Problem (roundup_sync.Remote_Issue) :
         rq  = urllib2.Request (url, None, kpm.headers)
         f   = kpm.opener.open (rq, timeout = kpm.timeout)
         return f.read ()
-    # end def document_contents
+    # end def document_content
 
     def document_ids (self) :
         docs = self.get ('Dokumente')
