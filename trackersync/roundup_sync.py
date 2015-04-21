@@ -112,6 +112,21 @@ class Remote_Issue (autosuper) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def document_ids
 
+    def messages (self) :
+        """ Iterator over messages of this remote issue.
+            The iterator must return a dictionary, the keys are the
+            message properties in roundup (so the iterator has to
+            convert from the attributes of the remote issue). Only the
+            'content' property is mandatory. Note that the given
+            properties are used for comparison. So if, e.g., a 'date'
+            property is given, this is compared *first*. If no message
+            matches the given date, the message is created in roundup.
+            The content property is generally compared *last* as it is
+            most effort.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def messages
+
     def get (self, name, default = None) :
         try :
             return self [name]
@@ -167,6 +182,51 @@ class Sync_Attribute_Default (Sync_Attribute) :
     # end def sync
 
 # end class Sync_Attribute_Default
+
+class Sync_Attribute_Messages (Sync_Attribute) :
+    """ Synchronize messages of the remote tracker with the messages in
+        roundup. The Remote_Issue descendant class of the remote tracker
+        has to implement the 'messages' method to iterate over all
+        messages of the remote tracker.
+        Note that currently only one-way sync is implemented (from the
+        remote tracker to roundup).
+    """
+
+    def __init__ (self) :
+        self.__super.__init__ ('messages', remote_name = None)
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        rup_msgs = []
+        msgs = syncer.get (self, id)
+        for m in sorted (msgs, key = lambda x: -int (x)) :
+            rup_msgs.append (syncer.getitem ('msg', m))
+        found = False
+        for m in remote_issue.messages () :
+            for mrup in rup_msgs :
+                # compare content last
+                for k in sorted (m, key = lambda x: x == 'content') :
+                    rupm = mrup [k]
+                    mm = m [k]
+                    if k == 'date' :
+                        assert rupm.startswith ('<Date ')
+                        rupm = rupm [6:-1]
+                        if  (   mm [-5] == '+' or mm [-5] == '-'
+                            and isdigit (mm [-4:])
+                            ) :
+                            mm = mm [:-5]
+                    if rupm.rstrip () != mm.rstrip () :
+                        break
+                else : # match
+                    break
+            else : # no match
+                msgs.append (syncer.create ('msg', **m))
+                found  = True
+        if found :
+            syncer.set (self, id, msgs)
+    # end def sync
+
+# end class Sync_Attribute_Messages
 
 class Sync_Attribute_Message (Sync_Attribute) :
     """ A Sync attribute that sync the contents of a field of the remote

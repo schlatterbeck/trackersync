@@ -29,8 +29,10 @@ import os
 import requests
 
 from optparse           import OptionParser
+from datetime           import datetime, timedelta
 from rsclib.autosuper   import autosuper
 from rsclib.Config_File import Config_File
+from rsclib.pycompat    import ustr
 from trackersync        import roundup_sync
 
 class Config (Config_File) :
@@ -48,6 +50,37 @@ class Config (Config_File) :
 
 # end class Config
 
+def jira_utctime (jiratime) :
+    """ Time with numeric timestamp converted to UTC.
+        Note that roundup strips trailing decimal places to 0.
+    >>> jira_utctime ('2014-10-28T13:29:22.585+0100')
+    '2014-10-28.12:29:22.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:22.385+0100')
+    '2014-10-28.12:29:22.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59.385+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59.585+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59.0+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2015-04-21T08:27:46+0200')
+    '2015-04-21.06:27:46.000+0000'
+    """
+    fmt = fmts = "%Y-%m-%dT%H:%M:%S.%f"
+    fmtnos     = "%Y-%m-%dT%H:%M:%S"
+    d, tz = jiratime.split ('+')
+    tz = int (tz)
+    h  = tz / 100
+    m  = tz % 100
+    if '.' not in d :
+        fmt = fmtnos
+    d  = datetime.strptime (d, fmt)
+    d  = d + timedelta (hours = -h, minutes = -m)
+    return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
+# end def jira_utctime
+
 class Jira_Issue (roundup_sync.Remote_Issue) :
 
     multilevel = True
@@ -56,6 +89,19 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
         self.jira     = jira
         self.__super.__init__ (record)
     # end def __init__
+
+    def messages (self) :
+        u = self.jira.url + '/issue/' + self.id + '/comment'
+        r = self.jira.session.get (u)
+        j = r.json
+        if not j ['comments'] :
+            assert j ['startAt'] == j ['total'] == 0
+        for c in j ['comments'] :
+            yield dict \
+                ( content = c ['body']
+                , date    = jira_utctime (c ['updated'])
+                )
+    # end def messages
 
 # end def Jira_Issue
 
