@@ -62,6 +62,6 @@ JIRA_ATTRIBUTES = \
     , roundup_sync.Sync_Attribute_Default_Message
         ( message      = 'Imported from Jira without messages'
         )
-    #, roundup_sync.Sync_Attribute_Files ()
+    , roundup_sync.Sync_Attribute_Files ()
     )
 

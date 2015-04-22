@@ -87,8 +87,43 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
 
     def __init__ (self, jira, record) :
         self.jira     = jira
+        self.doc_meta = {}
         self.__super.__init__ (record)
     # end def __init__
+
+    def attachment_iter (self) :
+        u = self.jira.url + '/issue/' + self.id + '?fields=attachment'
+        r = self.jira.session.get (u)
+        j = r.json
+        for a in j ['fields']['attachment'] :
+            yield a
+    # end def attachment_iter
+
+    def _docid (self, attachment_meta) :
+        a = attachment_meta
+        return ':'.join ((a ['filename'], a ['id']))
+    # end def _docid
+
+    def document_attributes (self, id) :
+        return dict (type = self.doc_meta [id]['mimeType'])
+    # end def document_attributes
+
+    def document_content (self, id) :
+        r = self.jira.session.get (self.doc_meta [id]['content'])
+        return r.content
+    # end def document_content
+
+    def document_ids (self) :
+        ids = []
+        if self.doc_meta :
+            for a in doc_meta.itervalues () :
+                ids.append (self._docid (a))
+        else :
+            for a in self.attachment_iter () :
+                ids.append (self._docid (a))
+                self.doc_meta [self._docid (a)] = a
+        return ids
+    # end def document_ids
 
     def messages (self) :
         u = self.jira.url + '/issue/' + self.id + '/comment'

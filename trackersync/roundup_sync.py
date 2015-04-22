@@ -87,20 +87,21 @@ class Remote_Issue (autosuper) :
             (dict ((k, v) for k, v in self.record.iteritems () if v))
     # end def as_json
 
+    def document_attributes (self, docid) :
+        """ Additional attributes for a file (document) attached to an
+            issue. By default roundup only has the MIME-Type here named
+            'type'. But schemas can be changed in roundup. This should
+            return a dictionary of all roundup attributes to be set.
+        """
+        return dict (type = 'application/octet-stream')
+    # end def document_attributes
+
     def document_content (self, docid) :
         """ This gets a document id (unique for this issue) and
             retrieves and returns the document content.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def document_content
-
-    def document_type (self, docid) :
-        """ Return the mime type of the given document.
-            Note that if the mime type is unknown, this should return
-            'application/octet-stream'.
-        """
-        return 'application/octet-stream'
-    # end def document_type
 
     def document_ids (self) :
         """ This returns a list of document ids for this issue. Note
@@ -305,8 +306,8 @@ class Sync_Attribute_Files (Sync_Attribute) :
                 newfile = syncer.create \
                     ( 'file'
                     , name    = docid
-                    , type    = remote_issue.document_type    (docid)
                     , content = remote_issue.document_content (docid)
+                    , ** remote_issue.document_attributes (docid)
                     )
                 fids.append (newfile)
                 found = True
