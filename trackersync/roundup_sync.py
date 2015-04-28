@@ -47,6 +47,7 @@ class Remote_Issue (autosuper) :
 
     def __init__ (self, record, sync_attributes = {}) :
         self.record     = record
+        self.newvalues  = {}
         self.attributes = sync_attributes
     # end def __init__
 
@@ -62,10 +63,20 @@ class Remote_Issue (autosuper) :
             raise KeyError (name)
         if self.multilevel :
             names = name.split ('.')
+            nitem = self.newvalues
             item  = self.record
             for n in names :
+                if nitem is not None :
+                    if n in nitem :
+                        nitem = nitem [n]
+                    else :
+                        nitem = None
                 item = item [n]
+            if nitem is not None :
+                return nitem
             return item
+        if name in self.newvalues :
+            return self.newvalues [name]
         return self.record [name]
     # end def __getitem__
 
@@ -83,8 +94,9 @@ class Remote_Issue (autosuper) :
 
     def as_json (self) :
         """ Only return non-empty values in json dump. """
-        return json.dumps \
-            (dict ((k, v) for k, v in self.record.iteritems () if v))
+        d = dict ((k, v) for k, v in self.record.iteritems () if v)
+        d.update ((k, v) for k, v in self.newvalues.iteritems ())
+        return json.dumps (d, sort_keys = True, indent = 4)
     # end def as_json
 
     def document_attributes (self, docid) :
@@ -135,6 +147,28 @@ class Remote_Issue (autosuper) :
             return default
     # end def get
 
+    def set (self, name, value) :
+        if self.multilevel :
+            names = name.split ('.')
+            item  = self.newvalues
+            # Copy over the current value to ease later update
+            item [names [0]] = self [names [0]]
+            for n in names [:-1] :
+                if n not in item :
+                    item [n] = {}
+                item = item [n]
+            item [names [-1]] = value
+        else :
+            self.newvalues [name] = value
+    # end def set
+    __setitem__ = set
+
+    def update_remote (self, syncer) :
+        """ Update remote issue tracker with self.newvalues.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def update_remote
+
 # end class Remote_Issue
 
 class Sync_Attribute (autosuper) :
@@ -145,7 +179,8 @@ class Sync_Attribute (autosuper) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        raise NotImplementedError ("Needs to be implemented in child class")
+        """ Needs to be implemented in child class """
+        pass
     # end def sync
 
 # end class Sync_Attribute
@@ -183,6 +218,47 @@ class Sync_Attribute_Default (Sync_Attribute) :
     # end def sync
 
 # end class Sync_Attribute_Default
+
+class Sync_Attribute_To_Remote (Sync_Attribute) :
+    """ Unconditionally synchronize a local attribute to the remote
+        tracker. Typical use-case is to set the local tracker issue
+        number in the remote tracker if the remote tracker also supports
+        keeping numbers of another tracker or there is a dedicated
+        custom attribute for this.
+    """
+
+    def sync (self, syncer, id, remote_issue) :
+        rv = remote_issue.get (self.remote_name, None)
+        lv = syncer.get (self, id)
+        if lv != rv :
+            remote_issue.set (self.remote_name, lv)
+    # end def sync
+
+# end class Sync_Attribute_To_Remote
+
+class Sync_Attribute_Two_Way (Sync_Attribute) :
+    """ Two-way sync: We first check if the remote changed since last
+        sync. If it did, we update the local tracker -- even if it might
+        have changed too. If the remote has not changed we check if we
+        need to update the local tracker.
+    """
+
+    def sync (self, syncer, id, remote_issue) :
+        rv = remote_issue.get (self.remote_name, None)
+        lv = syncer.get (self, id)
+        if rv == lv :
+            return
+        changed = False
+        old = syncer.oldremote.get (self.remote_name, None)
+        changed = old != remote_issue.get (self.remote_name)
+        # check if remote changed since last sync
+        if changed :
+            syncer.set (self, id, rv)
+        else :
+            remote_issue.set (self.remote_name, lv)
+    # end def sync
+
+# end class Sync_Attribute_Two_Way
 
 class Sync_Attribute_Messages (Sync_Attribute) :
     """ Synchronize messages of the remote tracker with the messages in
@@ -337,6 +413,7 @@ class Syncer (autosuper) :
         self.tracker     = self.srv.lookup ('ext_tracker', remote_name)
         self.verbose     = verbose
         self.debug       = debug
+        self.oldremote   = {}
     # end def __init__
 
     def create (self, cls, ** kw) :
@@ -355,21 +432,22 @@ class Syncer (autosuper) :
             return '%s=%s' % (key, value)
     # end def format
 
-    def get (self, attr, id) :
-        if attr.name in self.newvalues [id] :
-            return self.newvalues [id][attr.name]
-        if attr.name not in self.oldvalues [id] :
+    def get (self, attr, id, name = None) :
+        name = name or attr.name
+        if name in self.newvalues [id] :
+            return self.newvalues [id][name]
+        if name not in self.oldvalues [id] :
             if int (id) > 0 :
-                self.oldvalues [id][attr.name] = self.srv.display \
-                    ('issue%s' % id, attr.name) [attr.name]
+                self.oldvalues [id][name] = self.srv.display \
+                    ('issue%s' % id, name) [name]
             else :
-                t = self.schema ['issue'][attr.name]
+                t = self.schema ['issue'][name]
                 if t.startswith ('<roundup.hyperdb.Multilink') :
                     v = []
                 else :
                     v = None
-                self.oldvalues [id][attr.name] = v
-        return self.oldvalues [id][attr.name]
+                self.oldvalues [id][name] = v
+        return self.oldvalues [id][name]
     # end def get
 
     def getitem (self, cls, id, *attr) :
@@ -398,6 +476,7 @@ class Syncer (autosuper) :
             )
         id = None
         do_sync = False
+        self.oldremote = {}
         for i in issues :
             di = self.srv.display ('issue%s' % i, 'ext_id', 'ext_attributes')
             if di ['ext_id'] != remote_id :
@@ -406,6 +485,7 @@ class Syncer (autosuper) :
                 m = self.getitem ('msg', di ['ext_attributes'])
                 if m ['content'] != remote_issue.as_json () :
                     do_sync = True
+                self.oldremote = json.loads (m ['content'])
             else :
                 do_sync = True
             id = int (i)
@@ -428,7 +508,10 @@ class Syncer (autosuper) :
         if 'ext_id' not in self.newvalues [id] :
             if self.oldvalues [id].get ('ext_id') != remote_id :
                 self.newvalues [id]['ext_id'] = remote_id
-        if 'ext_attributes' not in self.newvalues [id] and do_sync :
+        if  (   'ext_attributes' not in self.newvalues [id]
+            and    json.dumps (self.oldremote, sort_keys = True, indent = 4)
+                != remote_issue.as_json ()
+            ) :
             newmsg = self.create ('msg', content = remote_issue.as_json ())
             self.newvalues [id]['ext_attributes'] = newmsg
         if id < 0 :
@@ -447,6 +530,8 @@ class Syncer (autosuper) :
                       for k, v in self.newvalues [id].items ()
                     )
                 )
+        if remote_issue.newvalues :
+            remote_issue.update_remote (self)
     # end def sync
 
 # end class Syncer

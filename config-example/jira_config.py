@@ -36,7 +36,7 @@ JIRA_ASSIGNEE = 'test'
 TRACKER_NAME  = 'jira-test'
 
 JIRA_ATTRIBUTES = \
-    ( roundup_sync.Sync_Attribute_One_Way
+    ( roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = 'title'
         , remote_name  = 'summary'
         )

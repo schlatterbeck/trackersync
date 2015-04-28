@@ -27,6 +27,7 @@ from __future__ import absolute_import
 
 import os
 import requests
+import json
 
 from optparse           import OptionParser
 from datetime           import datetime, timedelta
@@ -89,6 +90,9 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
         self.jira     = jira
         self.doc_meta = {}
         self.__super.__init__ (record)
+        # Remove these or we'll get a new ext_attributes on every sync
+        del self.record ['lastViewed']
+        del self.record ['updated']
     # end def __init__
 
     def attachment_iter (self) :
@@ -137,6 +141,19 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
                 , date    = jira_utctime (c ['updated'])
                 )
     # end def messages
+
+    def update_remote (self, syncer) :
+        if syncer.verbose :
+            print ("Remote-Update: %s %s" % (self.key, self.newvalues))
+        for k, v in self.newvalues.iteritems () :
+            if isinstance (v, (dict, list)) :
+                raise ValueError ("Update on non-atomic value")
+        u = self.jira.url + '/issue/' + self.id
+        h = { 'content-type' : 'application/json' }
+        r = self.jira.session.put \
+            (u, headers = h, data = json.dumps (dict (fields = self.newvalues)))
+        r.raise_for_status ()
+    # end def update_remote
 
 # end def Jira_Issue
 
