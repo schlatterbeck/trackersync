@@ -99,6 +99,17 @@ class Remote_Issue (autosuper) :
         return json.dumps (d, sort_keys = True, indent = 4)
     # end def as_json
 
+    def attach_file (self, name, type, content) :
+        """ Attach a file with the given filename to this remote issue.
+            Return the unique filename of the remote issue. Note that
+            care must be taken to return the new document id as returned
+            by the document_ids method. The roundup issue will be
+            updated with this new name to make sure that no duplicate
+            attachments are created.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def attach_file
+
     def document_attributes (self, docid) :
         """ Additional attributes for a file (document) attached to an
             issue. By default roundup only has the MIME-Type here named
@@ -366,19 +377,36 @@ class Sync_Attribute_Files (Sync_Attribute) :
         to the local issue. See the documentation of
         remote_issue.document_ids for details of how the documents are
         checked against local documents.
+        If the optional prefix is given, files with a name starting with
+        the given prefix are synchronized *to* the remote system. In
+        case the prefix is empty (zero-length string), *all* files not
+        coming from the remote tracker are created in the remote
+        tracker. Note that with such a setup (with empty prefix) it is
+        almost impossible to delete a file in both trackers -- the file
+        would have to be deleted in both systems by hand before starting
+        the next sync.
+        Note that files synchronized *to* the remote system are renamed
+        to the naming convention enforced by the remote system. This is
+        done to ensure that they are not created again in roundup on next
+        sync. The user used for synchronisation must have write
+        permission on the file.name attribute in roundup.
     """
 
-    def __init__ (self) :
+    def __init__ (self, prefix = None) :
+        self.prefix = prefix
         self.__super.__init__ ('files', remote_name = None)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        fids  = syncer.get (self, id)
-        files = [syncer.getitem ('file', i, 'name') for i in fids]
-        names = dict.fromkeys (f ['name'] for f in files)
-        found = False
+        fids   = syncer.get (self, id)
+        nosync = dict.fromkeys (fids)
+        files  = [syncer.getitem ('file', i, 'name', 'id') for i in fids]
+        names  = dict ((f ['name'], f ['id']) for f in files)
+        found  = False
         for docid in remote_issue.document_ids () :
-            if docid not in names :
+            if docid in names :
+                del nosync [names [docid]]
+            else :
                 newfile = syncer.create \
                     ( 'file'
                     , name    = docid
@@ -389,6 +417,21 @@ class Sync_Attribute_Files (Sync_Attribute) :
                 found = True
         if found :
             syncer.set (self, id, fids)
+        if self.prefix is not None :
+            files = [syncer.getitem ('file', i, 'name', 'id', 'type')
+                     for i in nosync
+                    ]
+            for f in files :
+                name = f ['name']
+                if name.startswith (self.prefix) :
+                    fid     = f ['id']
+                    name    = name [len (self.prefix):] or 'File'
+                    content = syncer.getitem ('file', fid, 'content')['content']
+                    n = remote_issue.attach_file (name, f ['type'], content)
+                    syncer.setitem ('file', fid, name = n)
+                    if syncer.verbose :
+                        k = remote_issue ['key']
+                        print ("Remote Attach (%s): %s" % (k, n))
     # end def sync
 
 # end class Sync_Attribute_Files
@@ -458,6 +501,14 @@ class Syncer (autosuper) :
         """
         return self.srv.display ('%s%s' % (cls, id), *attr)
     # end def getitem
+
+    def setitem (self, cls, id, **attr) :
+        """ Set an attribute of an item of the given cls,
+            attributes are 'key = value' pairs.
+        """
+        p = ("%s=%s" % (k, v) for k, v in attr.iteritems ())
+        return self.srv.set ('%s%s' % (cls, id), *p)
+    # end def setitem
 
     def set (self, attr, id, value) :
         self.newvalues [id][attr.name] = value

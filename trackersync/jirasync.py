@@ -95,10 +95,20 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
         del self.record ['updated']
     # end def __init__
 
+    def attach_file (self, name, type, content) :
+        u = self.jira.url + '/issue/' + self.id + '/attachments'
+        h = {'X-Atlassian-Token': 'nocheck'}
+        f = dict (file = (name, content, type))
+        r = self.jira.session.post (u, files = f, headers = h)
+        j = r.json ()
+        assert len (j) == 1
+        return self._docid (j [0])
+    # end def attach_file
+
     def attachment_iter (self) :
         u = self.jira.url + '/issue/' + self.id + '?fields=attachment'
         r = self.jira.session.get (u)
-        j = r.json
+        j = r.json ()
         for a in j ['fields']['attachment'] :
             yield a
     # end def attachment_iter
@@ -132,7 +142,7 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
     def messages (self) :
         u = self.jira.url + '/issue/' + self.id + '/comment'
         r = self.jira.session.get (u)
-        j = r.json
+        j = r.json ()
         if not j ['comments'] :
             assert j ['startAt'] == j ['total'] == 0
         for c in j ['comments'] :
@@ -185,12 +195,15 @@ class Jira (autosuper) :
             d = dict (jql = jql, startAt = i, maxResults = 1)
             u = self.url + '/' + 'search'
             r = self.session.get (u, params = d)
-            j = r.json
+            j = r.json ()
             if not j ['issues'] :
                 assert j ['startAt'] == j ['total']
                 break
             assert len (j ['issues']) == 1
             ji = j ['issues'][0]
+            # Workaround for requests.exceptions.ConnectionError:
+            # ('Connection aborted.', ResponseNotReady())
+            self.session.close ()
             yield Jira_Issue \
                 ( self
                 , dict (ji ['fields'], key = ji ['key'], id = ji ['id'])
