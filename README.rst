@@ -41,9 +41,20 @@ For synchronisation with external trackers you need to add a new
         , url_template = String (indexme = 'no'))
     ext_tracker.setkey("name")
 
-This ``Class`` tracks information about external trackers. Now we need
-to add some attributes to the ``issue`` class for keeping information
-about the external tracker::
+This ``Class`` tracks information about external trackers.
+If two-way message synchronisation should be used an additional class is
+needed for keeping track of the message-ids  in the remote system::
+
+    ext_msg = Class(db, "ext_msg", ext_tracker = Link ("ext_tracker")
+        , msg = Link ("msg")
+        , ext_id = String (indexme = 'no')
+        , key = String (indexme = 'no')
+        )
+    ext_msg.setkey("key")
+
+
+Now we need to add some attributes to the ``issue`` class for keeping
+information about the external tracker::
 
     ...
     , ext_id = String ()
@@ -85,12 +96,39 @@ need to be defined. The following attribute definitions are possible:
   or if the ``remote_name`` is specified as ``None``, the ``default``
   parameter will be used instead. This is useful to define suitable
   defaults for new issues created in roundup.
+- ``Sync_Attribute_To_Remote`` defines a one-way sync to the remote
+  tracker. A use-case is to set the local tracker issue number in the
+  remote tracker (if the remote tracker supports a fields for this).
+- ``Sync_Attribute_Two_Way`` defines a two-way sync to the remote
+  tracker. The sync first determines if the attribute in the remote
+  tracker has changed (by comparing the ext_attributes from the last
+  sync to the current attributes). If the attribute *has* changed in the
+  remote tracker, the attribute is updated in roundup -- even if it also
+  changed there. Only if the attribute has not changed in the remote
+  tracker it is determined if the roundup attribute is different from
+  the remote attribute. If it is, the remote tracker is updated.
 - ``Sync_Attribute_Files`` synchronizes file attachments of the remote
-  issue to the local issue. This is a one-way sync, no file attachments
-  are created in the remote issue. It currently has no parameters. This
-  may change in future versions with a parameter added to this sync
-  attribute to indicate that we want two-way synchronisation of file
-  attributes.
+  issue to the local issue. If an optional ``prefix`` parameter is given
+  to the constructor, all filenames starting with the given prefix are
+  considered for synchronisation *to* the remote tracker. First all
+  files of the remote tracker are checked against local files. Then the
+  opposite direction is synchronized considering only the files with a
+  relevant prefix in their filename. Note that files synchronized *to*
+  the remote system are renamed to the naming convention enforced by the
+  remote system *in the local tracker*. This is done because for file
+  synchronisation only the *filename* is compared between the remote
+  system and the local system. Each remote sync implementation must
+  ensure that the filenames generated are unique for each roundup issue.
+  For example for Jira the filenames consist of the filename in Jira
+  plus the unique file id in Jira.
+- ``Sync_Attribute_Messages`` synchronizes messages of the remote
+  tracker with the messages in the local tracker. First all messages of
+  the remote tracker are checked against the local messages, all
+  messages not found in the local tracker are created. The
+  synchronisation in the other direction is only done if a keyword
+  parameter is given to the class constructor of
+  ``Sync_Attribute_Messages``. All messages having the given keyword are
+  synchronized to the remote tracker.
 - ``Sync_Attribute_Message`` synchronizes a field in the remote tracker
   to a new message in roundup. Whenever the field in the remote issue
   changes, a new message is created in roundup and linked to the issue.
@@ -105,6 +143,13 @@ need to be defined. The following attribute definitions are possible:
   an issue that is specified in the ``Analyse`` field in KPMweb. We
   synchronize this field to a roundup message with the headline
   ``Analyse:``.
+- ``Sync_Attribute_Default_Message`` specifies a default message that is
+  added to the local issue whenever all other message synchronisation
+  has not produced any message. This attribute needs to be *after* all
+  other message synchronisation attributes in the list of sync
+  attributes. Adding a default message is used to add at least one
+  message to a new issue in roundup because at least one message is
+  required.
 
 In addition to the synchronized attributes, the URL of the roundup
 tracker (which includes user name and password), the KPMweb user name
@@ -115,7 +160,8 @@ configuration file and on the command line, the command line wins.
 
 The configuration file for the KPMweb synchronisation typically lives in
 ``/etc/trackersync/kpm_config.py`` but can be overridden on the command
-line.
+line. The configuration file for the Jira synchronisation backend lives
+in the same directory by default.
 
 Resources
 ---------
@@ -131,6 +177,18 @@ Alternatively you may want to install using ``pip``::
 
 Changes
 -------
+
+Version 1.1: Implemented Jira synchronisation
+
+Jira synchronisation is implemented, this needs a recent version of the
+python ``requests`` library installed. In some new sync attributes have
+been implemented, in particular two-way synchronisation. Two-way
+synchronisation is now also supported for messages and files.
+
+ - Jira synchronisation
+ - Two-way sync for atomic attributes
+ - Two-way sync for messages and files
+ - Standalone command-line tools for KPM and Jira sync
 
 Version 1.0: Initial Release with kpmsync
 

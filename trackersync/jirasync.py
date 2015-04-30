@@ -95,6 +95,19 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
         del self.record ['updated']
     # end def __init__
 
+    def add_message (self, roundup_msg) :
+        """ Add the given roundup_msg to the current jira issue.
+            As indicated in base class, roundup_msg is a dictionary of
+            all message properties with current values.
+        """
+        d  = dict (body = roundup_msg ['content'])
+        u  = self.jira.url + '/issue/' + self.id + '/comment'
+        h  = { 'content-type' : 'application/json' }
+        r  = self.jira.session.post (u, data = json.dumps (d), headers = h)
+        j  = r.json ()
+        return j ['id']
+    # end def add_message
+
     def attach_file (self, name, type, content) :
         u = self.jira.url + '/issue/' + self.id + '/attachments'
         h = {'X-Atlassian-Token': 'nocheck'}
@@ -149,6 +162,7 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
             yield dict \
                 ( content = c ['body']
                 , date    = jira_utctime (c ['updated'])
+                , id      = c ['id']
                 )
     # end def messages
 

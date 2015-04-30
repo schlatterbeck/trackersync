@@ -58,7 +58,7 @@ JIRA_ATTRIBUTES = \
         ( headline     = 'Description:'
         , remote_name  = 'description'
         )
-    , roundup_sync.Sync_Attribute_Messages ()
+    , roundup_sync.Sync_Attribute_Messages (keyword = 'External Sync')
     , roundup_sync.Sync_Attribute_Default_Message
         ( message      = 'Imported from Jira without messages'
         )

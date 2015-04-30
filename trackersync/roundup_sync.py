@@ -92,6 +92,18 @@ class Remote_Issue (autosuper) :
     # end def __str__
     __repr__ = __str__
 
+    def add_message (self, msg) :
+        """ Add the given roundup message msg to this remote issue.
+            The roundup message is a dictionary with the message
+            properties as keys and the values of the given message.
+            The method should return the id of the message just created
+            if available. If no ids are supported by the remote system,
+            message matching is performed only by other attributes
+            (including content).
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def add_message
+
     def as_json (self) :
         """ Only return non-empty values in json dump. """
         d = dict ((k, v) for k, v in self.record.iteritems () if v)
@@ -276,42 +288,100 @@ class Sync_Attribute_Messages (Sync_Attribute) :
         roundup. The Remote_Issue descendant class of the remote tracker
         has to implement the 'messages' method to iterate over all
         messages of the remote tracker.
-        Note that currently only one-way sync is implemented (from the
-        remote tracker to roundup).
+        Two-way sync is used if a keyword is given. In that case the
+        msg class in roundup needs to have a ``keywords`` attribute
+        which is a Multilink to ``msg_keyword``. If a message has the
+        given keyword it is considered for synchronisation to the remote
+        tracker.
     """
 
-    def __init__ (self) :
+    def __init__ (self, keyword = None) :
         self.__super.__init__ ('messages', remote_name = None)
+        self.keyword = keyword
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
         rup_msgs = []
-        msgs = syncer.get (self, id)
+        msgs   = syncer.get (self, id)
+        nosync = {}
         for m in sorted (msgs, key = lambda x: -int (x)) :
-            rup_msgs.append (syncer.getitem ('msg', m))
-        found = False
+            msg = syncer.getitem ('msg', m)
+            msg ['id'] = m
+            rup_msgs.append (msg)
+            nosync [m] = msg
+        appended = False
         for m in remote_issue.messages () :
-            for mrup in rup_msgs :
-                # compare content last
-                for k in sorted (m, key = lambda x: x == 'content') :
-                    rupm = mrup [k]
-                    mm = m [k]
-                    if k == 'date' :
-                        assert rupm.startswith ('<Date ')
-                        rupm = rupm [6:-1]
-                        if  (   mm [-5] == '+' or mm [-5] == '-'
-                            and isdigit (mm [-4:])
-                            ) :
-                            mm = mm [:-5]
-                    if rupm.rstrip () != mm.rstrip () :
+            emk = None
+            mid = None
+            if 'id' in m :
+                mid = m ['id']
+                del m ['id']
+            matchmsg = False
+            if mid :
+                try :
+                    emk = syncer.lookup \
+                        ('ext_msg', ':'.join ((syncer.tracker, mid)))
+                except KeyError :
+                    pass
+                if emk :
+                    mk = syncer.getitem ('ext_msg', emk, 'msg') ['msg']
+                    if mk in nosync :
+                        ct = nosync [mk]['content'].strip ()
+                        # Only if content matches, some remote trackers
+                        # allow message modification
+                        if ct == m ['content'].strip () :
+                            del nosync [mk]
+                            matchmsg = True
+            else :
+                for mrup in rup_msgs :
+                    # compare content last
+                    for k in sorted (m, key = lambda x: x == 'content') :
+                        rupm = mrup [k]
+                        mm = m [k]
+                        if k == 'date' :
+                            assert rupm.startswith ('<Date ')
+                            rupm = rupm [6:-1]
+                            if  (   mm [-5] == '+' or mm [-5] == '-'
+                                and isdigit (mm [-4:])
+                                ) :
+                                mm = mm [:-5]
+                        if rupm.rstrip () != mm.rstrip () :
+                            break
+                    else : # match
+                        del nosync [mrup ['id']]
+                        matchmsg = True
                         break
-                else : # match
-                    break
-            else : # no match
+            if not matchmsg :
                 msgs.append (syncer.create ('msg', **m))
-                found  = True
-        if found :
+                if mid :
+                    if emk :
+                        syncer.setitem ('ext_msg', emk, msg = msgs [-1])
+                    else :
+                        syncer.create \
+                            ( 'ext_msg'
+                            , ext_tracker = syncer.tracker
+                            , msg         = msgs [-1]
+                            , ext_id      = mid
+                            , key         = ''
+                            )
+                appended  = True
+        if appended :
             syncer.set (self, id, msgs)
+        if self.keyword is not None :
+            k = syncer.lookup ('msg_keyword', self.keyword)
+            for mrup in nosync.itervalues () :
+                if k in mrup ['keywords'] :
+                    mid = remote_issue.add_message (mrup)
+                    if syncer.verbose :
+                        print ("New remote message from msg%s" % mrup ['id'])
+                    if mid is not None :
+                        syncer.create \
+                            ( 'ext_msg'
+                            , ext_tracker = syncer.tracker
+                            , msg         = mrup ['id']
+                            , ext_id      = mid
+                            , key         = ''
+                            )
     # end def sync
 
 # end class Sync_Attribute_Messages
@@ -509,6 +579,21 @@ class Syncer (autosuper) :
         p = ("%s=%s" % (k, v) for k, v in attr.iteritems ())
         return self.srv.set ('%s%s' % (cls, id), *p)
     # end def setitem
+
+    def lookup (self, cls, key) :
+        try :
+            return self.srv.lookup (cls, key)
+        except xmlrpclib.Fault as fault :
+            fs = fault.faultString
+            if 'exceptions.KeyError' in fs :
+                msg = fs.split (':') [1]
+                msg = msg.rstrip ("'")
+                msg = msg.strip ('\\')
+                msg = msg.lstrip ("'")
+                raise KeyError (msg)
+            else :
+                raise
+    # end def lookup
 
     def set (self, attr, id, value) :
         self.newvalues [id][attr.name] = value
