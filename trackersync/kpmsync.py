@@ -64,9 +64,10 @@ class Config (Config_File) :
 
 class Problem (roundup_sync.Remote_Issue) :
 
-    def __init__ (self, kpm, record, canceled = False) :
+    def __init__ (self, kpm, record, lang, canceled = False) :
         self.kpm      = kpm
         self.canceled = canceled
+        self.lang     = lang
         rec = {}
         for k, v in record.iteritems () :
             if v is not None and v != str ('') :
@@ -98,56 +99,106 @@ class Problem (roundup_sync.Remote_Issue) :
         return [i.decode ('latin1') for i in ids]
     # end def document_ids
 
+    def __getitem__ (self, name) :
+        if name in ('action', 'number') :
+            name = getattr (self.lang, name)
+        return self.__super.__getitem__ (name)
+    # end def __getitem__
+
 # end def Problem
 
-# Numbering is 1-based from manual, we correct this in code rather than
-# trying to get it right in the following table.
-# These are the attributes with duplicate column names in the CSV
-# export. We fix this by adding a ' [Code]' suffix to the first
-# value (which is a key into some table).
-fix_kpm_attr = \
-    ( ( 7, 'Land')
-    , ( 9, 'E-Projekt')
-    , (14, 'Funktionalit\xe4t')
-    , (16, 'Reproduzierbar')
-    , (18, 'Fehlerh\xe4ufigkeit')
-    , (22, 'Ger\xe4tetyp')
-    , (27, 'Ger\xe4tetyp 2')
-    , (32, 'Ger\xe4tetyp 3')
-    , (55, 'L-Status')
-    , (64, 'Verifikation-Status')
-    , (76, 'Modulrelevant')
-    )
+class KPM_Language (autosuper) :
+    """ Encapsulate various language features of KPM.
+        Note that we keep the currently-configured language -- so in the
+        config-file the user can configure the translations according to
+        their native language. Currently we handle only german and
+        english. In addition to determining the language we translate
+        some duplicate header lines in the CSV:
+    """
 
-def fix_kpm_csv (delimiter, f) :
-    first = f.next ().split (delimiter)
-    for idx, header in fix_kpm_attr :
-        header = header.encode ('latin1')
-        assert first [idx - 1] == first [idx - 2] == header
-        first [idx - 2] = first [idx - 2] + ' [Code]'.encode ('latin1')
-    yield delimiter.join (first)
-    for line in f :
-        yield (line)
-# end def fix_kpm_csv
+    # Numbering is 1-based from manual, we correct this in code rather than
+    # trying to get it right in the following table.
+    # These are the attributes with duplicate column names in the CSV
+    # export. We fix this by adding a ' [Code]' suffix to the first
+    # value (which is a key into some table).
+    fix_kpm_attr_german = \
+        ( ( 7, 'Land')
+        , ( 9, 'E-Projekt')
+        , (14, 'Funktionalit\xe4t')
+        , (16, 'Reproduzierbar')
+        , (18, 'Fehlerh\xe4ufigkeit')
+        , (22, 'Ger\xe4tetyp')
+        , (27, 'Ger\xe4tetyp 2')
+        , (32, 'Ger\xe4tetyp 3')
+        , (55, 'L-Status')
+        , (64, 'Verifikation-Status')
+        , (76, 'Modulrelevant')
+        )
+
+    fix_kpm_attr_english = \
+        ( ( 7, 'Country')
+        , ( 9, 'E-Project')
+        , (14, 'Functionality')
+        , (16, 'Repeatable')
+        , (18, 'Fault frequency')
+        , (22, 'Device type')
+        , (27, 'device type 2')
+        , (32, 'device type 3')
+        , (55, 'L-Status')
+        , (64, 'Verification status')
+        , (76, 'module relevant')
+        )
+
+    def __init__ (self, delimiter) :
+        self.delimiter = delimiter
+        self.language  = None
+        self.action    = None
+        self.number    = None
+    # end def __init__
+
+    def fix_kpm_csv (self, f) :
+        first = f.next ().split (self.delimiter)
+        fix   = self.fix_kpm_attr_german
+        lang  = "german"
+        if  (  first [self.fix_kpm_attr_english [0][0] - 1]
+            == self.fix_kpm_attr_english [0][1]
+            ) :
+            fix  = self.fix_kpm_attr_english
+            lang = "english"
+        assert first [fix [0][0] - 1] == fix [0][1]
+        self.language = lang
+        self.action   = first [0]
+        self.number   = first [1]
+        for idx, header in fix :
+            header = header.encode ('latin1')
+            assert first [idx - 1] == first [idx - 2] == header
+            first [idx - 2] = first [idx - 2] + ' [Code]'.encode ('latin1')
+        yield self.delimiter.join (first)
+        for line in f :
+            yield (line)
+    # end def fix_kpm_csv
+
+# end class KPM_Language
 
 class Export (autosuper) :
 
     def __init__ (self, kpm, f, canceled = False) :
         self.canceled = canceled
         self.problems = {}
-        delimiter = str (';')
-        c = DictReader (fix_kpm_csv (delimiter, f), delimiter = delimiter)
+        self.lang = KPM_Language (delimiter = str (';'))
+        c = DictReader \
+            (self.lang.fix_kpm_csv (f), delimiter = self.lang.delimiter)
         for record in c :
-            if record ['Aktion'] :
+            if record [self.lang.action] :
                 continue
-            p = Problem (kpm, record, canceled = self.canceled)
-            self.problems [p.Nummer] = p
+            p = Problem (kpm, record, self.lang, canceled = self.canceled)
+            self.problems [p.number] = p
     # end def __init__
 
     def add (self, problem) :
-        if problem.Nummer in self.problems :
-            raise ValueError, "Duplicate Problem: %s" % problem.Nummer
-        self.problems [problem.Nummer] = problem
+        if problem.number in self.problems :
+            raise ValueError, "Duplicate Problem: %s" % problem.number
+        self.problems [problem.number] = problem
     # end def add
 
     def delete (self, problem_id) :
@@ -177,21 +228,25 @@ class Job (autosuper) :
     """ Job handling
     """
 
-    dates  = dict \
+    dates = dict \
         (( ('create', 'createdAt')
         ,  ('start',  'startedAt')
         ,  ('finish', 'finishedAt')
         ))
-    states = ('Auftrag angelegt', 'in Arbeit', 'fertiggestellt', 'Fehler')
-    types  = ( 'Lieferantenimport'
-             , 'Lieferantenexport'
-             , 'Lieferantenexport (stornierte Auftr\xe4ge)'
-             )
-    xmlns  = 'uri:de.volkswagen.kpm.ajax.xmlns'
+    states_d = ('Auftrag angelegt', 'in Arbeit', 'fertiggestellt', 'Fehler')
+    states_e = ('Auftrag angelegt', 'Accepted', 'Completed', 'Fehler')
+    types = \
+        ( 'Lieferantenimport'
+        , 'Lieferantenexport'
+        , 'Lieferantenexport (stornierte Auftr\xe4ge)'
+        )
+    xmlns = 'uri:de.volkswagen.kpm.ajax.xmlns'
 
-    def __init__ (self, kpm, jobid) :
+    def __init__ (self, kpm, jobid, debug = False) :
         self.kpm    = kpm
         self.jobid  = jobid
+        self.debug  = debug
+        self.count  = 0
         self.create = None
         self.start  = None
         self.finish = None
@@ -224,9 +279,10 @@ class Job (autosuper) :
         for e in ji :
             if e.tag == self.tag ('state') :
                 key = int (e.get ('key'), 10)
-                assert key < len (self.states)
-                if self.states [key] != e.get ('text') :
-                    print (self.states [key], e.get ('text'))
+                assert key < len (self.states_d)
+                if self.states_d [key] != e.get ('text') :
+                    if self.states_e [key] != e.get ('text') :
+                        print (self.states [key], e.get ('text'))
                 #assert self.states [key] == e.get ('text')
                 self.state = key
             if e.tag == self.tag ('type') :
@@ -240,8 +296,14 @@ class Job (autosuper) :
     # end def parse
 
     def query (self) :
+        self.count += 1
         f = self.kpm.get ('ticket.info.do', ticketId = self.jobid)
         v = f.read ()
+        if self.debug :
+            fn = "JOB-%s-%s" % (self.jobid, self.count)
+            f  = open (fn, 'w')
+            f.write (v)
+            f.close ()
         self.parse (v)
     # end def query
 
@@ -336,7 +398,7 @@ class KPM (autosuper) :
         p   = dict (params, columnModel = "V4".encode ('latin1'))
         f = self.get ('search.ee.exportJob.do', **p)
         v   = f.read ()
-        j   = Job (self, v)
+        j   = Job (self, v, debug = self.debug)
         if self.debug :
             print ("Job-ID: %s" % v)
         self.jobs.append (j)
@@ -396,10 +458,10 @@ def main () :
     username = opt.username    or cfg.KPM_USERNAME
     password = opt.password    or cfg.KPM_PASSWORD
     address  = opt.address     or cfg.KPM_ADDRESS
-    url      = opt.roundup_url or cfg.ROUNDUP_URL
+    url      = opt.roundup_url or cfg.get ('ROUNDUP_URL', None)
     kpm.login  (username = username, password = password)
     if (opt.job) :
-        jobs = [Job (kpm, opt.job)]
+        jobs = [Job (kpm, opt.job, debug = opt.debug)]
     else :
         # get active and canceled issues
         jobs = [kpm.search (address = address)]
