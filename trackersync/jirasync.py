@@ -250,6 +250,12 @@ def main () :
         , help    = "JQL-Query, overrides assignee option"
         )
     cmd.add_option \
+        ( "-n", "--no-action"
+        , help    = "Dry-run: Don't update any side of sync"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_option \
         ( "-P", "--password"
         , help    = "KPM login password"
         )
@@ -303,6 +309,7 @@ def main () :
             ( rup_url, cfg.get ('TRACKER_NAME', 'JIRA'), cfg.JIRA_ATTRIBUTES
             , verbose = opt.verbose
             , debug   = opt.debug
+            , dry_run = opt.no_action
             )
     if syncer :
         for issue in jira.query (q) :

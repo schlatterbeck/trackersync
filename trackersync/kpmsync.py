@@ -73,6 +73,8 @@ class Problem (roundup_sync.Remote_Issue) :
             if v is not None and v != str ('') :
                 v = v.decode ('latin1')
                 rec [k.decode ('latin1')] = v
+        # We can restrict the attributes to be synced to an explicit
+        # subset. The default is no restriction with attributes = {}
         attributes = {}
         if self.canceled :
             attributes ['Status'] = True
@@ -104,6 +106,12 @@ class Problem (roundup_sync.Remote_Issue) :
             name = getattr (self.lang, name)
         return self.__super.__getitem__ (name)
     # end def __getitem__
+
+    def update_remote (self, syncer) :
+        """ Update remote issue tracker with self.newvalues.
+        """
+        print ("Called update_remote")
+    # end def update_remote
 
 # end def Problem
 
@@ -149,6 +157,170 @@ class KPM_Language (autosuper) :
         , (76, 'module relevant')
         )
 
+    fields_english = \
+        ( 'Action'
+        , 'Number'
+        , 'Change-TS problem'
+        , 'Date'
+        , 'Origin'
+        , 'Country'
+        , 'Country [Code]'
+        , 'E-Project'
+        , 'E-Project [Code]'
+        , 'Short Text'
+        , 'Problem Description'
+        , 'Analysis/Root Cause'
+        , 'Functionality'
+        , 'Functionality [Code]'
+        , 'Repeatable'
+        , 'Repeatable [Code]'
+        , 'Fault frequency'
+        , 'Fault frequency [Code]'
+        , 'Project'
+        , 'Veh.-no.'
+        , 'Device type'
+        , 'Device type [Code]'
+        , 'Part-no. (causing)'
+        , 'HW (causing)'
+        , 'SW (causing)'
+        , 'device type 2'
+        , 'device type 2 [Code]'
+        , 'part-no. 2'
+        , 'HW 2'
+        , 'SW 2'
+        , 'device type 3'
+        , 'device type 3 [Code]'
+        , 'part-no. 3'
+        , 'HW 3'
+        , 'SW 3'
+        , 'VBV'
+        , 'Train'
+        , 'Rating'
+        , 'Status'
+        , 'Engineering status'
+        , 'Creator'
+        , 'Typist User'
+        , 'Coordinator'
+        , 'Coordinator user'
+        , 'engineering Coordinator'
+        , 'engineering coordinator user'
+        , 'Responsible Problem Solver'
+        , 'Responsible Problem Solver User'
+        , 'Implementation date'
+        , 'Order type'
+        , 'Contract Number'
+        , 'Change-TS supplier'
+        , 'supplier'
+        , 'L-Status'
+        , 'L-Status [Code]'
+        , 'L-Fault No.'
+        , 'L-System-OK'
+        , 'L-Intro date'
+        , 'supplier response/fixes'
+        , 'Supplier info'
+        , 'Tester'
+        , 'Tester User'
+        , 'Verification status'
+        , 'Verification status [Code]'
+        , 'verification software vers.'
+        , 'verification hardware vers.'
+        , 'verification'
+        , 'Documents'
+        , 'Additional Criteria 1'
+        , 'Description Additional Criteria 1'
+        , 'Additional Criteria 2'
+        , 'Description Additional Criteria 2'
+        , 'Additional Criteria 3'
+        , 'Description Additional Criteria 3'
+        , 'module relevant'
+        , 'module relevant [Code]'
+        , 'Active With'
+        , 'Authorised To Close'
+        )
+
+    fields_german = \
+        ( 'Aktion'
+        , 'Nummer'
+        , 'Änderungs-TS Problem'
+        , 'Datum'
+        , 'Quelle'
+        , 'Land'
+        , 'Land [Code]'
+        , 'E-Projekt'
+        , 'E-Projekt [Code]'
+        , 'Kurztext'
+        , 'Problembeschreibung'
+        , 'Analyse'
+        , 'Funktionalität'
+        , 'Funktionalität [Code]'
+        , 'Reproduzierbar'
+        , 'Reproduzierbar [Code]'
+        , 'Fehlerhäufigkeit'
+        , 'Fehlerhäufigkeit [Code]'
+        , 'Projekt'
+        , 'Fzg Nr.'
+        , 'Gerätetyp'
+        , 'Gerätetyp [Code]'
+        , 'Teilnummer (verurs.)'
+        , 'Hardwarestand (verurs.)'
+        , 'Softwarestand (verurs.)'
+        , 'Gerätetyp 2'
+        , 'Gerätetyp 2 [Code]'
+        , 'Teilnummer 2'
+        , 'Hardwarestand 2'
+        , 'Softwarestand 2'
+        , 'Gerätetyp 3'
+        , 'Gerätetyp 3 [Code]'
+        , 'Teilnummer 3'
+        , 'Hardwarestand 3'
+        , 'Softwarestand 3'
+        , 'VBV'
+        , 'Zug'
+        , 'Bewertung'
+        , 'Status'
+        , 'FB-Status'
+        , 'Erfasser'
+        , 'Erfasser Benutzer'
+        , 'Koordinator'
+        , 'Koordinator Benutzer'
+        , 'Fachkoordinator'
+        , 'Fachkoordinator Benutzer'
+        , 'Problemlösungsverantwortlicher'
+        , 'Problemlösungsverantwortlicher Benutzer'
+        , 'Einsatzdatum'
+        , 'Auftragsart'
+        , 'Auftragsnummer'
+        , 'Änderungs-TS Lieferant'
+        , 'Lieferant'
+        , 'L-Status'
+        , 'L-Status [Code]'
+        , 'L-Fehlernummer'
+        , 'L-System-IO'
+        , 'L-Einsatzdatum'
+        , 'Lieferantenaussage'
+        , 'Lieferanteninfo'
+        , 'Tester'
+        , 'Tester Benutzer'
+        , 'Verifikation-Status'
+        , 'Verifikation-Status [Code]'
+        , 'Verifikation-Softwarestand'
+        , 'Verifikation-Hardwarestand'
+        , 'Verifikation'
+        , 'Dokumente'
+        , 'Zusatzkriterium 1'
+        , 'Bechreibung Zusatzkriterium 1'
+        , 'Zusatzkriterium 2'
+        , 'Bechreibung Zusatzkriterium 2'
+        , 'Zusatzkriterium 3'
+        , 'Bechreibung Zusatzkriterium 3'
+        , 'Modulrelevant'
+        , 'Modulrelevant [Code]'
+        , 'Aktiv bei'
+        , 'Abschlussrecht'
+        )
+
+    fieldnames = dict (english = fields_english, german = fields_german)
+
     def __init__ (self, delimiter) :
         self.delimiter = delimiter
         self.language  = None
@@ -182,12 +354,25 @@ class KPM_Language (autosuper) :
 
 class Export (autosuper) :
 
-    def __init__ (self, kpm, f, canceled = False) :
+    def __init__ (self, kpm, f, canceled = False, debug = False) :
         self.canceled = canceled
+        self.debug    = debug
         self.problems = {}
-        self.lang = KPM_Language (delimiter = str (';'))
-        c = DictReader \
-            (self.lang.fix_kpm_csv (f), delimiter = self.lang.delimiter)
+        self.kpm      = kpm
+        self.lang     = KPM_Language (delimiter = str (';'))
+        if self.debug :
+            fo = open ('%s.csv' % self.debug, 'w')
+            lines = []
+            for line in f :
+                lines.append (line)
+                fo.write (line)
+            fo.close ()
+            i = iter (lines)
+            c = DictReader \
+                (self.lang.fix_kpm_csv (i), delimiter = self.lang.delimiter)
+        else :
+            c = DictReader \
+                (self.lang.fix_kpm_csv (f), delimiter = self.lang.delimiter)
         for record in c :
             if record [self.lang.action] :
                 continue
@@ -212,6 +397,8 @@ class Export (autosuper) :
     def sync (self, syncer) :
         for p_id, p in self.problems.iteritems () :
             syncer.sync (p_id, p)
+        syncer.sync_new_local_issues \
+            (lambda x: Problem (self.kpm, x, self.lang))
     # end def sync
 
     def __repr__ (self) :
@@ -318,7 +505,7 @@ class Job (autosuper) :
         if self.state != 2 or self.type == 0 :
             return None
         f  = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
-        xp = Export (self.kpm, f, canceled = self.type == 2)
+        xp = Export (self.kpm, f, canceled = self.type == 2, debug = self.jobid)
         return xp
     # end def download
 
@@ -430,6 +617,12 @@ def main () :
         , help    = "KPM job identifier (mainly used for debugging)"
         )
     cmd.add_option \
+        ( "-n", "--no-action"
+        , help    = "Dry-run: Don't update any side of sync"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_option \
         ( "-r", "--roundup-url"
         , help    = "Roundup URL for XMLRPC"
         )
@@ -472,6 +665,7 @@ def main () :
             (url, 'KPM', cfg.KPM_ATTRIBUTES
             , verbose = opt.verbose
             , debug   = opt.debug
+            , dry_run = opt.no_action
             )
     for j in jobs :
         j.query ()

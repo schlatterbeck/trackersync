@@ -27,6 +27,7 @@ from __future__ import absolute_import
 
 import xmlrpclib
 import json
+import numbers
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import ustr, text_type
 
@@ -148,6 +149,22 @@ class Remote_Issue (autosuper) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def document_ids
 
+    def create (self) :
+        """ Create new remote issue from data here. This is called by
+            the sync framework *after* all attributes have been set by
+            the sync. Similar to update_remote but creating a new remote
+            issue.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def create
+
+    def get (self, name, default = None) :
+        try :
+            return self [name]
+        except KeyError :
+            return default
+    # end def get
+
     def messages (self) :
         """ Iterator over messages of this remote issue.
             The iterator must return a dictionary, the keys are the
@@ -162,13 +179,6 @@ class Remote_Issue (autosuper) :
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def messages
-
-    def get (self, name, default = None) :
-        try :
-            return self [name]
-        except KeyError :
-            return default
-    # end def get
 
     def set (self, name, value) :
         if self.multilevel :
@@ -202,7 +212,11 @@ class Sync_Attribute (autosuper) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        """ Needs to be implemented in child class """
+        """ Needs to be implemented in child class.
+            Note that a sync method may return a value != None in which
+            case the sync for this Issue is not done. Useful for checks
+            if a sync for a particular issue should happen.
+        """
         pass
     # end def sync
 
@@ -216,8 +230,8 @@ class Sync_Attribute_One_Way (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         v = remote_issue.get (self.remote_name, None)
-        if syncer.get (self, id) != v :
-            syncer.set (self, id, v)
+        if syncer.get (id, self.name) != v :
+            syncer.set (id, self.name, v)
     # end def sync
 
 # end class Sync_Attribute_One_Way
@@ -236,8 +250,8 @@ class Sync_Attribute_Default (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         v = remote_issue.get (self.remote_name, self.default)
-        if syncer.get (self, id) is None :
-            syncer.set (self, id, v)
+        if syncer.get (id, self.name) is None :
+            syncer.set (id, self.name, v)
     # end def sync
 
 # end class Sync_Attribute_Default
@@ -248,12 +262,50 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
         number in the remote tracker if the remote tracker also supports
         keeping numbers of another tracker or there is a dedicated
         custom attribute for this.
+        An optional map can map local and remote values via a
+        dictionary. The keys in the map are local values. These map to
+        the remote values. Internally an inverse map is computed.
+        Optionally we can define a local default l_default. This is set
+        if the local value is None *and* the remote value is None.
     """
+
+    def __init__ \
+        ( self
+        , roundup_name
+        , remote_name = None
+        , l_default   = None
+        , map         = None
+        ) :
+        self.__super.__init__ (roundup_name, remote_name)
+        self.l_default = l_default
+        self.map       = map
+        self.imap      = None
+        if self.map :
+            self.imap = dict ((v, k) for k, v in map.iteritems ())
+    # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
         rv = remote_issue.get (self.remote_name, None)
-        lv = syncer.get (self, id)
-        if lv != rv :
+        lv = syncer.get (id, self.name)
+        if self.map :
+            # Both maps need to disagree for non-equal -- this prevents
+            # ping-pong updates in case the mappings are not fully
+            # consistent
+            equal = \
+                (  self.map.get (lv, self.l_default) == rv
+                or self.imap.get (rv, None) == lv
+                )
+        else :
+            equal = lv == rv
+        #if not equal :
+        #    import pdb; pdb.set_trace ()
+        if self.imap :
+            rv = self.imap.get (rv, None)
+        if self.map :
+            lv = self.map.get (lv, self.l_default)
+        if lv is None and rv is None and self.l_default is not None :
+            lv = self.l_default
+        if not equal :
             remote_issue.set (self.remote_name, lv)
     # end def sync
 
@@ -264,19 +316,72 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
         sync. If it did, we update the local tracker -- even if it might
         have changed too. If the remote has not changed we check if we
         need to update the local tracker.
+        An optional map can map local and remote values via a
+        dictionary. The keys in the map are local values. These map to
+        the remote values. Internally an inverse map is computed unless
+        imap is specified.
+        We can specify defaults for both, the local tracker (l_default)
+        *and* the remote tracker (r_default). These apply only if both,
+        the local *and* the remote value are empty. In that case the
+        local default (l_default) is set locally and the remote default
+        (r_default) is set on the remote side.
+        Note that in case we have both, a remote and a local default and
+        both sides have empty values, the result is undefined if both
+        values do not match (or a map maps them to equal values).
     """
+
+    def __init__ \
+        ( self
+        , roundup_name
+        , remote_name = None
+        , r_default   = None
+        , l_default   = None
+        , map         = None
+        , imap        = None
+        ) :
+        self.__super.__init__ (roundup_name, remote_name)
+        self.r_default = r_default
+        self.l_default = l_default
+        self.map       = map
+        self.imap      = imap
+        if self.map and not self.imap :
+            self.imap = dict ((v, k) for k, v in map.iteritems ())
+        if self.imap and not self.map :
+            self.map = dict ((v, k) for k, v in imap.iteritems ())
+    # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
         rv = remote_issue.get (self.remote_name, None)
-        lv = syncer.get (self, id)
-        if rv == lv :
+        lv = syncer.get (id, self.name)
+        if self.map :
+            # Both maps need to disagree for non-equal -- this prevents
+            # ping-pong updates in case the mappings are not fully
+            # consistent
+            equal = \
+                (  self.map.get (lv, self.l_default) == rv
+                or self.imap.get (rv, None) == lv
+                )
+        else :
+            equal = lv == rv
+        #if not equal :
+        #    import pdb; pdb.set_trace ()
+        if self.map :
+            lv = self.map.get (lv, self.l_default)
+        if self.imap :
+            rv = self.imap.get (rv, self.r_default)
+        if rv is None and lv is None :
+            if self.l_default is not None :
+                lv = self.l_default # this is synced *to* remote
+            if self.r_default is not None :
+                rv = self.r_default # this is synced *to* local
+        if equal :
             return
         changed = False
         old = syncer.oldremote.get (self.remote_name, None)
-        changed = old != remote_issue.get (self.remote_name)
+        changed = old != rv
         # check if remote changed since last sync
         if changed :
-            syncer.set (self, id, rv)
+            syncer.set (id, self.name, rv)
         else :
             remote_issue.set (self.remote_name, lv)
     # end def sync
@@ -302,7 +407,7 @@ class Sync_Attribute_Messages (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         rup_msgs = []
-        msgs   = syncer.get (self, id)
+        msgs   = syncer.get (id, self.name)
         nosync = {}
         for m in sorted (msgs, key = lambda x: -int (x)) :
             msg = syncer.getitem ('msg', m)
@@ -366,7 +471,7 @@ class Sync_Attribute_Messages (Sync_Attribute) :
                             )
                 appended  = True
         if appended :
-            syncer.set (self, id, msgs)
+            syncer.set (id, self.name, msgs)
         if self.keyword is not None :
             k = syncer.lookup ('msg_keyword', self.keyword)
             for mrup in nosync.itervalues () :
@@ -405,7 +510,7 @@ class Sync_Attribute_Message (Sync_Attribute) :
         v = remote_issue.get (self.remote_name, None)
         if not v :
             return
-        msgs = syncer.get (self, id)
+        msgs = syncer.get (id, self.name)
         for m in sorted (msgs, key = lambda x: -int (x)) :
             msg = syncer.getitem ('msg', m)
             cnt = msg ['content']
@@ -416,8 +521,9 @@ class Sync_Attribute_Message (Sync_Attribute) :
                     return
         content = '\n'.join ((self.headline, v))
         newmsg  = syncer.create ('msg', content = content)
-        msgs.append (newmsg)
-        syncer.set (self, id, msgs)
+        if not syncer.dry_run :
+            msgs.append (newmsg)
+        syncer.set (id, self.name, msgs)
     # end def sync
 
 # end class Sync_Attribute_Message
@@ -434,11 +540,11 @@ class Sync_Attribute_Default_Message (Sync_Attribute) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        msgs = syncer.get (self, id)
+        msgs = syncer.get (id, self.name)
         if not msgs :
             newmsg  = syncer.create ('msg', content = self.message)
             msgs.append (newmsg)
-            syncer.set (self, id, msgs)
+            syncer.set (id, self.name, msgs)
     # end def sync
 # end class Sync_Attribute_Default_Message
 
@@ -468,7 +574,7 @@ class Sync_Attribute_Files (Sync_Attribute) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        fids   = syncer.get (self, id)
+        fids   = syncer.get (id, self.name)
         nosync = dict.fromkeys (fids)
         files  = [syncer.getitem ('file', i, 'name', 'id') for i in fids]
         names  = dict ((f ['name'], f ['id']) for f in files)
@@ -486,7 +592,7 @@ class Sync_Attribute_Files (Sync_Attribute) :
                 fids.append (newfile)
                 found = True
         if found :
-            syncer.set (self, id, fids)
+            syncer.set (id, self.name, fids)
         if self.prefix is not None :
             files = [syncer.getitem ('file', i, 'name', 'id', 'type')
                      for i in nosync
@@ -514,30 +620,101 @@ class Syncer (autosuper) :
         the name of the external id attribute in the remote.
     """
 
-    def __init__ (self, url, remote_name, attributes, verbose = 0, debug = 0) :
+    ext_names = dict.fromkeys \
+        (('ext_attributes', 'ext_id', 'ext_status', 'ext_tracker'))
+
+    def __init__ \
+        ( self
+        , url
+        , remote_name
+        , attributes
+        , verbose = 0
+        , debug   = 0
+        , dry_run = 0
+        ) :
         self.srv = xmlrpclib.ServerProxy (url, allow_none = True)
-        self.attributes  = attributes
-        self.oldvalues   = {}
-        self.newvalues   = {}
-        self.newcount    = 0
-        self.remote_name = remote_name
-        schema = self.srv.schema ()
-        self.schema      = dict ((k, dict (schema [k])) for k in schema)
-        self.tracker     = self.srv.lookup ('ext_tracker', remote_name)
-        self.verbose     = verbose
-        self.debug       = debug
-        self.oldremote   = {}
+        self.attributes   = attributes
+        self.oldvalues    = {}
+        self.newvalues    = {}
+        self.newcount     = 0
+        self.remote_name  = remote_name
+        schema            = self.srv.schema ()
+        self.tracker      = self.srv.lookup ('ext_tracker', remote_name)
+        self.verbose      = verbose
+        self.debug        = debug
+        self.dry_run      = dry_run
+        self.oldremote    = {}
+        self.update_state = False
+        self.schema       = dict ((k, dict (schema [k])) for k in schema)
+        # Update schema with auto attributes
+        for cls in self.schema :
+            for k in 'creation', 'activity' :
+                self.schema [cls][k] = '<roundup.hyperdb.Date>'
+            self.schema [cls]['id']  = '<roundup.hyperdb.String>'
     # end def __init__
 
     def create (self, cls, ** kw) :
+        if self.debug :
+            if cls == 'file' :
+                print ("srv.create %s %s" % (cls, kw.get('name', '?')))
+            else :
+                print ("srv.create %s %s" % (cls, kw))
+        if self.dry_run :
+            return "9999999"
         return self.srv.create \
-            (cls, * (self.format (cls, k, v) for k, v in kw.items ()))
+            (cls, * [self.format (cls, k, v) for k, v in kw.items ()])
     # end def create
+
+    def setitem (self, cls, id, ** kw) :
+        """ Set attributes of an item of the given cls,
+            attributes are 'key = value' pairs.
+        """
+        if self.debug :
+            print ("srv.set %s%s %s" % (cls, id, kw))
+        if not self.dry_run :
+            self.srv.set \
+                ( '%s%s' % (cls, id)
+                , * [self.format (cls, k, v) for k, v in kw.items ()]
+                )
+    # end def setitem
+
+    def fix_attributes (self, classname, attrs) :
+        """ Fix transitive attributes. Two possibilities:
+            - a Link to a remote class and the attribute after the dot
+              is the key
+            - The attribute is named 'content' and is the content of a
+              message attribute
+            In the first case we simply perform a lookup, in the second
+            case we create the message and store the id.
+        """
+        new = dict ()
+        for k in attrs :
+            lst = k.split ('.')
+            l   = len (lst)
+            assert l <= 2
+            if l == 2 :
+                cls, name = lst
+                if name == 'content' :
+                    assert self.get_classname (classname, cls) == 'msg'
+                    msg = self.create ('msg', content = attrs [k])
+                    new [cls] = msg
+                else :
+                    assert self.get_type (classname, cls) == 'Link'
+                    id = self.lookup (cls, attrs [k])
+                    new [cls] = id
+            else :
+                new [k] = attrs [k]
+        return new
+    # end def fix_attributes
 
     def format (self, cls, key, value) :
         t = self.schema [cls][key]
+        if value is None :
+            import pdb; pdb.set_trace ()
         if t.startswith ('<roundup.hyperdb.Multilink') :
             return '%s=%s' % (key, ','.join (value))
+        elif isinstance (value, numbers.Number) :
+            return '%s=%s' % (key, value)
         elif not isinstance (value, text_type) :
             return xmlrpclib.Binary \
                 (key.encode ('ascii') + '='.encode ('ascii') + value)
@@ -545,23 +722,71 @@ class Syncer (autosuper) :
             return '%s=%s' % (key, value)
     # end def format
 
-    def get (self, attr, id, name = None) :
-        name = name or attr.name
+    def get (self, id, name) :
+        if name is None :
+            return None
         if name in self.newvalues [id] :
             return self.newvalues [id][name]
         if name not in self.oldvalues [id] :
-            if int (id) > 0 :
-                self.oldvalues [id][name] = self.srv.display \
-                    ('issue%s' % id, name) [name]
+            if name.startswith ('/') :
+                classname, path = name.strip ('/').split ('/', 1)
             else :
-                t = self.schema ['issue'][name]
-                if t.startswith ('<roundup.hyperdb.Multilink') :
-                    v = []
+                classname = 'issue'
+                path = name
+            sid = None
+            if int (id) > 0 :
+                sid = id
+            if name.startswith ('/') and sid :
+                d = dict (issue = id)
+                if 'ext_tracker' in self.schema [classname] :
+                    d ['ext_tracker'] = self.tracker
+                itms = self.srv.filter (classname, None, d)
+                assert len (itms) <= 1
+                if itms :
+                    sid = itms [0]
                 else :
-                    v = None
-                self.oldvalues [id][name] = v
+                    sid = None
+            self.oldvalues [id][name] = self.get_path (classname, path, sid)
         return self.oldvalues [id][name]
     # end def get
+
+    def get_classname (self, classname, name) :
+        """ Get the classname of a Link or Multilink property """
+        assert self.schema [classname][name].endswith ('">')
+        return self.schema [classname][name].strip ('"').rsplit ('"', 2) [-2]
+    # end def get_classname
+
+    def get_default (self, classname, name) :
+        """ Get default value for a property of the given class """
+        t = self.schema [classname][name]
+        if t.startswith ('<roundup.hyperdb.Multilink') :
+            v = []
+        else :
+            v = None
+        return v
+    # end def get_default
+
+    def get_path (self, classname, path, id) :
+        path = path.split ('.')
+        for p in path [:-1] :
+            assert self.get_type (classname, p) == 'Link'
+            if id :
+                id = self.srv.display ('%s%s' % (classname, id), p) [p]
+            classname = self.get_classname (classname, p)
+        p = path [-1]
+        if id :
+            return self.srv.display ('%s%s' % (classname, id), p) [p]
+        return self.get_default (classname, p)
+    # end def get_path
+
+    def get_type (self, classname, name) :
+        """ Get type of link value, either Link or Multilink """
+        t = self.schema [classname][name]
+        t = t.split () [0]
+        t = t.rsplit ('.', 1) [-1]
+        assert t in ('Link', 'Multilink')
+        return t
+    # end def get_type
 
     def getitem (self, cls, id, *attr) :
         """ Get all or given list of attributes of an item of the given cls.
@@ -571,14 +796,6 @@ class Syncer (autosuper) :
         """
         return self.srv.display ('%s%s' % (cls, id), *attr)
     # end def getitem
-
-    def setitem (self, cls, id, **attr) :
-        """ Set an attribute of an item of the given cls,
-            attributes are 'key = value' pairs.
-        """
-        p = ("%s=%s" % (k, v) for k, v in attr.iteritems ())
-        return self.srv.set ('%s%s' % (cls, id), *p)
-    # end def setitem
 
     def lookup (self, cls, key) :
         try :
@@ -595,9 +812,32 @@ class Syncer (autosuper) :
                 raise
     # end def lookup
 
-    def set (self, attr, id, value) :
-        self.newvalues [id][attr.name] = value
+    def set (self, id, attrname, value) :
+        self.newvalues [id][attrname] = value
     # end def set
+
+    def split_newvalues (self, id) :
+        """ Split self.newvalues into attributes belonging to issue and
+            attributes belonging to ext_tracker_state. This is only
+            needed for new-style roundup sync schema.
+        """
+        classes = dict (issue = {})
+        if 'ext_tracker_state' in self.schema :
+            classes ['ext_tracker_state'] = {}
+        for k in self.newvalues [id] :
+            if k.startswith ('/') :
+                # FIXME: Check if rest is composite
+                classname, rest = k.strip ('/').split ('/', 1)
+                if classname not in classes :
+                    classes [classname] = {}
+                classes [classname][rest] = self.newvalues [id][k]
+            elif k in self.ext_names :
+                classes ['ext_tracker_state'][k] = self.newvalues [id][k]
+            else :
+                # FIXME: Check if k is composite
+                classes ['issue'][k] = self.newvalues [id][k]
+        return classes
+    # end def split_newvalues
 
     def sync (self, remote_id, remote_issue) :
         """ We try to find issue with the given remote_id and then call
@@ -605,18 +845,51 @@ class Syncer (autosuper) :
             found, a new issue will be created after all attributes have
             been synced.
         """
-        issues = self.srv.filter \
-            ( 'issue'
-            , None
-            , dict (ext_id = remote_id, ext_tracker = self.tracker)
+        assert \
+            (  'ext_tracker_state' in self.schema
+            or 'ext_tracker' in self.schema ['issue']
             )
-        id = None
-        do_sync = False
+        ext_state      = None
+        id             = None
+        do_sync        = False
         self.oldremote = {}
-        for i in issues :
-            di = self.srv.display ('issue%s' % i, 'ext_id', 'ext_attributes')
-            if di ['ext_id'] != remote_id :
-                continue
+
+        if 'ext_tracker_state' in self.schema :
+            ext_state = self.srv.filter \
+                ( 'ext_tracker_state'
+                , None
+                , dict (ext_id = remote_id, ext_tracker = self.tracker)
+                )
+            if ext_state :
+                for i in ext_state :
+                    di = self.srv.display \
+                        ( 'ext_tracker_state%s' % i
+                        , 'ext_id', 'ext_attributes', 'issue'
+                        )
+                    if di ['ext_id'] == remote_id :
+                        id = int (di ['issue'])
+                        break
+        # Either old schema or old *and* new schema and never synced
+        # with new schema:
+        if not ext_state and 'ext_tracker' in self.schema ['issue'] :
+            issues = self.srv.filter \
+                ( 'issue'
+                , None
+                , dict (ext_id = remote_id, ext_tracker = self.tracker)
+                )
+            for i in issues :
+                di = self.srv.display \
+                    ('issue%s' % i, 'ext_id', 'ext_attributes')
+                if di ['ext_id'] == remote_id :
+                    id = int (i)
+                    # Update local schema in any case if we have
+                    # new-style schema in database but got data from
+                    # old-style schema.
+                    if 'ext_tracker_state' in self.schema :
+                        self.update_state = True
+                    break
+
+        if id :
             if di ['ext_attributes'] :
                 m = self.getitem ('msg', di ['ext_attributes'])
                 if m ['content'] != remote_issue.as_json () :
@@ -624,10 +897,8 @@ class Syncer (autosuper) :
                 self.oldremote = json.loads (m ['content'])
             else :
                 do_sync = True
-            id = int (i)
             self.newvalues [id] = {}
             self.oldvalues [id] = di
-            break
         else :
             self.newcount += 1
             id = -self.newcount
@@ -637,12 +908,24 @@ class Syncer (autosuper) :
             do_sync = not remote_issue.attributes
             self.newvalues [id] = {}
             self.newvalues [id]['ext_tracker'] = self.tracker
+        # If the following is non-empty, sync only an explicit subset of
+        # attributes.
         attr = remote_issue.attributes
         for a in self.attributes :
             if not attr or a.remote_name in attr :
-                a.sync (self, id, remote_issue)
+                if self.debug :
+                    print \
+                        ( "sa: %s %s %s"
+                        % (a.__class__.__name__, a.name, a.remote_name)
+                        )
+                if a.sync (self, id, remote_issue) :
+                    if self.verbose :
+                        print ("Not syncing: %s" % id)
+                    break
         if 'ext_id' not in self.newvalues [id] :
-            if self.oldvalues [id].get ('ext_id') != remote_id :
+            if  (  self.oldvalues [id].get ('ext_id') != remote_id
+                or self.update_state
+                ) :
                 self.newvalues [id]['ext_id'] = remote_id
         if  (   'ext_attributes' not in self.newvalues [id]
             and    json.dumps (self.oldremote, sort_keys = True, indent = 4)
@@ -650,24 +933,86 @@ class Syncer (autosuper) :
             ) :
             newmsg = self.create ('msg', content = remote_issue.as_json ())
             self.newvalues [id]['ext_attributes'] = newmsg
+        if self.update_state :
+            for attr in 'ext_attributes', 'ext_status' :
+                # get will return newvalues if existing so this is
+                # idempotent if already set
+                self.newvalues [id][attr] = self.get (id, attr)
+            self.newvalues [id]['ext_tracker'] = self.tracker
         if id < 0 :
             if not remote_issue.attributes :
                 if self.verbose :
                     print ("create issue: %s" % self.newvalues [id])
-                self.create ('issue', ** self.newvalues [id])
+                classdict = self.split_newvalues (id)
+                attr = self.fix_attributes ('issue', classdict ['issue'])
+                iid = self.create ('issue', ** attr)
+                del classdict ['issue']
+                self.update_aux_classes (iid, classdict)
         elif self.newvalues [id] :
             if self.verbose :
                 print ("set issue %s: %s" % (id, self.newvalues [id]))
+            classdict = self.split_newvalues (id)
+            attr = self.fix_attributes ('issue', classdict ['issue'])
+            if attr :
+                self.setitem ('issue', id, ** attr)
+            del classdict ['issue']
+            self.update_aux_classes (id, classdict)
+        if remote_issue.newvalues and not self.dry_run :
             if self.debug :
-                print (self.newvalues [id].items ())
-            self.srv.set \
-                ( 'issue%s' % id
-                , * ( self.format ('issue', k, v)
-                      for k, v in self.newvalues [id].items ()
-                    )
-                )
-        if remote_issue.newvalues :
+                print ("Update remote:", remote_issue.newvalues)
             remote_issue.update_remote (self)
     # end def sync
+
+    def sync_new_local_issues (self, new_remote_issue) :
+        """ Determine *local* issues which are not yet synced to the
+            remote. We search for issues with a remote issue tracker set
+            (ext_tracker) but without ext_attributes.
+        """
+        # Method for generating new remote issue, typically gets an
+        # empty dictionary as parameter (but in special cases the dict
+        # may contain values in the future)
+        self.new_remote_issue = new_remote_issue
+        ext = self.srv.filter \
+            ( 'ext_tracker_state'
+            , None
+            , dict (ext_tracker = self.tracker, ext_attributes = -1)
+            )
+        for id in ext :
+            assert self.get (id, 'ext_id') == None
+            remote_issue = self.new_remote_issue ({})
+            for a in self.attributes :
+                if a.sync (self, id, remote_issue) :
+                    if self.verbose :
+                        "Not syncing: %s" % id
+                    break
+            rid = remote_issue.create ()
+            self.set (id, 'ext_id', rid)
+            newmsg = self.create ('msg', content = remote_issue.as_json ())
+            self.set (id, 'ext_attributes', newmsg)
+    # end def sync_new_local_issues
+
+    def update_aux_classes (self, id, classdict) :
+        """ Auxiliary classes, e.g. for KPM an item that links to issue
+            and holds additional attributes. We also see
+            ext_tracker_status as such an aux class.
+            All of those have a Link named 'issue' to the current issue.
+        """
+        for cls in classdict :
+            attr = self.fix_attributes (cls, classdict [cls])
+            # Check if we already have an item
+            d = dict (issue = str (id))
+            if cls == 'ext_tracker_state' :
+                d ['ext_tracker'] = self.tracker
+            it = self.srv.filter (cls, None, d)
+            if it :
+                assert len (it) == 1
+                if attr :
+                    self.setitem (cls, it [0], ** attr)
+            else :
+                attr ['issue'] = str (id)
+                if cls == 'ext_tracker_state' :
+                    attr ['ext_tracker'] = self.tracker
+                self.create (cls, ** attr)
+    # end def update_aux_classes
 
 # end class Syncer

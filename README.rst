@@ -77,7 +77,22 @@ Running the Sync
 To configure the synchronisation you can find example configuration
 files in the ``config-example`` subdirectory. Configuration files are in
 python syntax and should end in ``.py``. The attributes to synchronize
-need to be defined. The following attribute definitions are possible:
+need to be defined. Property definitions typically define the attribute
+name on the remote side and on the local (roundup) side. For roundup,
+property names can include dots (".") indicating dereferencing an item,
+e.g., "prio.description" would dereference a Link property "prio" and
+return the value of the property "description" of this prio. In addition
+there is a syntax for Link1-properties: These are not stored in the
+roundup-issue itself but link to the roundup issue with a Link property
+named "issue".  The sync framework makes sure that at most one such link
+exists per issue. The syntax for these properties is
+"/<classname>/property" where property can again be a multilevel
+property including dots. The classname is the name of the Link1 class
+and the item linking to the currently-synchronized issue is determined
+by searching the class for items where the "issue" property refers to
+the current issue.
+
+The following attribute definitions are possible:
 
 - ``Sync_Attribute_One_Way`` defines a one-way sync from the remote
   tracker to your local roundup tracker. It gets two parameters, the
