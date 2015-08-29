@@ -204,7 +204,7 @@ KPM_ATTRIBUTES = \
         ( roundup_name = 'id'
         , remote_name  = 'L-Fehlernummer'
         )
-    , roundup_sync.Sync_Attribute_To_Remote
+    , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = 'fixed_in'
         , remote_name  = 'L-System-IO'
         )
