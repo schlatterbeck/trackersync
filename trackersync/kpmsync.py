@@ -504,8 +504,11 @@ class Job (autosuper) :
     def download (self) :
         if self.state != 2 or self.type == 0 :
             return None
-        f  = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
-        xp = Export (self.kpm, f, canceled = self.type == 2, debug = self.jobid)
+        f   = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
+        xpp = dict (canceled = self.type == 2)
+        if self.debug :
+            xpp ['debug'] = self.jobid
+        xp  = Export (self.kpm, f, ** xpp)
         return xp
     # end def download
 

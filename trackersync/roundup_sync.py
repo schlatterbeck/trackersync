@@ -284,7 +284,13 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
             self.imap = dict ((v, k) for k, v in map.iteritems ())
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
+    def _sync (self, syncer, id, remote_issue) :
+        # Never sync something to remote if local issue not yet created.
+        # Default values of local issue are assigned during creation, so
+        # we can't sync these to the remote site during this sync (they
+        # would get empty values).
+        if id < 0 :
+            return None, None, True
         rv = remote_issue.get (self.remote_name, None)
         lv = syncer.get (id, self.name)
         if self.map :
@@ -297,19 +303,46 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
                 )
         else :
             equal = lv == rv
-        #if not equal :
-        #    import pdb; pdb.set_trace ()
         if self.imap :
             rv = self.imap.get (rv, None)
         if self.map :
             lv = self.map.get (lv, self.l_default)
         if lv is None and rv is None and self.l_default is not None :
             lv = self.l_default
+        return lv, rv, equal
+    # end def _sync
+
+    def sync (self, syncer, id, remote_issue) :
+        lv, rv, equal = self._sync (syncer, id, remote_issue)
         if not equal :
             remote_issue.set (self.remote_name, lv)
     # end def sync
 
 # end class Sync_Attribute_To_Remote
+
+class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
+    """ A default, only set if the current value is not set.
+        Very useful for required attributes on creation.
+        This is set from the local attribute and in case this is also
+        not set, a default can be specified in the constructor.
+        Very similar to Sync_Attribute_To_Remote but only synced if the
+        remote attribute is empty.
+    """
+
+    def sync (self, syncer, id, remote_issue) :
+        lv, rv, equal = self._sync (syncer, id, remote_issue)
+        # Note that rv != remote_issue.get in case we do have self.imap
+        # in that case we need to check if the *original* attribute
+        # is set if it doesn't reverse map to a known value.
+        if  (   not equal
+            and not rv
+            and not remote_issue.get (self.remote_name, None)
+            and lv
+            ) :
+            remote_issue.set (self.remote_name, lv)
+    # end def sync
+
+# end class Sync_Attribute_To_Remote_Default
 
 class Sync_Attribute_Two_Way (Sync_Attribute) :
     """ Two-way sync: We first check if the remote changed since last
@@ -379,8 +412,9 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
         changed = False
         old = syncer.oldremote.get (self.remote_name, None)
         changed = old != rv
-        # check if remote changed since last sync
-        if changed :
+        # check if remote changed since last sync;
+        # Update remote issue if we have r_default and rv is not set
+        if changed and (rv or not self.r_default) :
             syncer.set (id, self.name, rv)
         else :
             remote_issue.set (self.remote_name, lv)
@@ -958,7 +992,7 @@ class Syncer (autosuper) :
             del classdict ['issue']
             self.update_aux_classes (id, classdict)
         if remote_issue.newvalues and not self.dry_run :
-            if self.debug :
+            if self.verbose :
                 print ("Update remote:", remote_issue.newvalues)
             remote_issue.update_remote (self)
     # end def sync
