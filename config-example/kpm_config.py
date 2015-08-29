@@ -34,18 +34,18 @@ KPM_ADDRESS  = '21 KPM-TEST'
 ROUNDUP_URL  = 'http://username:password@localhost:8080/tracker/xmlrpc'
 
 KPM_ATTRIBUTES = \
-    ( roundup_sync.Sync_Attribute_One_Way
+    ( roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = 'title'
         , remote_name  = 'Kurztext'
         )
     , roundup_sync.Sync_Attribute_One_Way
-        ( roundup_name = 'ext_status'
+        ( roundup_name = '/ext_tracker_state/ext_status'
         , remote_name  = 'Status'
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = 'release'
         , remote_name  = 'Softwarestand (verurs.)'
-        , default      = '?'
+        , r_default    = '?'
         )
     , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'part_of'
@@ -57,6 +57,24 @@ KPM_ATTRIBUTES = \
         , remote_name  = None
         , default      = '273'
         )
+    , roundup_sync.Sync_Attribute_Default
+        ( roundup_name = 'inherit_ext'
+        , remote_name  = None
+        , default      = 'yes'
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/analysis.content'
+        , remote_name  = 'Analyse'
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/description.content'
+        , remote_name  = 'Problembeschreibung'
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/supplier_answer.content'
+        , remote_name  = 'Lieferantenaussage'
+        )
+    # The following 3 have additional sync *to* remote above.
     , roundup_sync.Sync_Attribute_Message
         ( headline     = 'Analyse:'
         , remote_name  = 'Analyse'
@@ -70,5 +88,130 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Lieferantenaussage'
         )
     , roundup_sync.Sync_Attribute_Files ()
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = "creation"
+        , remote_name  = "Datum"
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = "Quelle"
+        , l_default    = "default here"
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = "E-Projekt"
+        , l_default    = "project here"
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/reproduceable'
+        , remote_name  = 'Reproduzierbar [Code]'
+        , map = {True: 'XH', False: 'XI'}
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/fault_frequency.name'
+        , remote_name  = 'Fehlerhäufigkeit [Code]'
+        , map = dict (once = 'XE', repeatedly = 'XF', always = 'XG')
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/kpm_function.kpm_key'
+        , remote_name  = 'Funktionalität [Code]'
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = '/kpm/hardware_version'
+        , remote_name  = 'Hardwarestand (verurs.)'
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
+        ( roundup_name = 'severity.name'
+        , remote_name  = 'Bewertung'
+        , r_default    = 'Minor'
+        , l_default    = 'DB'
+        , map  = dict (Minor = 'DB', Major = 'DB', Showstopper = 'DB')
+        , imap = dict
+            ( A1 = 'Showstopper'
+            , A  = 'Showstopper'
+            , B  = 'Major'
+            , C  = 'Minor'
+            , D  = 'Minor'
+            , DB = 'Minor'
+            , DV = 'Minor'
+            )
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Projekt'
+        , l_default    = 'project here'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Gerätetyp [Code]'
+        , l_default    = 'device here'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Teilnummer (verurs.)'
+        , l_default    = 'part number here'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Koordinator'
+        , l_default    = 'coordinator here'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Koordinator Benutzer'
+        , l_default    = 'SOME,NAME'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Fachkoordinator'
+        , l_default    = 'coordinator here'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Fachkoordinator Benutzer'
+        , l_default    = 'SOME,NAME'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Problemlösungsverantwortlicher'
+        , l_default    = 'responsible here'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = 'category.name'
+        , remote_name  = 'Problemlösungsverantwortlicher Benutzer'
+        , l_default    = 'SOME,NAME'
+        , map = dict (Project_name = 'SOME,OTHER_NAME')
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Lieferant'
+        , l_default    = '21 KPM-TEST'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = 'status.name'
+        , remote_name  = 'L-Status [Code]'
+        , map = dict
+            ( analyzing = '0'
+            , escalated = '0'
+            , open      = '1'
+            , feedback  = '1'
+            , testing   = '4'
+            , suspended = '5'
+            , closed    = '5'
+            )
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = 'id'
+        , remote_name  = 'L-Fehlernummer'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = 'fixed_in'
+        , remote_name  = 'L-System-IO'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Modulrelevant [Code]'
+        , l_default    = '00'
+        )
     )
 
