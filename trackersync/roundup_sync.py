@@ -228,6 +228,26 @@ class Sync_Attribute (autosuper) :
         pass
     # end def sync
 
+    def no_sync_necessary (self, lv, rv) :
+        l_def = getattr (self, 'l_default', None)
+        r_def = getattr (self, 'r_default', None)
+        if self.map :
+            # Both maps need to disagree for non-equal -- this prevents
+            # ping-pong updates in case the mappings are not fully
+            # consistent
+            equal = \
+                (  self.map.get  (lv, l_def) == rv
+                or self.imap.get (rv, None)  == lv
+                )
+        else :
+            equal = lv == rv
+        return  (   equal
+                and (   not (lv is None and rv is None)
+                    or  not (l_def or r_def)
+                    )
+                )
+    # end def no_sync_necessary
+
 # end class Sync_Attribute
 
 class Sync_Attribute_Check (Sync_Attribute) :
@@ -330,28 +350,19 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
             return None, None, True
         rv = remote_issue.get (self.remote_name, None)
         lv = syncer.get (id, self.name)
-        if self.map :
-            # Both maps need to disagree for non-equal -- this prevents
-            # ping-pong updates in case the mappings are not fully
-            # consistent
-            equal = \
-                (  self.map.get (lv, self.l_default) == rv
-                or self.imap.get (rv, None) == lv
-                )
-        else :
-            equal = lv == rv
+        nosync = self.no_sync_necessary (lv, rv)
         if self.imap :
             rv = self.imap.get (rv, None)
         if self.map :
             lv = self.map.get (lv, self.l_default)
         if lv is None and rv is None and self.l_default is not None :
             lv = self.l_default
-        return lv, rv, equal
+        return lv, rv, nosync
     # end def _sync
 
     def sync (self, syncer, id, remote_issue) :
-        lv, rv, equal = self._sync (syncer, id, remote_issue)
-        if not equal :
+        lv, rv, nosync = self._sync (syncer, id, remote_issue)
+        if not nosync :
             remote_issue.set (self.remote_name, lv)
     # end def sync
 
@@ -367,11 +378,11 @@ class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
     """
 
     def sync (self, syncer, id, remote_issue) :
-        lv, rv, equal = self._sync (syncer, id, remote_issue)
+        lv, rv, nosync = self._sync (syncer, id, remote_issue)
         # Note that rv != remote_issue.get in case we do have self.imap
         # in that case we need to check if the *original* attribute
         # is set if it doesn't reverse map to a known value.
-        if  (   not equal
+        if  (   not nosync
             and not rv
             and not remote_issue.get (self.remote_name, None)
             and lv
@@ -421,34 +432,22 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        rv = remote_issue.get (self.remote_name, None)
-        lv = syncer.get (id, self.name)
-        if self.map :
-            # Both maps need to disagree for non-equal -- this prevents
-            # ping-pong updates in case the mappings are not fully
-            # consistent
-            equal = \
-                (  self.map.get (lv, self.l_default) == rv
-                or self.imap.get (rv, None) == lv
-                )
-        else :
-            equal = lv == rv
-        #if not equal :
-        #    import pdb; pdb.set_trace ()
+        rv      = remote_issue.get (self.remote_name, None)
+        lv      = syncer.get (id, self.name)
+        nosync  = self.no_sync_necessary (lv, rv)
+        old     = syncer.oldremote.get (self.remote_name, None)
+        changed = old != rv
         if self.map :
             lv = self.map.get (lv, self.l_default)
         if self.imap :
             rv = self.imap.get (rv, self.r_default)
+        if nosync :
+            return
         if rv is None and lv is None :
             if self.l_default is not None :
                 lv = self.l_default # this is synced *to* remote
             if self.r_default is not None :
                 rv = self.r_default # this is synced *to* local
-        if equal :
-            return
-        changed = False
-        old = syncer.oldremote.get (self.remote_name, None)
-        changed = old != rv
         # check if remote changed since last sync;
         # Update remote issue if we have r_default and rv is not set
         if changed and (rv or not self.r_default) :
@@ -1020,14 +1019,7 @@ class Syncer (autosuper) :
                 del classdict ['issue']
                 self.update_aux_classes (iid, classdict)
         elif self.newvalues [id] :
-            if self.verbose :
-                print ("set issue %s: %s" % (id, self.newvalues [id]))
-            classdict = self.split_newvalues (id)
-            attr = self.fix_attributes ('issue', classdict ['issue'])
-            if attr :
-                self.setitem ('issue', id, ** attr)
-            del classdict ['issue']
-            self.update_aux_classes (id, classdict)
+            self.update_issue (id)
         if remote_issue.newvalues and not self.dry_run :
             if self.verbose :
                 print ("Update remote:", remote_issue.newvalues)
@@ -1046,20 +1038,31 @@ class Syncer (autosuper) :
         ext = self.srv.filter \
             ( 'ext_tracker_state'
             , None
-            , dict (ext_tracker = self.tracker, ext_attributes = -1)
+            , dict (ext_tracker = self.tracker, ext_attributes = '-1')
             )
         for id in ext :
-            assert self.get (id, 'ext_id') == None
+            et = self.getitem ('ext_tracker_state', id)
+            assert et ['ext_id'] == None
             remote_issue = self.new_remote_issue ({})
+            iid = et ['issue']
+            self.newvalues [iid] = {}
+            self.oldvalues [iid] = {}
+            do_sync = True
             for a in self.attributes :
-                if a.sync (self, id, remote_issue) :
+                if a.sync (self, iid, remote_issue) :
                     if self.verbose :
-                        "Not syncing: %s" % id
+                        print ("Not syncing: %s" % iid)
+                    do_sync = False
                     break
+            if not do_sync :
+                continue
+            if self.verbose :
+                print ("remote_issue.create", remote_issue.newvalues)
             rid = remote_issue.create ()
-            self.set (id, 'ext_id', rid)
+            self.set (iid, '/ext_tracker_state/ext_id', rid)
             newmsg = self.create ('msg', content = remote_issue.as_json ())
-            self.set (id, 'ext_attributes', newmsg)
+            self.set (iid, '/ext_tracker_state/ext_attributes', newmsg)
+            #self.update_issue (iid)
     # end def sync_new_local_issues
 
     def update_aux_classes (self, id, classdict) :
@@ -1085,5 +1088,16 @@ class Syncer (autosuper) :
                     attr ['ext_tracker'] = self.tracker
                 self.create (cls, ** attr)
     # end def update_aux_classes
+
+    def update_issue (self, id) :
+        if self.verbose :
+            print ("set issue %s: %s" % (id, self.newvalues [id]))
+        classdict = self.split_newvalues (id)
+        attr = self.fix_attributes ('issue', classdict ['issue'])
+        if attr :
+            self.setitem ('issue', id, ** attr)
+        del classdict ['issue']
+        self.update_aux_classes (id, classdict)
+    # end def update_issue
 
 # end class Syncer
