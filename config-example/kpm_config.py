@@ -34,7 +34,12 @@ KPM_ADDRESS  = '21 KPM-TEST'
 ROUNDUP_URL  = 'http://username:password@localhost:8080/tracker/xmlrpc'
 
 KPM_ATTRIBUTES = \
-    ( roundup_sync.Sync_Attribute_Two_Way
+    ( roundup_sync.Sync_Attribute_Check
+        ( roundup_name = '/kpm/ready_for_sync'
+        , remote_name  = None
+        , r_default    = True
+        )
+    , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = 'title'
         , remote_name  = 'Kurztext'
         )

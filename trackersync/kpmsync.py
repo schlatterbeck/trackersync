@@ -113,6 +113,14 @@ class Problem (roundup_sync.Remote_Issue) :
         print ("Called update_remote")
     # end def update_remote
 
+    def check_sync_callback (self, syncer, id) :
+        """ Check for kpmid is a legacy lifter: Old issues don't have a
+            kpm attached and must therefore always sync.
+        """
+        kpmid = syncer.get (id, '/kpm/id')
+        return bool (kpmid)
+    # end def check_sync_callback
+
 # end def Problem
 
 class KPM_Language (autosuper) :

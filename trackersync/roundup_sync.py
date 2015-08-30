@@ -123,6 +123,14 @@ class Remote_Issue (autosuper) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def attach_file
 
+    def check_sync_callback (self, syncer, id) :
+        """ Override a no-sync decision. If this returns False, a sync
+            for this issue is performed, even if other no-sync checks of
+            a Sync_Attribute_Check fail.
+        """
+        return True
+    # end def check_sync_callback
+
     def document_attributes (self, docid) :
         """ Additional attributes for a file (document) attached to an
             issue. By default roundup only has the MIME-Type here named
@@ -221,6 +229,35 @@ class Sync_Attribute (autosuper) :
     # end def sync
 
 # end class Sync_Attribute
+
+class Sync_Attribute_Check (Sync_Attribute) :
+    """ A boolean roundup attribute used to check if the issue should
+        be synced to the remote side. If a remote_name exists, the value
+        of it is used to set the roundup attribute. Otherwise an
+        r_default (usually set to True) must exist.
+        The check_sync_callback routine gets the syncer and id as
+        parameters and must return a boolean value indicating if syncing
+        should be forced. This routine can override a no-sync
+        decision.
+    """
+
+    def __init__ (self, roundup_name, remote_name = None, r_default   = None) :
+        self.r_default = r_default
+        self.__super.__init__ (roundup_name, remote_name)
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        synccheck = remote_issue.check_sync_callback (syncer, id)
+        lv = syncer.get (id, self.name)
+        # Stop sync if following condition is true:
+        if not lv and id > 0 and synccheck :
+            return True
+        rv = remote_issue.get (self.remote_name, self.r_default)
+        if not lv :
+            syncer.set (id, self.name, rv)
+    # end def sync
+
+# end class Sync_Attribute_Check
 
 class Sync_Attribute_One_Way (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
