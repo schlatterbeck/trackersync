@@ -107,12 +107,6 @@ class Problem (roundup_sync.Remote_Issue) :
         return self.__super.__getitem__ (name)
     # end def __getitem__
 
-    def update_remote (self, syncer) :
-        """ Update remote issue tracker with self.newvalues.
-        """
-        print ("Called update_remote")
-    # end def update_remote
-
     def check_sync_callback (self, syncer, id) :
         """ Check for kpmid is a legacy lifter: Old issues don't have a
             kpm attached and must therefore always sync.
@@ -120,6 +114,18 @@ class Problem (roundup_sync.Remote_Issue) :
         kpmid = syncer.get (id, '/kpm/id')
         return bool (kpmid)
     # end def check_sync_callback
+
+    def create (self) :
+        """ Create new remote issue
+        """
+        print ("Called remote_issue.create", self.newvalues)
+    # end def create
+
+    def update_remote (self, syncer) :
+        """ Update remote issue tracker with self.newvalues.
+        """
+        print ("Called update_remote")
+    # end def update_remote
 
 # end def Problem
 
@@ -437,10 +443,11 @@ class Job (autosuper) :
         )
     xmlns = 'uri:de.volkswagen.kpm.ajax.xmlns'
 
-    def __init__ (self, kpm, jobid, debug = False) :
+    def __init__ (self, kpm, jobid, debug = False, reuse = False) :
         self.kpm    = kpm
         self.jobid  = jobid
         self.debug  = debug
+        self.reuse  = reuse
         self.count  = 0
         self.create = None
         self.start  = None
@@ -492,6 +499,16 @@ class Job (autosuper) :
 
     def query (self) :
         self.count += 1
+        # If a download of this job-id exists, continue
+        # Useful for debugging.
+        if self.reuse :
+            try :
+                f = open ('JOB-%s-%s' % (self.jobid, self.count), 'r')
+                v = f.read ()
+                self.parse (v)
+                return
+            except IOError :
+                pass
         f = self.kpm.get ('ticket.info.do', ticketId = self.jobid)
         v = f.read ()
         if self.debug :
@@ -512,10 +529,18 @@ class Job (autosuper) :
     def download (self) :
         if self.state != 2 or self.type == 0 :
             return None
-        f   = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
         xpp = dict (canceled = self.type == 2)
         if self.debug :
             xpp ['debug'] = self.jobid
+        f = None
+        # If downloaded job exists, return it
+        if self.reuse :
+            try :
+                f = open ('%s.csv' % self.jobid, 'r')
+            except IOError :
+                pass
+        if not f :
+            f = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
         xp  = Export (self.kpm, f, ** xpp)
         return xp
     # end def download
@@ -665,7 +690,7 @@ def main () :
     url      = opt.roundup_url or cfg.get ('ROUNDUP_URL', None)
     kpm.login  (username = username, password = password)
     if (opt.job) :
-        jobs = [Job (kpm, opt.job, debug = opt.debug)]
+        jobs = [Job (kpm, opt.job, debug = opt.debug, reuse = True)]
     else :
         # get active and canceled issues
         jobs = [kpm.search (address = address)]
