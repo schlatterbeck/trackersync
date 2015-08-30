@@ -450,8 +450,13 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
                 rv = self.r_default # this is synced *to* local
         # check if remote changed since last sync;
         # Update remote issue if we have r_default and rv is not set
-        if changed and (rv or not self.r_default) :
-            syncer.set (id, self.name, rv)
+        if  (  (changed and (rv or not self.r_default))
+            or (syncer.remote_change and rv is not None)
+            ) :
+            if rv is None :
+                print ("WARN: Would set issue%s %s to None" % (id, self.name))
+            else :
+                syncer.set (id, self.name, rv)
         else :
             remote_issue.set (self.remote_name, lv)
     # end def sync
@@ -698,24 +703,26 @@ class Syncer (autosuper) :
         , url
         , remote_name
         , attributes
-        , verbose = 0
-        , debug   = 0
-        , dry_run = 0
+        , verbose         = 0
+        , debug           = 0
+        , dry_run         = 0
+        , remote_change   = False
         ) :
         self.srv = xmlrpclib.ServerProxy (url, allow_none = True)
-        self.attributes   = attributes
-        self.oldvalues    = {}
-        self.newvalues    = {}
-        self.newcount     = 0
-        self.remote_name  = remote_name
-        schema            = self.srv.schema ()
-        self.tracker      = self.srv.lookup ('ext_tracker', remote_name)
-        self.verbose      = verbose
-        self.debug        = debug
-        self.dry_run      = dry_run
-        self.oldremote    = {}
-        self.update_state = False
-        self.schema       = dict ((k, dict (schema [k])) for k in schema)
+        self.attributes      = attributes
+        self.oldvalues       = {}
+        self.newvalues       = {}
+        self.newcount        = 0
+        self.remote_name     = remote_name
+        self.remote_change   = remote_change
+        schema               = self.srv.schema ()
+        self.tracker         = self.srv.lookup ('ext_tracker', remote_name)
+        self.verbose         = verbose
+        self.debug           = debug
+        self.dry_run         = dry_run
+        self.oldremote       = {}
+        self.update_state    = False
+        self.schema          = dict ((k, dict (schema [k])) for k in schema)
         # Update schema with auto attributes
         for cls in self.schema :
             for k in 'creation', 'activity' :
@@ -1062,7 +1069,7 @@ class Syncer (autosuper) :
             self.set (iid, '/ext_tracker_state/ext_id', rid)
             newmsg = self.create ('msg', content = remote_issue.as_json ())
             self.set (iid, '/ext_tracker_state/ext_attributes', newmsg)
-            #self.update_issue (iid)
+            self.update_issue (iid)
     # end def sync_new_local_issues
 
     def update_aux_classes (self, id, classdict) :

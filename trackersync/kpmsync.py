@@ -39,7 +39,7 @@ try :
 except ImportError :
     from urllib         import urlencode
 from time               import sleep
-from optparse           import OptionParser
+from argparse           import ArgumentParser
 from datetime           import datetime
 from csv                import DictReader
 from xml.etree          import ElementTree
@@ -632,51 +632,66 @@ class KPM (autosuper) :
 
 def main () :
     import sys
-    cmd = OptionParser ()
-    cmd.add_option \
+    cmd = ArgumentParser ()
+    cmd.add_argument \
         ( "-a", "--address"
         , help    = "KPM-Address of Supplier"
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-c", "--config"
         , help    = "Configuration file"
         , default = '/etc/trackersync/kpm_config.py'
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-D", "--debug"
         , help    = "Debugging"
         , action  = 'store_true'
         , default = False
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-j", "--job"
         , help    = "KPM job identifier (mainly used for debugging)"
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-n", "--no-action"
         , help    = "Dry-run: Don't update any side of sync"
         , action  = 'store_true'
         , default = False
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-r", "--roundup-url"
         , help    = "Roundup URL for XMLRPC"
         )
-    cmd.add_option \
+    cmd.add_argument \
+        ( "-R", "--remote-change"
+        , help    = "Treat remote values as changed if non-empty. "
+                    "Set local value to remote value for two-way sync "
+                    "attributes, even if the remote doesn't seem to be "
+                    "changed. The default in this case would be to "
+                    "overwrite the remote with the local value. This is "
+                    "useful in case the sync configuration changed and "
+                    "some local values are unset or need update. "
+                    "Note that this applies only if the remote value is "
+                    "non-empty."
+        , dest    = 'remote_change'
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_argument \
         ( "-P", "--password"
         , help    = "KPM login password"
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-U", "--username"
         , help    = "KPM login user name"
         )
-    cmd.add_option \
+    cmd.add_argument \
         ( "-v", "--verbose"
         , help    = "Verbose reporting"
         , action  = 'store_true'
         , default = False
         )
-    opt, arg = cmd.parse_args ()
+    opt     = cmd.parse_args ()
     config  = Config.config
     cfgpath = Config.path
     if opt.config :
@@ -699,9 +714,10 @@ def main () :
     if url and cfg.get ('KPM_ATTRIBUTES') :
         syncer = roundup_sync.Syncer \
             (url, 'KPM', cfg.KPM_ATTRIBUTES
-            , verbose = opt.verbose
-            , debug   = opt.debug
-            , dry_run = opt.no_action
+            , verbose         = opt.verbose
+            , debug           = opt.debug
+            , dry_run         = opt.no_action
+            , remote_change   = opt.remote_change
             )
     for j in jobs :
         j.query ()

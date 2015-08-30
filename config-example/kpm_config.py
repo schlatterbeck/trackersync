@@ -42,6 +42,7 @@ KPM_ATTRIBUTES = \
     , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = 'title'
         , remote_name  = 'Kurztext'
+        , r_default    = '?'
         )
     , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/ext_tracker_state/ext_status'
@@ -74,6 +75,7 @@ KPM_ATTRIBUTES = \
     , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = '/kpm/description.content'
         , remote_name  = 'Problembeschreibung'
+        , r_default    = '-'
         )
     , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = '/kpm/supplier_answer.content'
