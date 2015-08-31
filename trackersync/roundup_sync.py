@@ -160,8 +160,7 @@ class Remote_Issue (autosuper) :
     def create (self) :
         """ Create new remote issue from data here. This is called by
             the sync framework *after* all attributes have been set by
-            the sync. Similar to update_remote but creating a new remote
-            issue.
+            the sync. Similar to update but creating a new remote issue.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def create
@@ -204,11 +203,11 @@ class Remote_Issue (autosuper) :
     # end def set
     __setitem__ = set
 
-    def update_remote (self, syncer) :
+    def update (self, syncer) :
         """ Update remote issue tracker with self.newvalues.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
-    # end def update_remote
+    # end def update
 
 # end class Remote_Issue
 
@@ -792,6 +791,18 @@ class Syncer (autosuper) :
             return '%s=%s' % (key, ','.join (value))
         elif isinstance (value, numbers.Number) :
             return '%s=%s' % (key, value)
+        elif key == 'content' :
+            # Message content in roundup is stored as \r\n line-endings
+            # So we make sure to add \r.
+            if cls == 'msg' :
+                value = value.replace ('\n', '\r\n')
+            # Send message content (or file content) as binary to
+            # preserve newline semantics across xmlrpc interface
+            # even if not really binary.
+            if isinstance (value, unicode) :
+                value = value.encode ('utf-8')
+            return xmlrpclib.Binary \
+                (key.encode ('ascii') + '='.encode ('ascii') + value)
         elif not isinstance (value, text_type) :
             return xmlrpclib.Binary \
                 (key.encode ('ascii') + '='.encode ('ascii') + value)
@@ -1030,7 +1041,7 @@ class Syncer (autosuper) :
         if remote_issue.newvalues and not self.dry_run :
             if self.verbose :
                 print ("Update remote:", remote_issue.newvalues)
-            remote_issue.update_remote (self)
+            remote_issue.update (self)
     # end def sync
 
     def sync_new_local_issues (self, new_remote_issue) :

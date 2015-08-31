@@ -166,7 +166,7 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
                 )
     # end def messages
 
-    def update_remote (self, syncer) :
+    def update (self, syncer) :
         if syncer.verbose :
             print ("Remote-Update: %s %s" % (self.key, self.newvalues))
         for k, v in self.newvalues.iteritems () :
@@ -177,7 +177,7 @@ class Jira_Issue (roundup_sync.Remote_Issue) :
         r = self.jira.session.put \
             (u, headers = h, data = json.dumps (dict (fields = self.newvalues)))
         r.raise_for_status ()
-    # end def update_remote
+    # end def update
 
 # end def Jira_Issue
 
