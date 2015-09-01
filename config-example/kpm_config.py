@@ -35,47 +35,77 @@ ROUNDUP_URL  = 'http://username:password@localhost:8080/tracker/xmlrpc'
 
 KPM_ATTRIBUTES = \
     ( roundup_sync.Sync_Attribute_Check
+        ( roundup_name = 'closed'
+        , remote_name  = None
+        , invert       = True
+        , update       = False
+        )
+    , roundup_sync.Sync_Attribute_Check
         ( roundup_name = '/kpm/ready_for_sync'
         , remote_name  = None
         , r_default    = True
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'title'
         , remote_name  = 'Kurztext'
         , r_default    = '?'
+        , only_update  = True
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = 'title'
+        , remote_name  = 'Kurztext'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/ext_tracker_state/ext_status'
         , remote_name  = 'Status'
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'release'
         , remote_name  = 'Softwarestand (verurs.)'
         , r_default    = '?'
+        , only_update  = True
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = 'release'
+        , remote_name  = 'Softwarestand (verurs.)'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'part_of'
         , remote_name  = None
-        , default      = '73897'
+        , r_default    = '73897'
         )
     , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'category'
         , remote_name  = None
-        , default      = '273'
+        , r_default    = '273'
         )
     , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'inherit_ext'
         , remote_name  = None
-        , default      = 'yes'
+        , r_default    = 'yes'
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/kpm/analysis.content'
         , remote_name  = 'Analyse'
+        , only_update  = True
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = '/kpm/analysis.content'
+        , remote_name  = 'Analyse'
+        , only_create  = True
+        )
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/kpm/description.content'
         , remote_name  = 'Problembeschreibung'
         , r_default    = '-'
+        , only_update  = True
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = '/kpm/description.content'
+        , remote_name  = 'Problembeschreibung'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = '/kpm/supplier_answer.content'
@@ -98,40 +128,87 @@ KPM_ATTRIBUTES = \
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = "creation"
         , remote_name  = "Datum"
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = "Quelle"
         , l_default    = "default here"
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = "E-Projekt"
         , l_default    = "project here"
+        , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/kpm/reproduceable'
         , remote_name  = 'Reproduzierbar [Code]'
+        , only_update  = True
         , map = {True: 'XH', False: 'XI'}
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = '/kpm/reproduceable'
+        , remote_name  = 'Reproduzierbar [Code]'
+        , only_create  = True
+        , map = {True: 'XH', False: 'XI'}
+        )
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/kpm/fault_frequency.name'
         , remote_name  = 'Fehlerhäufigkeit [Code]'
+        , only_update  = True
         , map = dict (once = 'XE', repeatedly = 'XF', always = 'XG')
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = '/kpm/fault_frequency.name'
+        , remote_name  = 'Fehlerhäufigkeit [Code]'
+        , only_create  = True
+        , map = dict (once = 'XE', repeatedly = 'XF', always = 'XG')
+        )
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/kpm/kpm_function.kpm_key'
         , remote_name  = 'Funktionalität [Code]'
+        , only_update  = True
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = '/kpm/kpm_function.kpm_key'
+        , remote_name  = 'Funktionalität [Code]'
+        , only_create  = True
+        )
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = '/kpm/hardware_version'
         , remote_name  = 'Hardwarestand (verurs.)'
+        , only_update  = True
         )
-    , roundup_sync.Sync_Attribute_Two_Way
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = '/kpm/hardware_version'
+        , remote_name  = 'Hardwarestand (verurs.)'
+        , only_create  = True
+        )
+    , roundup_sync.Sync_Attribute_One_Way
         ( roundup_name = 'severity.name'
         , remote_name  = 'Bewertung'
         , r_default    = 'Minor'
         , l_default    = 'DB'
+        , only_update  = True
+        , map  = dict (Minor = 'DB', Major = 'DB', Showstopper = 'DB')
+        , imap = dict
+            ( A1 = 'Showstopper'
+            , A  = 'Showstopper'
+            , B  = 'Major'
+            , C  = 'Minor'
+            , D  = 'Minor'
+            , DB = 'Minor'
+            , DV = 'Minor'
+            )
+        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( roundup_name = 'severity.name'
+        , remote_name  = 'Bewertung'
+        , r_default    = 'Minor'
+        , l_default    = 'DB'
+        , only_create  = True
         , map  = dict (Minor = 'DB', Major = 'DB', Showstopper = 'DB')
         , imap = dict
             ( A1 = 'Showstopper'
@@ -147,52 +224,71 @@ KPM_ATTRIBUTES = \
         ( roundup_name = None
         , remote_name  = 'Projekt'
         , l_default    = 'project here'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Gerätetyp [Code]'
         , l_default    = 'device here'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Teilnummer (verurs.)'
         , l_default    = 'part number here'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Koordinator'
         , l_default    = 'coordinator here'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Koordinator Benutzer'
         , l_default    = 'SOME,NAME'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Fachkoordinator'
         , l_default    = 'coordinator here'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Fachkoordinator Benutzer'
         , l_default    = 'SOME,NAME'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Problemlösungsverantwortlicher'
         , l_default    = 'responsible here'
+        , only_create  = True
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = 'category.name'
         , remote_name  = 'Problemlösungsverantwortlicher Benutzer'
         , l_default    = 'SOME,NAME'
+        , only_create  = True
         , map = dict (Project_name = 'SOME,OTHER_NAME')
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
         , remote_name  = 'Lieferant'
         , l_default    = '21 KPM-TEST'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Auftragsart'
+        , l_default    = '13'
+        )
+    , roundup_sync.Sync_Attribute_To_Remote_Default
+        ( roundup_name = None
+        , remote_name  = 'Auftragsnummer'
+        , l_default    = '4711' # Put correct number here
         )
     , roundup_sync.Sync_Attribute_To_Remote
         ( roundup_name = 'status.name'
@@ -219,6 +315,7 @@ KPM_ATTRIBUTES = \
         ( roundup_name = None
         , remote_name  = 'Modulrelevant [Code]'
         , l_default    = '00'
+        , only_create  = True
         )
     )
 

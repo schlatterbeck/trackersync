@@ -212,10 +212,47 @@ class Remote_Issue (autosuper) :
 # end class Remote_Issue
 
 class Sync_Attribute (autosuper) :
+    """ Sync a property from/to a remote tracker.
+        If only_update is specified, the sync is run only in the update
+        phase (when the remote issue is already existing).
+        If only_create is specified, the sync is run only for creation
+        of the remote issue (when it doesn't exist yet).
+        The default is to run a sync during both phases.
 
-    def __init__ (self, roundup_name, remote_name = None) :
+        The map attribute is an optional map of local values to remote
+        values. The imap is the inverse. Both can be specified if the
+        mapping is not 1:1, but be careful as such configurations tend
+        not to roundtrip very well. Note that not all Sync_Attribute
+        support a map.
+
+        Note that if both, a map/imap and l_default or r_default is
+        specified, the default values must be the values *after*
+        applying the map (or imap).
+    """
+
+    def __init__ \
+        ( self
+        , roundup_name
+        , remote_name = None
+        , only_update = False
+        , only_create = False
+        , l_default   = None
+        , r_default   = None
+        , map         = None
+        , imap        = None
+        ) :
         self.name        = roundup_name
         self.remote_name = remote_name
+        self.only_update = only_update
+        self.only_create = only_create
+        self.l_default   = l_default
+        self.r_default   = r_default
+        self.map         = map
+        self.imap        = imap
+        if not self.imap and self.map :
+            self.imap = dict ((v, k) for k, v in  map.iteritems ())
+        if not self.map and self.imap :
+            self.map  = dict ((v, k) for k, v in imap.iteritems ())
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -252,27 +289,45 @@ class Sync_Attribute (autosuper) :
 class Sync_Attribute_Check (Sync_Attribute) :
     """ A boolean roundup attribute used to check if the issue should
         be synced to the remote side. If a remote_name exists, the value
-        of it is used to set the roundup attribute. Otherwise an
-        r_default (usually set to True) must exist.
+        of it is used to set the roundup attribute if 'update' is True.
+        Otherwise an if 'update' is on, r_default (usually set to
+        True) must exist.
+        If 'invert' is set, the logic is inverted, it is checked that
+        the attribute does *not* exist. Consequently if 'update' is set
+        it should update the property to False (or a python equivalent
+        that evaluates to a boolean False).
         The check_sync_callback routine gets the syncer and id as
         parameters and must return a boolean value indicating if syncing
         should be forced. This routine can override a no-sync
         decision.
+        Note that update is only performed for new local issues.
+        Note that we don't currently support a map / imap.
     """
 
-    def __init__ (self, roundup_name, remote_name = None, r_default   = None) :
-        self.r_default = r_default
-        self.__super.__init__ (roundup_name, remote_name)
+    def __init__ \
+        ( self
+        , roundup_name
+        , remote_name = None
+        , invert      = False
+        , update      = True
+        , ** kw
+        ) :
+        self.invert    = invert
+        self.update    = update
+        self.__super.__init__ (roundup_name, remote_name, ** kw)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
         synccheck = remote_issue.check_sync_callback (syncer, id)
         lv = syncer.get (id, self.name)
+        stop = not lv
+        if self.invert :
+            stop = not stop
         # Stop sync if following condition is true:
-        if not lv and id > 0 and synccheck :
+        if stop and id > 0 and synccheck :
             return True
-        rv = remote_issue.get (self.remote_name, self.r_default)
-        if not lv :
+        if self.update and lv is None :
+            rv = remote_issue.get (self.remote_name, self.r_default)
             syncer.set (id, self.name, rv)
     # end def sync
 
@@ -282,12 +337,20 @@ class Sync_Attribute_One_Way (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update
         roundup's attribute if the value has changed.
+        Things get more complicated if we have defaults, if both values
+        are None and we have an r_default, it is applied.
     """
 
     def sync (self, syncer, id, remote_issue) :
-        v = remote_issue.get (self.remote_name, None)
-        if syncer.get (id, self.name) != v :
-            syncer.set (id, self.name, v)
+        rv = remote_issue.get (self.remote_name, None)
+        lv = syncer.get (id, self.name)
+        if self.no_sync_necessary (lv, rv) :
+            return
+        if self.imap :
+            rv = self.imap.get (rv, self.r_default)
+        elif rv is None and self.r_default :
+            rv = self.r_default
+        syncer.set (id, self.name, rv)
     # end def sync
 
 # end class Sync_Attribute_One_Way
@@ -299,13 +362,12 @@ class Sync_Attribute_Default (Sync_Attribute) :
         not set, a default can be specified in the constructor.
     """
 
-    def __init__ (self, roundup_name, remote_name = None, default = None) :
-        self.default = default
-        self.__super.__init__ (roundup_name, remote_name)
-    # end def __init__
-
     def sync (self, syncer, id, remote_issue) :
-        v = remote_issue.get (self.remote_name, self.default)
+        v = remote_issue.get (self.remote_name)
+        if self.imap :
+            v = self.imap.get (v, self.r_default)
+        elif v is None and self.r_default :
+            v = self.r_default
         if syncer.get (id, self.name) is None :
             syncer.set (id, self.name, v)
     # end def sync
@@ -324,21 +386,6 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
         Optionally we can define a local default l_default. This is set
         if the local value is None *and* the remote value is None.
     """
-
-    def __init__ \
-        ( self
-        , roundup_name
-        , remote_name = None
-        , l_default   = None
-        , map         = None
-        ) :
-        self.__super.__init__ (roundup_name, remote_name)
-        self.l_default = l_default
-        self.map       = map
-        self.imap      = None
-        if self.map :
-            self.imap = dict ((v, k) for k, v in map.iteritems ())
-    # end def __init__
 
     def _sync (self, syncer, id, remote_issue) :
         # Never sync something to remote if local issue not yet created.
@@ -410,26 +457,6 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
         values do not match (or a map maps them to equal values).
     """
 
-    def __init__ \
-        ( self
-        , roundup_name
-        , remote_name = None
-        , r_default   = None
-        , l_default   = None
-        , map         = None
-        , imap        = None
-        ) :
-        self.__super.__init__ (roundup_name, remote_name)
-        self.r_default = r_default
-        self.l_default = l_default
-        self.map       = map
-        self.imap      = imap
-        if self.map and not self.imap :
-            self.imap = dict ((v, k) for k, v in map.iteritems ())
-        if self.imap and not self.map :
-            self.map = dict ((v, k) for k, v in imap.iteritems ())
-    # end def __init__
-
     def sync (self, syncer, id, remote_issue) :
         rv      = remote_issue.get (self.remote_name, None)
         lv      = syncer.get (id, self.name)
@@ -474,8 +501,8 @@ class Sync_Attribute_Messages (Sync_Attribute) :
         tracker.
     """
 
-    def __init__ (self, keyword = None) :
-        self.__super.__init__ ('messages', remote_name = None)
+    def __init__ (self, keyword = None, ** kw) :
+        self.__super.__init__ ('messages', remote_name = None, ** kw)
         self.keyword = keyword
     # end def __init__
 
@@ -574,10 +601,10 @@ class Sync_Attribute_Message (Sync_Attribute) :
         roundup and link it to the messages of the issue.
     """
 
-    def __init__ (self, headline, remote_name) :
+    def __init__ (self, headline, remote_name, ** kw) :
         self.headline = headline
         self.hlen     = len (headline)
-        self.__super.__init__ ('messages', remote_name)
+        self.__super.__init__ ('messages', remote_name, ** kw)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -608,9 +635,9 @@ class Sync_Attribute_Default_Message (Sync_Attribute) :
         This is used to add at least one message to a new issue in
         roundup because at least one message is required.
     """
-    def __init__ (self, message) :
+    def __init__ (self, message, ** kw) :
         self.message = message
-        self.__super.__init__ ('messages', None)
+        self.__super.__init__ ('messages', None, ** kw)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -642,9 +669,9 @@ class Sync_Attribute_Files (Sync_Attribute) :
         permission on the file.name attribute in roundup.
     """
 
-    def __init__ (self, prefix = None) :
+    def __init__ (self, prefix = None, ** kw) :
         self.prefix = prefix
-        self.__super.__init__ ('files', remote_name = None)
+        self.__super.__init__ ('files', remote_name = None, ** kw)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -1000,6 +1027,8 @@ class Syncer (autosuper) :
         # attributes.
         attr = remote_issue.attributes
         for a in self.attributes :
+            if a.only_create :
+                continue
             if not attr or a.remote_name in attr :
                 if self.debug :
                     print \
@@ -1067,6 +1096,8 @@ class Syncer (autosuper) :
             self.oldvalues [iid] = {}
             do_sync = True
             for a in self.attributes :
+                if a.only_update :
+                    continue
                 if a.sync (self, iid, remote_issue) :
                     if self.verbose :
                         print ("Not syncing: %s" % iid)
