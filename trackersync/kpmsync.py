@@ -40,6 +40,7 @@ from datetime           import datetime
 from csv                import DictReader
 from xml.etree          import ElementTree
 from rsclib.autosuper   import autosuper
+from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
 
 from trackersync        import roundup_sync
@@ -236,6 +237,8 @@ class Problem (roundup_sync.Remote_Issue) :
         end    = 'erfolgreich.'
         if not result.startswith (start) or not result.endswith (end) :
             print ("issue%s:" % issue, result)
+            self.kpm.log.error \
+                ('issue %s: %s' % (issue, result.replace ('\n', ' ')))
     # end def _update
 
     def create (self) :
@@ -734,7 +737,7 @@ class Job (autosuper) :
 
 # end class Job
 
-class KPM (autosuper) :
+class KPM (Log, Lock_Mixin) :
     """ Interactions with the KPM web interface aka
         "Lieferantenschnittstelle".
     """
@@ -746,6 +749,7 @@ class KPM (autosuper) :
         , timeout = None
         , verbose = False
         , debug   = False
+        , ** kw
         ) :
         self.site     = site
         self.verbose  = verbose
@@ -756,6 +760,7 @@ class KPM (autosuper) :
         self.session  = requests.Session ()
         if timeout :
             self.session.timeout = timeout
+        self.__super.__init__ (** kw)
     # end def __init__
 
     def login (self, username, password) :
@@ -791,7 +796,6 @@ class KPM (autosuper) :
 # end class KPM
 
 def main () :
-    import sys
     cmd = ArgumentParser ()
     cmd.add_argument \
         ( "-a", "--address"
