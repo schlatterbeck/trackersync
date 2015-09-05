@@ -224,6 +224,18 @@ class Problem (roundup_sync.Remote_Issue) :
             f = open ('sync_out-%s.csv' % self.get ('Nummer'), 'w')
             f.write (v)
             f.close ()
+        issue  = self.get ('L-Fehlernummer')
+        for k in range (3) :
+            try :
+                result = self.kpm.update ('%s.csv' % issue, v)
+                break
+            except request.exceptions.ConnectionError :
+                pass
+        result = result.strip ()
+        start  = 'Die Aktualisierung hat folgende Hinweise ergeben:'
+        end    = 'erfolgreich.'
+        if not result.startswith (start) or not result.endswith (end) :
+            print ("issue%s:" % issue, result)
     # end def _update
 
     def create (self) :
@@ -603,6 +615,39 @@ class Job (autosuper) :
         return not self.error
     # end def valid
 
+    # Job deletion not yet supported by application
+    # According to Dr. Dirk Licht (Author "Endbenutzerhandbuch") 2015-03-11
+    #def delete (self) :
+    #    return self.kpm.get ('ticket.delete.do', ticketId = self.jobid).content
+    ## end def delete
+
+    def download (self) :
+        if self.state != 2 or self.type == 0 :
+            return None
+        c = None
+        # If downloaded job exists, return it
+        if self.reuse :
+            try :
+                f = open ('%s.csv' % self.jobid, 'r')
+                c = [l.decode ('latin1') for l in f]
+            except IOError :
+                pass
+        if not c :
+            r = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
+            r.encoding = 'latin1'
+            c = r.text.split ('\n')
+        return c
+    # end def download
+
+    def export (self) :
+        xpp = dict (canceled = self.type == 2)
+        if self.debug :
+            xpp ['debug'] = self.jobid
+        c  = self.download ()
+        xp = Export (self.kpm, c, ** xpp)
+        return xp
+    # end def export
+
     def parse (self, text) :
         tree = ElementTree.fromstring (text)
         assert tree.tag == self.tag ('ajaxResponse')
@@ -636,6 +681,13 @@ class Job (autosuper) :
                 self.att = e.get ('hasAttachment') == 'true'
     # end def parse
 
+    def poll (self) :
+        self.query ()
+        while self.state < 2 :
+            sleep (10)
+            self.query ()
+    # end def poll
+
     def query (self) :
         self.count += 1
         # If a download of this job-id exists, continue
@@ -656,34 +708,6 @@ class Job (autosuper) :
             f.close ()
         self.parse (v)
     # end def query
-
-    # Job deletion not yet supported by application
-    # According to Dr. Dirk Licht (Author "Endbenutzerhandbuch") 2015-03-11
-    #def delete (self) :
-    #    return self.kpm.get ('ticket.delete.do', ticketId = self.jobid).content
-    ## end def delete
-
-    def download (self) :
-        if self.state != 2 or self.type == 0 :
-            return None
-        xpp = dict (canceled = self.type == 2)
-        if self.debug :
-            xpp ['debug'] = self.jobid
-        c = None
-        # If downloaded job exists, return it
-        if self.reuse :
-            try :
-                f = open ('%s.csv' % self.jobid, 'r')
-                c = [l.decode ('latin1') for l in f]
-            except IOError :
-                pass
-        if not c :
-            r = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
-            r.encoding = 'latin1'
-            c = r.text.split ('\n')
-        xp  = Export (self.kpm, c, ** xpp)
-        return xp
-    # end def download
 
     def tag (self, tag) :
         return '{%s}%s' % (self.xmlns, tag)
@@ -729,7 +753,6 @@ class KPM (autosuper) :
         self.base_url = '/'.join ((site, url))
         self.timeout  = timeout
         self.headers  = {}
-        self.jobs     = []
         self.session  = requests.Session ()
         if timeout :
             self.session.timeout = timeout
@@ -738,6 +761,7 @@ class KPM (autosuper) :
     def login (self, username, password) :
         self.session.auth = (username, password)
         r   = self.get ('b2bLogin.do')
+        assert r.status_code == 200
     # end def login
 
     def get (self, url, ** params) :
@@ -753,9 +777,16 @@ class KPM (autosuper) :
         j   = Job (self, r.content, debug = self.debug)
         if self.debug :
             print ("Job-ID: %s" % r.content)
-        self.jobs.append (j)
         return j
     # end def search
+
+    def update (self, name, csvdata) :
+        url = '/'.join ((self.base_url, 'problem.ee.import.do'))
+        pf  = {'theFile': (name, csvdata, 'text/plain')}
+        r   = self.session.post (url, files = pf)
+        r.encoding = 'latin1'
+        return r.text
+    # end def update
 
 # end class KPM
 
@@ -848,14 +879,10 @@ def main () :
             , dry_run         = opt.no_action
             , remote_change   = opt.remote_change
             )
-    for j in jobs :
-        j.query ()
     old_xp = None
     for j in jobs :
-        while j.state < 2 :
-            sleep (10)
-            j.query ()
-        xp = j.download ()
+        j.poll ()
+        xp = j.export ()
         # Remove duplicates, seems KPM sometimes returns a problem in
         # both, the normal list and the cancelled problems. In that case
         # we don't process the cancelled one (as it contains less info)
