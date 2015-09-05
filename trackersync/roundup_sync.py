@@ -233,22 +233,24 @@ class Sync_Attribute (autosuper) :
     def __init__ \
         ( self
         , roundup_name
-        , remote_name = None
-        , only_update = False
-        , only_create = False
-        , l_default   = None
-        , r_default   = None
-        , map         = None
-        , imap        = None
+        , remote_name  = None
+        , only_update  = False
+        , only_create  = False
+        , l_default    = None
+        , r_default    = None
+        , map          = None
+        , imap         = None
+        , strip_prefix = None
         ) :
-        self.name        = roundup_name
-        self.remote_name = remote_name
-        self.only_update = only_update
-        self.only_create = only_create
-        self.l_default   = l_default
-        self.r_default   = r_default
-        self.map         = map
-        self.imap        = imap
+        self.name         = roundup_name
+        self.remote_name  = remote_name
+        self.only_update  = only_update
+        self.only_create  = only_create
+        self.l_default    = l_default
+        self.r_default    = r_default
+        self.map          = map
+        self.imap         = imap
+        self.strip_prefix = strip_prefix
         if not self.imap and self.map :
             self.imap = dict ((v, k) for k, v in  map.iteritems ())
         if not self.map and self.imap :
@@ -343,6 +345,9 @@ class Sync_Attribute_One_Way (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         rv = remote_issue.get (self.remote_name, None)
+        if self.strip_prefix and rv.startswith (self.strip_prefix) :
+            l = len (self.strip_prefix)
+            rv = rv [l:]
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv) :
             return
@@ -364,6 +369,9 @@ class Sync_Attribute_Default (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         v = remote_issue.get (self.remote_name)
+        if self.strip_prefix and v.startswith (self.strip_prefix) :
+            l = len (self.strip_prefix)
+            v = v [l:]
         if self.imap :
             v = self.imap.get (v, self.r_default)
         elif v is None and self.r_default :
@@ -459,6 +467,11 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         rv      = remote_issue.get (self.remote_name, None)
+        if rv and self.strip_prefix and rv.startswith (self.strip_prefix) :
+            l = len (self.strip_prefix)
+            if syncer.debug :
+                print ("Stripping:", rv)
+            rv = rv [l:]
         lv      = syncer.get (id, self.name)
         nosync  = self.no_sync_necessary (lv, rv)
         old     = syncer.oldremote.get (self.remote_name, None)

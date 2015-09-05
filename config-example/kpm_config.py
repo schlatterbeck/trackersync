@@ -60,7 +60,7 @@ KPM_ATTRIBUTES = \
         ( roundup_name = '/ext_tracker_state/ext_status'
         , remote_name  = 'Status'
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_Default
         ( roundup_name = 'release'
         , remote_name  = 'Softwarestand (verurs.)'
         , r_default    = '?'
@@ -110,6 +110,7 @@ KPM_ATTRIBUTES = \
     , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = '/kpm/supplier_answer.content'
         , remote_name  = 'Lieferantenaussage'
+        , strip_prefix = 'Lieferantenaussage\n\n'
         )
     # The following 3 have additional sync *to* remote above.
     , roundup_sync.Sync_Attribute_Message

@@ -638,7 +638,7 @@ class Job (autosuper) :
         if not c :
             r = self.kpm.get ('ticket.download.do', ticketId = self.jobid)
             r.encoding = 'latin1'
-            c = r.text.split ('\n')
+            c = [l + '\n' for l in r.text.split ('\n')]
         return c
     # end def download
 
