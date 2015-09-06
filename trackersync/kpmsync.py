@@ -175,6 +175,21 @@ class Problem (roundup_sync.Remote_Issue) :
         self.__super.__init__ (rec, attributes)
     # end def __init__
 
+    def convert_date (self, value) :
+        """ Convert date from roundup value to german date
+            representation. Used only for KPM 'Datum'. Currently we
+            don't care about timezone, KPM document doesn't specify the
+            timezone used. Roundup XMLRPC dates come as UTC if not
+            otherwise configured.
+            This is automagically called by framework for each roundup
+            date property.
+        """
+        if not value :
+            return value
+        dt = datetime.strptime (value, "%Y-%m-%d.%H:%M:%S.%f")
+        return dt.strftime ('%d.%m.%Y')
+    # end def convert_date
+
     def document_content (self, docid) :
         return self.kpm.get \
             ( 'problem.base.dokument.download.do'
@@ -208,7 +223,7 @@ class Problem (roundup_sync.Remote_Issue) :
     # end def check_sync_callback
 
     def _update (self, type) :
-        self.set ('Aktion', type)
+        self.set ('Aktion', type, None)
         w    = CSV_Writer \
             (None, encoding = 'latin1', delimiter = self.lang.delimiter)
         w.writerow (self.lang.fields_v4_orig)
@@ -235,6 +250,10 @@ class Problem (roundup_sync.Remote_Issue) :
         result = result.strip ()
         start  = 'Die Aktualisierung hat folgende Hinweise ergeben:'
         end    = 'erfolgreich.'
+        imp    = 'erfolgreich importiert - neue Problemnummer'
+        if result.startswith (start) and imp in result :
+            num = result.split (':') [-1]
+            return num.strip ()
         if not result.startswith (start) or not result.endswith (end) :
             print ("issue%s:" % issue, result)
             self.kpm.log.error \
@@ -246,7 +265,8 @@ class Problem (roundup_sync.Remote_Issue) :
             We use column format V4 which can represent all the columns
             we may ever need.
         """
-        self._update ('I')
+        number = self._update ('I')
+        return number
     # end def create
 
     def update (self, syncer) :

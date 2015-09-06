@@ -46,6 +46,14 @@ class Remote_Issue (autosuper) :
 
     multilevel = None
 
+    # Map roundup types to names for conversion methods
+    typemap = \
+        { '<roundup.hyperdb.String>'  : 'string'
+        , '<roundup.hyperdb.Date>'    : 'date'
+        , '<roundup.hyperdb.Number>'  : 'number'
+        , '<roundup.hyperdb.Boolean>' : 'bool'
+        }
+
     def __init__ (self, record, sync_attributes = {}) :
         self.record     = record
         self.newvalues  = {}
@@ -187,7 +195,13 @@ class Remote_Issue (autosuper) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def messages
 
-    def set (self, name, value) :
+    def set (self, name, value, type) :
+        type = self.typemap.get (type, None)
+        conv = None
+        if type :
+            conv = getattr (self, 'convert_%s' % type, None)
+        if conv :
+            value = conv (value)
         if self.multilevel :
             names = name.split ('.')
             item  = self.newvalues
@@ -236,6 +250,16 @@ class Remote_Issue (autosuper) :
 
 # end class Remote_Issue
 
+def rup_date (datestring) :
+    """ String roundup XMLRPC date and extract date/time in the format
+        %Y-%m-%d.%H:%M:%S seconds are with 3 decimal places, e.g.
+        2015-09-06.13:51:38.840
+    """
+    assert datestring.startswith ('<Date ')
+    ret = datestring [6:-1]
+    return ret
+# end def rup_date
+
 class Sync_Attribute (autosuper) :
     """ Sync a property from/to a remote tracker.
         If only_update is specified, the sync is run only in the update
@@ -282,15 +306,6 @@ class Sync_Attribute (autosuper) :
             self.map  = dict ((v, k) for k, v in imap.iteritems ())
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
-        """ Needs to be implemented in child class.
-            Note that a sync method may return a value != None in which
-            case the sync for this Issue is not done. Useful for checks
-            if a sync for a particular issue should happen.
-        """
-        pass
-    # end def sync
-
     def no_sync_necessary (self, lv, rv) :
         l_def = getattr (self, 'l_default', None)
         r_def = getattr (self, 'r_default', None)
@@ -310,6 +325,26 @@ class Sync_Attribute (autosuper) :
                     )
                 )
     # end def no_sync_necessary
+
+    def sync (self, syncer, id, remote_issue) :
+        """ Needs to be implemented in child class.
+            Note that a sync method may return a value != None in which
+            case the sync for this Issue is not done. Useful for checks
+            if a sync for a particular issue should happen.
+        """
+        pass
+    # end def sync
+
+    def type (self, syncer) :
+        if not self.name :
+            return None
+        if self.name.startswith ('/') :
+            classname, path = self.name.strip ('/').split ('/', 1)
+        else :
+            classname = 'issue'
+            path = self.name
+        return syncer.get_transitive_schema (classname, path)
+    # end def type
 
 # end class Sync_Attribute
 
@@ -436,7 +471,7 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
     def sync (self, syncer, id, remote_issue) :
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
         if not nosync :
-            remote_issue.set (self.remote_name, lv)
+            remote_issue.set (self.remote_name, lv, self.type (syncer))
     # end def sync
 
 # end class Sync_Attribute_To_Remote
@@ -460,7 +495,7 @@ class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
             and not remote_issue.get (self.remote_name, None)
             and lv
             ) :
-            remote_issue.set (self.remote_name, lv)
+            remote_issue.set (self.remote_name, lv, self.type (syncer))
     # end def sync
 
 # end class Sync_Attribute_To_Remote_Default
@@ -511,7 +546,7 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
             else :
                 syncer.set (id, self.name, rv)
         else :
-            remote_issue.set (self.remote_name, lv)
+            remote_issue.set (self.remote_name, lv, self.type (syncer))
     # end def sync
 
 # end class Sync_Attribute_Two_Way
@@ -572,8 +607,7 @@ class Sync_Attribute_Messages (Sync_Attribute) :
                         rupm = mrup [k]
                         mm = m [k]
                         if k == 'date' :
-                            assert rupm.startswith ('<Date ')
-                            rupm = rupm [6:-1]
+                            rupm = rup_date (rupm)
                             if  (   mm [-5] == '+' or mm [-5] == '-'
                                 and isdigit (mm [-4:])
                                 ) :
@@ -890,6 +924,20 @@ class Syncer (autosuper) :
         return self.oldvalues [id][name]
     # end def get
 
+    def get_class_path (self, classname, path, id = None) :
+        """ We get a transitive property 'path' and return classname and
+            property name and optionally the id.
+        """
+        path = path.split ('.')
+        for p in path [:-1] :
+            assert self.get_type (classname, p) == 'Link'
+            if id :
+                id = self.srv.display ('%s%s' % (classname, id), p) [p]
+            classname = self.get_classname (classname, p)
+        p = path [-1]
+        return classname, p, id
+    # end def get_class_path
+
     def get_classname (self, classname, name) :
         """ Get the classname of a Link or Multilink property """
         assert self.schema [classname][name].endswith ('">')
@@ -907,17 +955,19 @@ class Syncer (autosuper) :
     # end def get_default
 
     def get_path (self, classname, path, id) :
-        path = path.split ('.')
-        for p in path [:-1] :
-            assert self.get_type (classname, p) == 'Link'
-            if id :
-                id = self.srv.display ('%s%s' % (classname, id), p) [p]
-            classname = self.get_classname (classname, p)
-        p = path [-1]
+        classname, p, id = self.get_class_path (classname, path, id)
         if id :
-            return self.srv.display ('%s%s' % (classname, id), p) [p]
+            r = self.srv.display ('%s%s' % (classname, id), p) [p]
+            if r and self.schema [classname][p] == '<roundup.hyperdb.Date>' :
+                return rup_date (r)
+            return r
         return self.get_default (classname, p)
     # end def get_path
+
+    def get_transitive_schema (self, classname, path) :
+        classname, prop, id = self.get_class_path (classname, path)
+        return self.schema [classname][prop]
+    # end def get_transitive_schema
 
     def get_type (self, classname, name) :
         """ Get type of link value, either Link or Multilink """
@@ -1135,6 +1185,9 @@ class Syncer (autosuper) :
             if self.verbose :
                 print ("remote_issue.create", remote_issue.newvalues)
             rid = remote_issue.create ()
+            if not rid :
+                raise ValueError \
+                    ("Didn't receive correct remote issue on creation")
             self.set (iid, '/ext_tracker_state/ext_id', rid)
             newmsg = self.create ('msg', content = remote_issue.as_json ())
             self.set (iid, '/ext_tracker_state/ext_attributes', newmsg)

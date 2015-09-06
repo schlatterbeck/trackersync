@@ -139,7 +139,7 @@ KPM_ATTRIBUTES = \
         )
     , roundup_sync.Sync_Attribute_To_Remote_Default
         ( roundup_name = None
-        , remote_name  = "E-Projekt"
+        , remote_name  = "E-Projekt [Code]"
         , l_default    = "project here"
         , only_create  = True
         )
