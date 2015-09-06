@@ -834,6 +834,7 @@ def main () :
     cmd.add_argument \
         ( "-j", "--job"
         , help    = "KPM job identifier (mainly used for debugging)"
+        , action  = 'append'
         )
     cmd.add_argument \
         ( "-n", "--no-action"
@@ -887,12 +888,14 @@ def main () :
     address  = opt.address     or cfg.KPM_ADDRESS
     url      = opt.roundup_url or cfg.get ('ROUNDUP_URL', None)
     kpm.login  (username = username, password = password)
+    jobs = []
     if (opt.job) :
-        jobs = [Job (kpm, opt.job, debug = opt.debug, reuse = True)]
-    else :
+        for j in opt.job :
+            jobs.append (Job (kpm, j, debug = opt.debug, reuse = True))
+    if not jobs :
         # get active and canceled issues
-        jobs = [kpm.search (address = address)]
-        jobs.append (kpm.search (address = address, canceled = 'true'))
+        jobs.append (kpm.search (address = address))
+        jobs.append (kpm.search (address = address, canceled = True))
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES') :
         syncer = roundup_sync.Syncer \

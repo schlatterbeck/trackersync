@@ -1101,6 +1101,9 @@ class Syncer (autosuper) :
         # If the following is non-empty, sync only an explicit subset of
         # attributes.
         attr = remote_issue.attributes
+        # Don't sync a subset of attributes if local issue doesn't exist
+        if id < 0 and attr :
+            return
         for a in self.attributes :
             if a.only_create :
                 continue
@@ -1115,7 +1118,7 @@ class Syncer (autosuper) :
                 if a.sync (self, id, remote_issue) :
                     if self.verbose :
                         print ("Not syncing: %s" % id)
-                    break
+                    return
         if 'ext_id' not in self.newvalues [id] :
             if  (  self.oldvalues [id].get ('ext_id') != remote_id
                 or self.update_state
