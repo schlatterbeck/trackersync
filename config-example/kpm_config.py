@@ -110,7 +110,7 @@ KPM_ATTRIBUTES = \
     , roundup_sync.Sync_Attribute_Two_Way
         ( roundup_name = '/kpm/supplier_answer.content'
         , remote_name  = 'Lieferantenaussage'
-        , strip_prefix = 'Lieferantenaussage\n\n'
+        , strip_prefix = 'Lieferantenaussage:\n\n'
         )
     # The following 3 have additional sync *to* remote above.
     , roundup_sync.Sync_Attribute_Message

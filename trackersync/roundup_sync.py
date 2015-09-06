@@ -203,6 +203,31 @@ class Remote_Issue (autosuper) :
     # end def set
     __setitem__ = set
 
+    def strip_prefix (self, propname, prefix) :
+        """ Strip a prefix from a given property.
+            This must sometimes be done when the remote system returns a
+            prefix where it should not: When setting the remote to "x"
+            and it returns "PREFIXx", the result will not roundtrip,
+            instead for each update for a two-way sync, the remote will
+            grow a new prefix. To prevent this behaviour we strip prefix
+            from oldvalue (correcting the behaviour of the remote
+            system).
+            Note that this is currently not implemented for transitive
+            properties (self.multilevel set) of the remote system.
+        """
+        v = self.get (propname)
+        if self.multilevel :
+            raise NotImplementedError \
+                ("Multilevel not implemented for strip_prefix")
+        if  (   propname in self.record
+            and propname not in self.newvalues
+            and v.startswith (prefix) 
+            ) :
+            l = len (prefix)
+            v = v [l:]
+            self.record [propname] = v
+    # end def strip_prefix
+
     def update (self, syncer) :
         """ Update remote issue tracker with self.newvalues.
         """
@@ -345,9 +370,6 @@ class Sync_Attribute_One_Way (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         rv = remote_issue.get (self.remote_name, None)
-        if self.strip_prefix and rv.startswith (self.strip_prefix) :
-            l = len (self.strip_prefix)
-            rv = rv [l:]
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv) :
             return
@@ -369,9 +391,6 @@ class Sync_Attribute_Default (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         v = remote_issue.get (self.remote_name)
-        if self.strip_prefix and v.startswith (self.strip_prefix) :
-            l = len (self.strip_prefix)
-            v = v [l:]
         if self.imap :
             v = self.imap.get (v, self.r_default)
         elif v is None and self.r_default :
@@ -467,11 +486,6 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 
     def sync (self, syncer, id, remote_issue) :
         rv      = remote_issue.get (self.remote_name, None)
-        if rv and self.strip_prefix and rv.startswith (self.strip_prefix) :
-            l = len (self.strip_prefix)
-            if syncer.debug :
-                print ("Stripping:", rv)
-            rv = rv [l:]
         lv      = syncer.get (id, self.name)
         nosync  = self.no_sync_necessary (lv, rv)
         old     = syncer.oldremote.get (self.remote_name, None)
@@ -825,8 +839,6 @@ class Syncer (autosuper) :
 
     def format (self, cls, key, value) :
         t = self.schema [cls][key]
-        if value is None :
-            import pdb; pdb.set_trace ()
         if t.startswith ('<roundup.hyperdb.Multilink') :
             return '%s=%s' % (key, ','.join (value))
         elif isinstance (value, numbers.Number) :
@@ -1042,6 +1054,8 @@ class Syncer (autosuper) :
         for a in self.attributes :
             if a.only_create :
                 continue
+            if a.strip_prefix :
+                remote_issue.strip_prefix (a.remote_name, a.strip_prefix)
             if not attr or a.remote_name in attr :
                 if self.debug :
                     print \

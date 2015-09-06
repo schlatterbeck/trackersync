@@ -535,7 +535,6 @@ class Export (autosuper) :
             fo = open ('%s.csv' % self.debug, 'w')
             for line in content :
                 fo.write (line.encode ('latin1'))
-                fo.write ('\n'.encode ('latin1'))
             fo.close ()
         c = DictReader \
             ( self.lang.fix_kpm_csv (content)
