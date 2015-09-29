@@ -245,7 +245,7 @@ class Problem (roundup_sync.Remote_Issue) :
             try :
                 result = self.kpm.update ('%s.csv' % issue, v)
                 break
-            except request.exceptions.ConnectionError :
+            except requests.exceptions.ConnectionError :
                 pass
         result = result.strip ()
         start  = 'Die Aktualisierung hat folgende Hinweise ergeben:'
