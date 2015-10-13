@@ -110,10 +110,12 @@ if sys.version.startswith ('2.') :
         def valueconv (self, val) :
             """ Allow None and other values that can be converted to a
                 string representation (e.g. int)
+                Replace characters not representable in the target
+                encoding.
             """
             if val is None :
                 return None
-            return unicode (val).encode (self.enc)
+            return unicode (val).encode (self.enc, 'replace')
         # end def valueconv
 
         def writerow(self, row) :
