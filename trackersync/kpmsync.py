@@ -243,12 +243,14 @@ class Problem (roundup_sync.Remote_Issue) :
             f.write (v)
             f.close ()
         issue  = self.get ('L-Fehlernummer')
-        for k in range (3) :
+        for k in range (5) :
             try :
                 result = self.kpm.update ('%s.csv' % issue, v)
                 break
             except requests.exceptions.ConnectionError :
                 pass
+        else :
+            raise
         result = result.strip ()
         start  = 'Die Aktualisierung hat folgende Hinweise ergeben:'
         end    = 'erfolgreich.'
