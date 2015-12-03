@@ -39,6 +39,7 @@ from argparse           import ArgumentParser
 from datetime           import datetime
 from csv                import DictReader
 from xml.etree          import ElementTree
+from traceback          import print_exc
 from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
@@ -587,7 +588,11 @@ class Export (autosuper) :
 
     def sync (self, syncer) :
         for p_id, p in self.problems.iteritems () :
-            syncer.sync (p_id, p)
+            try :
+                syncer.sync (p_id, p)
+            except StandardError :
+                print ("Error syncing %s" % p_id)
+                print_exc ()
         syncer.sync_new_local_issues \
             (lambda x: Problem (self.kpm, x, self.lang))
     # end def sync
