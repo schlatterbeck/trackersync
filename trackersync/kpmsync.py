@@ -154,7 +154,8 @@ class Config (Config_File) :
     def __init__ (self, path = path, config = config) :
         self.__super.__init__ \
             ( path, config
-            , KPM_ADDRESS = '21 KPM-TEST'
+            , KPM_ADDRESS  = '21 KPM-TEST'
+            , KPM_LANGUAGE = 'german'
             )
     # end def __init__
 
@@ -499,9 +500,9 @@ class KPM_Language (autosuper) :
 
     fieldnames = dict (english = fields_english, german = fields_german)
 
-    def __init__ (self, delimiter) :
+    def __init__ (self, delimiter, language = None) :
         self.delimiter = delimiter
-        self.language  = None
+        self.language  = language
         self.action    = None
         self.number    = None
     # end def __init__
@@ -516,7 +517,13 @@ class KPM_Language (autosuper) :
             ) :
             fix  = self.fix_kpm_attr_english
             lang = "english"
-        assert first [fix [0][0] - 1] == fix [0][1]
+        if first [fix [0][0] - 1] != fix [0][1] :
+            raise ValueError ("Non-implemented language detected")
+        if self.language and lang != self.language :
+            raise ValueError \
+                ( "Invalid Language, detected: %s, configured: %s"
+                % (lang, self.language)
+                )
         self.language = lang
         self.action   = first [0]
         self.number   = first [1]
@@ -556,7 +563,8 @@ class Export (autosuper) :
         self.debug    = debug
         self.problems = {}
         self.kpm      = kpm
-        self.lang     = KPM_Language (delimiter = str (';'))
+        self.lang     = KPM_Language \
+            (delimiter = str (';'), language = kpm.lang)
         if self.debug :
             fo = open ('%s.csv' % self.debug, 'w')
             for line in content :
@@ -778,6 +786,7 @@ class KPM (Log, Lock_Mixin) :
         , timeout = None
         , verbose = False
         , debug   = False
+        , lang    = 'german'
         , ** kw
         ) :
         self.site     = site
@@ -786,6 +795,7 @@ class KPM (Log, Lock_Mixin) :
         self.base_url = '/'.join ((site, url))
         self.timeout  = timeout
         self.headers  = {}
+        self.lang     = lang
         self.session  = requests.Session ()
         if timeout :
             self.session.timeout = timeout
@@ -892,7 +902,8 @@ def main () :
         cfgpath, config = os.path.split (opt.config)
         config = os.path.splitext (config) [0]
     cfg = Config (path = cfgpath, config = config)
-    kpm = KPM  (verbose = opt.verbose, debug = opt.debug)
+    kpm = KPM \
+        (verbose = opt.verbose, debug = opt.debug, lang = cfg.KPM_LANGUAGE)
     username = opt.username    or cfg.KPM_USERNAME
     password = opt.password    or cfg.KPM_PASSWORD
     address  = opt.address     or cfg.KPM_ADDRESS

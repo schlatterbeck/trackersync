@@ -31,6 +31,7 @@ from trackersync import roundup_sync
 KPM_USERNAME = 'user'
 KPM_PASSWORD = 'secret'
 KPM_ADDRESS  = '21 KPM-TEST'
+KPM_LANGUAGE = 'german'
 ROUNDUP_URL  = 'http://username:password@localhost:8080/tracker/xmlrpc'
 
 KPM_ATTRIBUTES = \
