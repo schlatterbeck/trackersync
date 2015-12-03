@@ -28,6 +28,7 @@ import os
 import sys
 import requests
 import csv
+import xmlrpclib
 try :
     from urllib.parse   import urlencode, parse_qs
 except ImportError :
@@ -590,7 +591,7 @@ class Export (autosuper) :
         for p_id, p in self.problems.iteritems () :
             try :
                 syncer.sync (p_id, p)
-            except StandardError :
+            except (StandardError, xmlrpclib.Fault) :
                 print ("Error syncing %s" % p_id)
                 print_exc ()
         syncer.sync_new_local_issues \
