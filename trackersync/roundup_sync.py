@@ -28,6 +28,7 @@ from __future__ import absolute_import
 import xmlrpclib
 import json
 import numbers
+import ssl
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import ustr, text_type
 
@@ -154,6 +155,18 @@ class Remote_Issue (autosuper) :
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def document_content
+
+    def document_fixer (self, namedict) :
+        """ Allow the remote issue to correct document names, i.e.,
+            extract only the relevant document id part according the the
+            naming convention of the remote issue. This is needed
+            because we don't have the remote document id in roundup and
+            need to preserve it in the filename. So we need a way to
+            code both, the docid and the remote filename into the
+            roundup filename.
+        """
+        return namedict
+    # end def document_fixer
 
     def document_ids (self) :
         """ This returns a list of document ids for this issue. Note
@@ -736,28 +749,43 @@ class Sync_Attribute_Files (Sync_Attribute) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        fids   = syncer.get (id, self.name)
-        nosync = dict.fromkeys (fids)
-        files  = [syncer.getitem ('file', i, 'name', 'id') for i in fids]
-        names  = dict ((f ['name'], f ['id']) for f in files)
-        found  = False
+        fids    = syncer.get (id, self.name)
+        filids  = dict.fromkeys (fids)
+        fields  = ('id', 'name', 'type')
+        files   = [syncer.getitem ('file', i, *fields) for i in fids]
+        attrs   = dict ((f ['id'], f) for f in files)
+        by_name = dict ((f ['name'], f ['id']) for f in files)
+        by_name = remote_issue.document_fixer (by_name)
+        created = False
         for docid in remote_issue.document_ids () :
-            if docid in names :
-                del nosync [names [docid]]
+            # content needs to be fetched because some backends get
+            # their document_attributes with the content.
+            content    = remote_issue.document_content (docid)
+            attributes = remote_issue.document_attributes (docid)
+            if docid in by_name :
+                id = by_name [docid]
+                d  = {}
+                for k in attributes :
+                    if k in attrs [id] and attributes [k] != attrs [id][k] :
+                        d [k] = attributes [k]
+                if d :
+                    syncer.setitem ('file', id, ** d)
+                del filids [id]
             else :
+                if 'name' not in attributes :
+                    attributes ['name'] = docid
                 newfile = syncer.create \
                     ( 'file'
-                    , name    = docid
-                    , content = remote_issue.document_content (docid)
-                    , ** remote_issue.document_attributes (docid)
+                    , content = content
+                    , ** attributes
                     )
                 fids.append (newfile)
-                found = True
-        if found :
+                created = True
+        if created :
             syncer.set (id, self.name, fids)
         if self.prefix is not None :
             files = [syncer.getitem ('file', i, 'name', 'id', 'type')
-                     for i in nosync
+                     for i in filids
                     ]
             for f in files :
                 name = f ['name']
@@ -794,8 +822,13 @@ class Syncer (autosuper) :
         , debug           = 0
         , dry_run         = 0
         , remote_change   = False
+        , unverified      = False
         ) :
-        self.srv = xmlrpclib.ServerProxy (url, allow_none = True)
+        srvargs = dict (allow_none = True)
+        if unverified :
+            context = ssl._create_unverified_context ()
+            srvargs ['context'] = context
+        self.srv = xmlrpclib.ServerProxy (url, **srvargs)
         self.attributes      = attributes
         self.oldvalues       = {}
         self.newvalues       = {}

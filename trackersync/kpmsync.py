@@ -29,6 +29,7 @@ import sys
 import requests
 import csv
 import xmlrpclib
+import ssl
 try :
     from urllib.parse   import urlencode, parse_qs
 except ImportError :
@@ -168,6 +169,7 @@ class Problem (roundup_sync.Remote_Issue) :
         self.debug    = self.kpm.debug
         self.canceled = canceled
         self.lang     = lang
+        self.docinfo  = {}
         rec = {}
         for k, v in record.iteritems () :
             if v is not None and v != str ('') :
@@ -195,13 +197,50 @@ class Problem (roundup_sync.Remote_Issue) :
         return dt.strftime ('%d.%m.%Y')
     # end def convert_date
 
+    def document_attributes (self, docid) :
+        if docid in self.docinfo and self.docinfo [docid] :
+            if 'type' not in self.docinfo [docid] :
+                self.docinfo [docid].update \
+                    (self.__super.document_attributes (docid))
+            return self.docinfo [docid]
+        return self.__super.document_attributes (docid)
+    # end def document_attributes
+
     def document_content (self, docid) :
-        return self.kpm.get \
+        result = self.kpm.get \
             ( 'problem.base.dokument.download.do'
             , actionCommand = 'downloadDokumentAsAttachment'
             , dokTs         = docid
-            ).content
+            )
+        h = result.headers
+        info = self.docinfo [docid] = {}
+        if 'content-type' in h :
+            info ['type'] = h ['content-type']
+        if 'content-disposition' in h :
+            parts = h ['content-disposition'].split (';')
+            for p in parts :
+                if p.startswith ('filename=') :
+                    fn = p.split ('=', 1) [-1].strip ('"')
+                    info ['name'] = '#'.join ((docid, fn))
+                    break
+        return result.content
     # end def document_content
+
+    def document_fixer (self, namedict) :
+        """ We replace filenames with a '#' in them. This is the naming
+            convention for preserving the docid *and* the remote
+            filename. Note that for legacy reasons files may not have
+            the original filename preserved (or are files not attached
+            via kpm), these are preserved as-is.
+        """
+        d = {}
+        for fn in namedict :
+            docid = fn
+            if '#' in fn :
+                docid = fn.split ('#', 1) [0]
+            d [docid] = namedict [fn]
+        return d
+    # end def document_fixer
 
     def document_ids (self) :
         docs = self.get ('Dokumente')
@@ -261,7 +300,13 @@ class Problem (roundup_sync.Remote_Issue) :
         if result.startswith (start) and imp in result :
             num = result.split (':') [-1]
             return num.strip ()
+        if result.startswith ('<!DOCTYPE HTML') :
+            msg = "issue%s: Got HTML Response!" % issue
+            print (msg)
+            self.kpm.log.error (msg)
+            return
         if not result.startswith (start) or not result.endswith (end) :
+            result = result.replace ('\n\n', '\n')
             print ("issue%s:" % issue, result)
             self.kpm.log.error \
                 ('issue %s: %s' % (issue, result.replace ('\n', ' ')))
@@ -845,6 +890,12 @@ def main () :
         , help    = "Configuration file"
         , default = '/etc/trackersync/kpm_config.py'
         )
+    if hasattr (ssl, '_create_unverified_context') :
+        cmd.add_argument \
+            ( "-C", "--unverified-ssl-context"
+            , help    = "Don't verify certificates"
+            , action  = 'store_true'
+            )
     cmd.add_argument \
         ( "-D", "--debug"
         , help    = "Debugging"
@@ -919,13 +970,16 @@ def main () :
         jobs.append (kpm.search (address = address, canceled = True))
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES') :
-        syncer = roundup_sync.Syncer \
-            (url, 'KPM', cfg.KPM_ATTRIBUTES
-            , verbose         = opt.verbose
+        syncargs = dict \
+            ( verbose         = opt.verbose
             , debug           = opt.debug
             , dry_run         = opt.no_action
             , remote_change   = opt.remote_change
             )
+        if opt.unverified_ssl_context :
+            syncargs ['unverified'] = True
+        syncer = roundup_sync.Syncer \
+            (url, 'KPM', cfg.KPM_ATTRIBUTES, ** syncargs)
     old_xp = None
     for j in jobs :
         j.poll ()
