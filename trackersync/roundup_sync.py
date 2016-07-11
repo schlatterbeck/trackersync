@@ -29,6 +29,7 @@ import xmlrpclib
 import json
 import numbers
 import ssl
+from   time             import sleep
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import ustr, text_type
 
@@ -783,7 +784,7 @@ class Sync_Attribute_Files (Sync_Attribute) :
                 created = True
         if created :
             syncer.set (id, self.name, fids)
-        if self.prefix is not None :
+        if self.prefix is not None and not self.remote_dry_run :
             files = [syncer.getitem ('file', i, 'name', 'id', 'type')
                      for i in filids
                     ]
@@ -801,6 +802,39 @@ class Sync_Attribute_Files (Sync_Attribute) :
     # end def sync
 
 # end class Sync_Attribute_Files
+
+class Retry_Server_Proxy (autosuper) :
+
+    def __init__ (self, retries, sleeptime, *args, **kw) :
+        self.retries   = retries
+        self.sleeptime = sleeptime
+        self.proxy     = xmlrpclib.ServerProxy (*args, **kw)
+    # end def __init__
+
+    def retry (self, function) :
+        def f_retry (*args, **kw) :
+            for retry in range (self.retries) :
+                try :
+                    return function (*args, **kw)
+                except xmlrpclib.ProtocolError :
+                    if self.sleeptime :
+                        sleep (self.sleeptime)
+            raise
+        # end def f_retry
+        return f_retry
+    # end def retry
+
+    def __getattr__ (self, name) :
+        obj = getattr (self.proxy, name)
+        if (callable (obj)) :
+            obj = self.retry (obj)
+            setattr (self, name, obj)
+        else :
+            setattr (self, name, obj)
+        return obj
+    # end def __getattr__
+
+# end class Retry_Server_Proxy
 
 class Syncer (autosuper) :
     """ Synchronisation Framework
@@ -821,6 +855,7 @@ class Syncer (autosuper) :
         , verbose         = 0
         , debug           = 0
         , dry_run         = 0
+        , remote_dry_run  = 0
         , remote_change   = False
         , unverified      = False
         ) :
@@ -828,7 +863,7 @@ class Syncer (autosuper) :
         if unverified :
             context = ssl._create_unverified_context ()
             srvargs ['context'] = context
-        self.srv = xmlrpclib.ServerProxy (url, **srvargs)
+        self.srv = Retry_Server_Proxy (3, 0, url, **srvargs)
         self.attributes      = attributes
         self.oldvalues       = {}
         self.newvalues       = {}
@@ -840,6 +875,7 @@ class Syncer (autosuper) :
         self.verbose         = verbose
         self.debug           = debug
         self.dry_run         = dry_run
+        self.remote_dry_run  = remote_dry_run
         self.oldremote       = {}
         self.update_state    = False
         self.schema          = dict ((k, dict (schema [k])) for k in schema)
@@ -1180,7 +1216,10 @@ class Syncer (autosuper) :
                 self.update_aux_classes (iid, classdict)
         elif self.newvalues [id] :
             self.update_issue (id)
-        if remote_issue.newvalues and not self.dry_run :
+        if  (   remote_issue.newvalues
+            and not self.dry_run
+            and not self.remote_dry_run
+            ) :
             if self.verbose :
                 print ("Update remote:", remote_issue.newvalues)
             remote_issue.update (self)

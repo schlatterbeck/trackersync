@@ -914,6 +914,12 @@ def main () :
         , default = False
         )
     cmd.add_argument \
+        ( "-N", "--no-remote-action"
+        , help    = "Remote-dry-run: Don't update remote side of sync"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_argument \
         ( "-r", "--roundup-url"
         , help    = "Roundup URL for XMLRPC"
         )
@@ -974,6 +980,7 @@ def main () :
             ( verbose         = opt.verbose
             , debug           = opt.debug
             , dry_run         = opt.no_action
+            , remote_dry_run  = opt.no_remote_action
             , remote_change   = opt.remote_change
             )
         if opt.unverified_ssl_context :
