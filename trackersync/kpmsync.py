@@ -215,9 +215,9 @@ class Problem (roundup_sync.Remote_Issue) :
         h = result.headers
         info = self.docinfo [docid] = {}
         if 'content-type' in h :
-            info ['type'] = h ['content-type']
+            info ['type'] = h ['content-type'].decode ('latin1')
         if 'content-disposition' in h :
-            parts = h ['content-disposition'].split (';')
+            parts = h ['content-disposition'].decode ('latin1').split (';')
             for p in parts :
                 if p.startswith ('filename=') :
                     fn = p.split ('=', 1) [-1].strip ('"')
