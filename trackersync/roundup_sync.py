@@ -764,14 +764,14 @@ class Sync_Attribute_Files (Sync_Attribute) :
             content    = remote_issue.document_content (docid)
             attributes = remote_issue.document_attributes (docid)
             if docid in by_name :
-                id = by_name [docid]
+                did = by_name [docid]
                 d  = {}
                 for k in attributes :
-                    if k in attrs [id] and attributes [k] != attrs [id][k] :
+                    if k in attrs [did] and attributes [k] != attrs [did][k] :
                         d [k] = attributes [k]
                 if d :
-                    syncer.setitem ('file', id, ** d)
-                del filids [id]
+                    syncer.setitem ('file', did, ** d)
+                del filids [did]
             else :
                 if 'name' not in attributes :
                     attributes ['name'] = docid
