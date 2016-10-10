@@ -996,12 +996,21 @@ class Syncer (autosuper) :
     def get_class_path (self, classname, path, id = None) :
         """ We get a transitive property 'path' and return classname and
             property name and optionally the id.
+            Note that id may become a list when processing multilinks on
+            the way.
         """
         path = path.split ('.')
         for p in path [:-1] :
-            assert self.get_type (classname, p) == 'Link'
+            assert self.get_type (classname, p) in ('Link', 'Multilink')
             if id :
-                id = self.srv.display ('%s%s' % (classname, id), p) [p]
+                if isinstance (id, list) :
+                    id = [self.srv.display ('%s%s' % (classname, i), p) [p]
+                          for i in id
+                         ]
+                    if id and isinstance (id [0], list) :
+                        id = [item for sublist in id for item in sublist]
+                else :
+                    id = self.srv.display ('%s%s' % (classname, id), p) [p]
             classname = self.get_classname (classname, p)
         p = path [-1]
         return classname, p, id
@@ -1026,7 +1035,12 @@ class Syncer (autosuper) :
     def get_path (self, classname, path, id) :
         classname, p, id = self.get_class_path (classname, path, id)
         if id :
-            r = self.srv.display ('%s%s' % (classname, id), p) [p]
+            if isinstance (id, list) :
+                r = [self.srv.display ('%s%s' % (classname, i), p) [p]
+                     for i in id
+                    ]
+            else :
+                r = self.srv.display ('%s%s' % (classname, id), p) [p]
             if r and self.schema [classname][p] == '<roundup.hyperdb.Date>' :
                 return rup_date (r)
             return r
