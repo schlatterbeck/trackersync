@@ -1039,6 +1039,7 @@ class Syncer (autosuper) :
                 r = [self.srv.display ('%s%s' % (classname, i), p) [p]
                      for i in id
                     ]
+                r = ','.join (r)
             else :
                 r = self.srv.display ('%s%s' % (classname, id), p) [p]
             if r and self.schema [classname][p] == '<roundup.hyperdb.Date>' :
