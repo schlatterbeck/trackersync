@@ -247,8 +247,13 @@ class Problem (roundup_sync.Remote_Issue) :
         if not docs :
             return []
         ids  = []
+        self.kpm.log.info ("docs: %r" % docs)
         for doc in docs.split () :
-            ids.extend (parse_qs (doc) ['dokTs'])
+            parsed = parse_qs (doc)
+            if 'dokTs' not in parsed :
+                self.kpm.log.error ("Error parsing doc: %r" % parsed)
+            else :
+                ids.extend (parsed ['dokTs'])
         return ids
     # end def document_ids
 
@@ -310,6 +315,7 @@ class Problem (roundup_sync.Remote_Issue) :
             print ("issue%s:" % issue, result)
             self.kpm.log.error \
                 ('issue %s: %s' % (issue, result.replace ('\n', ' ')))
+            self.kpm.log.error ('issue %s: %r' % (issue, v))
     # end def _update
 
     def create (self) :
