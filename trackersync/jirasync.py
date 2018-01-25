@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2015-18 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -35,6 +35,7 @@ from rsclib.autosuper   import autosuper
 from rsclib.Config_File import Config_File
 from rsclib.pycompat    import ustr
 from trackersync        import roundup_sync
+from trackersync        import tracker_sync
 
 class Config (Config_File) :
 
@@ -82,7 +83,7 @@ def jira_utctime (jiratime) :
     return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
 # end def jira_utctime
 
-class Jira_Issue (roundup_sync.Remote_Issue) :
+class Jira_Issue (tracker_sync.Remote_Issue) :
 
     multilevel = True
 
@@ -254,6 +255,7 @@ def main () :
         , help    = "Dry-run: Don't update any side of sync"
         , action  = 'store_true'
         , default = False
+        , dest    = 'dry_run'
         )
     cmd.add_option \
         ( "-P", "--password"
@@ -305,12 +307,8 @@ def main () :
         )
     q = jql or 'assignee=%s' % assignee
     if rup_url and cfg.get ('JIRA_ATTRIBUTES') :
-        syncer = roundup_sync.Syncer \
-            ( rup_url, cfg.get ('TRACKER_NAME', 'JIRA'), cfg.JIRA_ATTRIBUTES
-            , verbose = opt.verbose
-            , debug   = opt.debug
-            , dry_run = opt.no_action
-            )
+        trn    = cfg.get ('TRACKER_NAME', 'JIRA')
+        syncer = roundup_sync.Syncer (rup_url, trn, cfg.JIRA_ATTRIBUTES, opt)
     if syncer :
         for issue in jira.query (q) :
             if opt.debug :

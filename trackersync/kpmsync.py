@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2015-18 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -46,6 +46,7 @@ from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
 
+from trackersync        import tracker_sync
 from trackersync        import roundup_sync
 
 if sys.version.startswith ('2.') :
@@ -162,7 +163,7 @@ class Config (Config_File) :
 
 # end class Config
 
-class Problem (roundup_sync.Remote_Issue) :
+class Problem (tracker_sync.Remote_Issue) :
 
     def __init__ (self, kpm, record, lang, canceled = False) :
         self.kpm      = kpm
@@ -918,12 +919,14 @@ def main () :
         , help    = "Dry-run: Don't update any side of sync"
         , action  = 'store_true'
         , default = False
+        , dest    = 'dry_run'
         )
     cmd.add_argument \
         ( "-N", "--no-remote-action"
         , help    = "Remote-dry-run: Don't update remote side of sync"
         , action  = 'store_true'
         , default = False
+        , dest    = 'remote_dry_run'
         )
     cmd.add_argument \
         ( "-r", "--roundup-url"
@@ -982,17 +985,9 @@ def main () :
         jobs.append (kpm.search (address = address, canceled = True))
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES') :
-        syncargs = dict \
-            ( verbose         = opt.verbose
-            , debug           = opt.debug
-            , dry_run         = opt.no_action
-            , remote_dry_run  = opt.no_remote_action
-            , remote_change   = opt.remote_change
-            )
         if opt.unverified_ssl_context :
             syncargs ['unverified'] = True
-        syncer = roundup_sync.Syncer \
-            (url, 'KPM', cfg.KPM_ATTRIBUTES, ** syncargs)
+        syncer = roundup_sync.Syncer (url, 'KPM', cfg.KPM_ATTRIBUTES, opt)
     old_xp = None
     for j in jobs :
         j.poll ()
