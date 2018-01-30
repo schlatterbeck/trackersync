@@ -37,20 +37,20 @@ TRACKER_NAME  = 'jira-test'
 
 JIRA_ATTRIBUTES = \
     ( roundup_sync.Sync_Attribute_Two_Way
-        ( roundup_name = 'title'
+        ( local_name   = 'title'
         , remote_name  = 'summary'
         )
     , roundup_sync.Sync_Attribute_One_Way
-        ( roundup_name = 'ext_status'
+        ( local_name   = 'ext_status'
         , remote_name  = 'status.name'
         )
     , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'release'
+        ( local_name   = 'release'
         , remote_name  = None
         , default      = '?'
         )
     , roundup_sync.Sync_Attribute_Default
-        ( roundup_name = 'inherit_ext'
+        ( local_name   = 'inherit_ext'
         , remote_name  = None
         , default      = 'yes'
         )

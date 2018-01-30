@@ -96,8 +96,8 @@ class Remote_Issue (autosuper) :
     __repr__ = __str__
 
     def add_message (self, msg) :
-        """ Add the given roundup message msg to this remote issue.
-            The roundup message is a dictionary with the message
+        """ Add the given local message msg to this remote issue.
+            The local message is a dictionary with the message
             properties as keys and the values of the given message.
             The method should return the id of the message just created
             if available. If no ids are supported by the remote system,
@@ -118,7 +118,7 @@ class Remote_Issue (autosuper) :
         """ Attach a file with the given filename to this remote issue.
             Return the unique filename of the remote issue. Note that
             care must be taken to return the new document id as returned
-            by the document_ids method. The roundup issue will be
+            by the document_ids method. The local issue will be
             updated with this new name to make sure that no duplicate
             attachments are created.
         """
@@ -135,9 +135,10 @@ class Remote_Issue (autosuper) :
 
     def document_attributes (self, docid) :
         """ Additional attributes for a file (document) attached to an
-            issue. By default roundup only has the MIME-Type here named
-            'type'. But schemas can be changed in roundup. This should
-            return a dictionary of all roundup attributes to be set.
+            issue. By default the local issue only has the MIME-Type
+            here named 'type'. But schemas can be changed (e.g. in
+            roundup). This should return a dictionary of all local
+            attributes to be set.
         """
         return dict (type = 'application/octet-stream')
     # end def document_attributes
@@ -153,10 +154,10 @@ class Remote_Issue (autosuper) :
         """ Allow the remote issue to correct document names, i.e.,
             extract only the relevant document id part according the the
             naming convention of the remote issue. This is needed
-            because we don't have the remote document id in roundup and
-            need to preserve it in the filename. So we need a way to
-            code both, the docid and the remote filename into the
-            roundup filename.
+            because we don't have the remote document id in the local
+            tracker and need to preserve it in the filename. So we need
+            a way to code both, the docid and the remote filename into
+            the local filename.
         """
         return namedict
     # end def document_fixer
@@ -166,7 +167,7 @@ class Remote_Issue (autosuper) :
             that the IDs need to be unique for this issue. The IDs are
             used to decide if a file is already attached to the local
             issue, no files are compared for the decision. The filenames
-            in roundup are the IDs returned by this method.
+            in the local tracker are the IDs returned by this method.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def document_ids
@@ -189,14 +190,14 @@ class Remote_Issue (autosuper) :
     def messages (self) :
         """ Iterator over messages of this remote issue.
             The iterator must return a dictionary, the keys are the
-            message properties in roundup (so the iterator has to
-            convert from the attributes of the remote issue). Only the
-            'content' property is mandatory. Note that the given
+            message properties in the local tracker (so the iterator has
+            to convert from the attributes of the remote issue). Only
+            the 'content' property is mandatory. Note that the given
             properties are used for comparison. So if, e.g., a 'date'
             property is given, this is compared *first*. If no message
-            matches the given date, the message is created in roundup.
-            The content property is generally compared *last* as it is
-            most effort.
+            matches the given date, the message is created in the local
+            tracker. The content property is generally compared *last*
+            as it is most effort.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def messages
@@ -280,7 +281,7 @@ class Sync_Attribute (autosuper) :
 
     def __init__ \
         ( self
-        , roundup_name
+        , local_name
         , remote_name  = None
         , only_update  = False
         , only_create  = False
@@ -290,7 +291,7 @@ class Sync_Attribute (autosuper) :
         , imap         = None
         , strip_prefix = None
         ) :
-        self.name         = roundup_name
+        self.name         = local_name
         self.remote_name  = remote_name
         self.only_update  = only_update
         self.only_create  = only_create
@@ -341,9 +342,9 @@ class Sync_Attribute (autosuper) :
 # end class Sync_Attribute
 
 class Sync_Attribute_Check (Sync_Attribute) :
-    """ A boolean roundup attribute used to check if the issue should
+    """ A boolean local attribute used to check if the issue should
         be synced to the remote side. If a remote_name exists, the value
-        of it is used to set the roundup attribute if 'update' is True.
+        of it is used to set the local attribute if 'update' is True.
         Otherwise an if 'update' is on, r_default (usually set to
         True) must exist.
         If 'invert' is set, the logic is inverted, it is checked that
@@ -360,7 +361,7 @@ class Sync_Attribute_Check (Sync_Attribute) :
 
     def __init__ \
         ( self
-        , roundup_name
+        , local_name
         , remote_name = None
         , invert      = False
         , update      = True
@@ -368,7 +369,7 @@ class Sync_Attribute_Check (Sync_Attribute) :
         ) :
         self.invert    = invert
         self.update    = update
-        self.__super.__init__ (roundup_name, remote_name, ** kw)
+        self.__super.__init__ (local_name, remote_name, ** kw)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -390,7 +391,7 @@ class Sync_Attribute_Check (Sync_Attribute) :
 class Sync_Attribute_One_Way (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update
-        roundup's attribute if the value has changed.
+        the local attribute if the value has changed.
         Things get more complicated if we have defaults, if both values
         are None and we have an r_default, it is applied.
     """
@@ -607,7 +608,7 @@ class Trackersync_Syncer (autosuper) :
 
     def fix_attributes (self, classname, attrs) :
         """ Fix transitive attributes. Take care of special cases like
-            roundup's 'content' property
+            e.g. roundup's 'content' property
         """
 	return attrs
     # end def fix_attributes
