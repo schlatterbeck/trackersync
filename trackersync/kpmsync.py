@@ -48,6 +48,7 @@ from rsclib.Config_File import Config_File
 
 from trackersync        import tracker_sync
 from trackersync        import roundup_sync
+from trackersync        import jira_sync
 
 if sys.version.startswith ('2.') :
 
@@ -156,8 +157,9 @@ class Config (Config_File) :
     def __init__ (self, path = path, config = config) :
         self.__super.__init__ \
             ( path, config
-            , KPM_ADDRESS  = '21 KPM-TEST'
-            , KPM_LANGUAGE = 'german'
+            , KPM_ADDRESS   = '21 KPM-TEST'
+            , KPM_LANGUAGE  = 'german'
+            , LOCAL_TRACKER = 'jira'
             )
     # end def __init__
 
@@ -265,9 +267,13 @@ class Problem (tracker_sync.Remote_Issue) :
     # end def __getitem__
 
     def check_sync_callback (self, syncer, id) :
-        """ Check for kpmid is a legacy lifter: Old issues don't have a
-            kpm attached and must therefore always sync.
+        """ Check for kpmid is a legacy lifter: Old roundup issues don't
+            have a kpm attached and must therefore always sync.
+            This forces a sync if we return something that evaluates to
+            False in a boolean context.
         """
+        if not isinstance (syncer, roundup_sync.Syncer) :
+            return True
         kpmid = syncer.get (id, '/kpm/id')
         return bool (kpmid)
     # end def check_sync_callback
@@ -886,6 +892,8 @@ class KPM (Log, Lock_Mixin) :
 
 # end class KPM
 
+local_trackers = dict (jira = jira_sync.Syncer, roundup = roundup_sync.Syncer)
+
 def main () :
     cmd = ArgumentParser ()
     cmd.add_argument \
@@ -915,6 +923,15 @@ def main () :
         , action  = 'append'
         )
     cmd.add_argument \
+        ( "-l", "--local-username"
+        , help    = "Username for local tracker"
+        )
+    cmd.add_argument \
+        ( "-L", "--local-tracker"
+        , help    = "Local tracker, one of %s, default: jira"
+                  % ', '.join (local_trackers.keys ())
+        )
+    cmd.add_argument \
         ( "-n", "--no-action"
         , help    = "Dry-run: Don't update any side of sync"
         , action  = 'store_true'
@@ -927,10 +944,6 @@ def main () :
         , action  = 'store_true'
         , default = False
         , dest    = 'remote_dry_run'
-        )
-    cmd.add_argument \
-        ( "-r", "--roundup-url"
-        , help    = "Roundup URL for XMLRPC"
         )
     cmd.add_argument \
         ( "-R", "--remote-change"
@@ -948,8 +961,16 @@ def main () :
         , default = False
         )
     cmd.add_argument \
+        ( "-p", "--local-password"
+        , help    = "Password for local tracker"
+        )
+    cmd.add_argument \
         ( "-P", "--password"
         , help    = "KPM login password"
+        )
+    cmd.add_argument \
+        ( "-u", "--url"
+        , help    = "Local Tracker URL for XMLRPC/REST"
         )
     cmd.add_argument \
         ( "-U", "--username"
@@ -970,10 +991,17 @@ def main () :
     cfg = Config (path = cfgpath, config = config)
     kpm = KPM \
         (verbose = opt.verbose, debug = opt.debug, lang = cfg.KPM_LANGUAGE)
-    username = opt.username    or cfg.KPM_USERNAME
-    password = opt.password    or cfg.KPM_PASSWORD
-    address  = opt.address     or cfg.KPM_ADDRESS
-    url      = opt.roundup_url or cfg.get ('ROUNDUP_URL', None)
+    username  = opt.username    or cfg.KPM_USERNAME
+    password  = opt.password    or cfg.KPM_PASSWORD
+    address   = opt.address     or cfg.KPM_ADDRESS
+    url       = opt.url         or cfg.get ('LOCAL_URL', None)
+    lpassword = opt.local_password or cfg.LOCAL_PASSWORD
+    lusername = opt.local_username or cfg.LOCAL_USERNAME
+    ltracker  = opt.local_tracker  or cfg.LOCAL_TRACKER
+    opt.local_password = lpassword
+    opt.local_username = lusername
+    opt.url            = url
+    opt.local_tracker  = ltracker
     kpm.login  (username = username, password = password)
     jobs = []
     if (opt.job) :
@@ -987,7 +1015,8 @@ def main () :
     if url and cfg.get ('KPM_ATTRIBUTES') :
         if opt.unverified_ssl_context :
             syncargs ['unverified'] = True
-        syncer = roundup_sync.Syncer (url, 'KPM', cfg.KPM_ATTRIBUTES, opt)
+        syncer = local_trackers [opt.local_tracker] \
+            ('KPM', cfg.KPM_ATTRIBUTES, opt)
     old_xp = None
     for j in jobs :
         j.poll ()

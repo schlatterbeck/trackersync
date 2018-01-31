@@ -345,12 +345,16 @@ class Sync_Attribute_Check (Sync_Attribute) :
     """ A boolean local attribute used to check if the issue should
         be synced to the remote side. If a remote_name exists, the value
         of it is used to set the local attribute if 'update' is True.
-        Otherwise an if 'update' is on, r_default (usually set to
+        Otherwise and if 'update' is on, r_default (usually set to
         True) must exist.
         If 'invert' is set, the logic is inverted, it is checked that
         the attribute does *not* exist. Consequently if 'update' is set
         it should update the property to False (or a python equivalent
         that evaluates to a boolean False).
+        If an optional value is given, it is checked if the remote value
+        matches the given value. If yes and invert is not set, the sync
+        is performed. If yes and invert is set, the sync is *not*
+        performed.
         The check_sync_callback routine gets the syncer and id as
         parameters and must return a boolean value indicating if syncing
         should be forced. This routine can override a no-sync
@@ -365,17 +369,22 @@ class Sync_Attribute_Check (Sync_Attribute) :
         , remote_name = None
         , invert      = False
         , update      = True
+        , value       = None
         , ** kw
         ) :
         self.invert    = invert
         self.update    = update
+        self.value     = value
         self.__super.__init__ (local_name, remote_name, ** kw)
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
         synccheck = remote_issue.check_sync_callback (syncer, id)
         lv = syncer.get (id, self.name)
-        stop = not lv
+        if self.value :
+            stop = lv != self.value
+        else :
+            stop = not lv
         if self.invert :
             stop = not stop
         # Stop sync if following condition is true:
@@ -388,7 +397,7 @@ class Sync_Attribute_Check (Sync_Attribute) :
 
 # end class Sync_Attribute_Check
 
-class Sync_Attribute_One_Way (Sync_Attribute) :
+class Sync_Attribute_To_Local (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update
         the local attribute if the value has changed.
@@ -408,9 +417,9 @@ class Sync_Attribute_One_Way (Sync_Attribute) :
         syncer.set (id, self.name, rv)
     # end def sync
 
-# end class Sync_Attribute_One_Way
+# end class Sync_Attribute_To_Local
 
-class Sync_Attribute_Default (Sync_Attribute) :
+class Sync_Attribute_To_Local_Default (Sync_Attribute) :
     """ A default, only set if the current value is not set.
         Very useful for required attributes on creation.
         This is set from the remote attribute and in case this is also
@@ -427,7 +436,7 @@ class Sync_Attribute_Default (Sync_Attribute) :
             syncer.set (id, self.name, v)
     # end def sync
 
-# end class Sync_Attribute_Default
+# end class Sync_Attribute_To_Local_Default
 
 class Sync_Attribute_To_Remote (Sync_Attribute) :
     """ Unconditionally synchronize a local attribute to the remote
@@ -596,7 +605,7 @@ class Trackersync_Syncer (autosuper) :
                 print ("srv.create %s %s" % (cls, kw))
 	if self.dry_run :
 	    return "9999999"
-	return self.__super.create (cls, ** kw)
+	return self._create (cls, ** kw)
     # end def create
 
     def filter (self, classname, searchdict) :
@@ -755,7 +764,7 @@ class Trackersync_Syncer (autosuper) :
         if self.debug :
             print ("srv.set %s%s %s" % (cls, id, kw))
         if not self.dry_run :
-            return self.__super.setitem (cls, id, ** kw)
+            return self._setitem (cls, id, ** kw)
     # end def setitem
 
     def split_name (self, name) :

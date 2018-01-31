@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2015-18 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -28,11 +28,12 @@ from __future__ import absolute_import
 
 from trackersync import roundup_sync
 
-KPM_USERNAME = 'user'
-KPM_PASSWORD = 'secret'
-KPM_ADDRESS  = '21 KPM-TEST'
-KPM_LANGUAGE = 'german'
-ROUNDUP_URL  = 'http://username:password@localhost:8080/tracker/xmlrpc'
+KPM_USERNAME  = 'user'
+KPM_PASSWORD  = 'secret'
+KPM_ADDRESS   = '21 KPM-TEST'
+KPM_LANGUAGE  = 'german'
+LOCAL_URL     = 'http://username:password@localhost:8080/tracker/xmlrpc'
+LOCAL_TRACKER = 'roundup'
 
 KPM_ATTRIBUTES = \
     ( roundup_sync.Sync_Attribute_Check
@@ -46,7 +47,7 @@ KPM_ATTRIBUTES = \
         , remote_name  = None
         , r_default    = True
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = 'title'
         , remote_name  = 'Kurztext'
         , r_default    = '?'
@@ -57,11 +58,11 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Kurztext'
         , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/ext_tracker_state/ext_status'
         , remote_name  = 'Status'
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'release'
         , remote_name  = 'Softwarestand (verurs.)'
         , r_default    = '?'
@@ -72,22 +73,22 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Softwarestand (verurs.)'
         , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'part_of'
         , remote_name  = None
         , r_default    = '73897'
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'category'
         , remote_name  = None
         , r_default    = '273'
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'inherit_ext'
         , remote_name  = None
         , r_default    = 'yes'
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/kpm/analysis.content'
         , remote_name  = 'Analyse'
         , only_update  = True
@@ -97,7 +98,7 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Analyse'
         , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/kpm/description.content'
         , remote_name  = 'Problembeschreibung'
         , r_default    = '-'
@@ -144,7 +145,7 @@ KPM_ATTRIBUTES = \
         , l_default    = "project here"
         , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/kpm/reproduceable'
         , remote_name  = 'Reproduzierbar [Code]'
         , only_update  = True
@@ -156,7 +157,7 @@ KPM_ATTRIBUTES = \
         , only_create  = True
         , map = {True: 'XH', False: 'XI'}
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/kpm/fault_frequency.name'
         , remote_name  = 'Fehlerhäufigkeit [Code]'
         , only_update  = True
@@ -168,7 +169,7 @@ KPM_ATTRIBUTES = \
         , only_create  = True
         , map = dict (once = 'XE', repeatedly = 'XF', always = 'XG')
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/kpm/kpm_function.kpm_key'
         , remote_name  = 'Funktionalität [Code]'
         , only_update  = True
@@ -178,7 +179,7 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Funktionalität [Code]'
         , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = '/kpm/hardware_version'
         , remote_name  = 'Hardwarestand (verurs.)'
         , only_update  = True
@@ -188,7 +189,7 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Hardwarestand (verurs.)'
         , only_create  = True
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = 'severity.name'
         , remote_name  = 'Bewertung'
         , r_default    = 'Minor'

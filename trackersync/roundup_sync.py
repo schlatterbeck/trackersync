@@ -36,8 +36,8 @@ from   trackersync      import tracker_sync
 
 Sync_Attribute                   = tracker_sync.Sync_Attribute
 Sync_Attribute_Check             = tracker_sync.Sync_Attribute_Check
-Sync_Attribute_One_Way           = tracker_sync.Sync_Attribute_One_Way
-Sync_Attribute_Default           = tracker_sync.Sync_Attribute_Default
+Sync_Attribute_To_Local          = tracker_sync.Sync_Attribute_To_Local
+Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
 Sync_Attribute_To_Remote_Default = tracker_sync.Sync_Attribute_To_Remote_Default
 Sync_Attribute_Two_Way           = tracker_sync.Sync_Attribute_Two_Way
@@ -336,7 +336,14 @@ class Syncer (tracker_sync.Syncer) :
     ext_names = dict.fromkeys \
         (('ext_attributes', 'ext_id', 'ext_status', 'ext_tracker'))
 
-    def __init__ (self, url, remote_name, attributes, opt) :
+    def __init__ (self, remote_name, attributes, opt) :
+        # Check if url contains username/password part
+        url = opt.url
+        if '@' not in url :
+            p, r   = url.split ('//', 1)
+            h, r   = r.split ('/', 1)
+            lu, lp = opt.local_user, opt.local_password
+            url = "%s//%s:%s@%s/%s" % (p, lu, lp, h, r)
         srvargs = dict (allow_none = True)
         if getattr (opt, 'unverified', None) :
             context = ssl._create_unverified_context ()
@@ -374,11 +381,11 @@ class Syncer (tracker_sync.Syncer) :
         self.default_class = 'issue'
     # end def compute_schema
 
-    def create (self, cls, ** kw) :
-        """ Debug and dryrun is handled by base class. """
+    def _create (self, cls, ** kw) :
+        """ Debug and dryrun is handled by base class create. """
         return self.srv.create \
             (cls, * [self.format (cls, k, v) for k, v in kw.items ()])
-    # end def create
+    # end def _create
 
     def filter (self, classname, searchdict) :
         return self.srv.filter (classname, None, searchdict)
@@ -468,16 +475,16 @@ class Syncer (tracker_sync.Syncer) :
                 raise
     # end def lookup
 
-    def setitem (self, cls, id, ** kw) :
+    def _setitem (self, cls, id, ** kw) :
         """ Set attributes of an item of the given cls,
             attributes are 'key = value' pairs.
-            Debug and dryrun is handled by base class.
+            Debug and dryrun is handled by base class setitem.
         """
         self.srv.set \
             ( '%s%s' % (cls, id)
             , * [self.format (cls, k, v) for k, v in kw.items ()]
             )
-    # end def setitem
+    # end def _setitem
 
     def sync_status (self, remote_id, remote_issue) :
         """ Get the sync status (e.g., old properties of last sync of 

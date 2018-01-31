@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2015-18 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -31,25 +31,26 @@ from trackersync import roundup_sync
 JIRA_USERNAME = 'test'
 JIRA_PASSWORD = 'test'
 JIRA_URL      = 'http://localhost:9090/rest/api/2'
-ROUNDUP_URL   = 'http://username:password@localhost:8080/tracker/xmlrpc'
+LOCAL_URL     = 'http://username:password@localhost:8080/tracker/xmlrpc'
 JIRA_ASSIGNEE = 'test'
 TRACKER_NAME  = 'jira-test'
+LOCAL_TRACKER = 'roundup'
 
 JIRA_ATTRIBUTES = \
     ( roundup_sync.Sync_Attribute_Two_Way
         ( local_name   = 'title'
         , remote_name  = 'summary'
         )
-    , roundup_sync.Sync_Attribute_One_Way
+    , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = 'ext_status'
         , remote_name  = 'status.name'
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'release'
         , remote_name  = None
         , default      = '?'
         )
-    , roundup_sync.Sync_Attribute_Default
+    , roundup_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'inherit_ext'
         , remote_name  = None
         , default      = 'yes'
