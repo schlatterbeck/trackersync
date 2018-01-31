@@ -438,6 +438,114 @@ class Sync_Attribute_To_Local_Default (Sync_Attribute) :
 
 # end class Sync_Attribute_To_Local_Default
 
+class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
+    """ A Sync attribute consisting of several read-only attributes in
+        the remote tracker.
+        We simply take the values in the remote tracker and update
+        the local attribute if the value has changed. The remote
+        attributes are concatenated (with a separator that defaults to
+        '\n'). We don't have default values and no maps. By default the
+        name of the fields are prepended to each section, this can be
+        turned off by setting add_prefix to False.
+    """
+
+    def __init__ \
+        ( self
+        , local_name
+        , remote_names = None
+        , only_update  = False
+        , only_create  = False
+        , delimiter    = '\n'
+        , add_prefix   = True
+        ) :
+        self.name         = local_name
+        self.remote_names = remote_names
+        self.remote_name  = ', '.join (remote_names) # for debug messages
+        self.only_update  = only_update
+        self.only_create  = only_create
+        self.delimiter    = delimiter
+        self.add_prefix   = add_prefix
+        self.strip_prefix = False
+        self.map = self.imap = None
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        v = []
+        for k in self.remote_names :
+            val = remote_issue.get (k, None)
+            if not val :
+                continue
+            if self.add_prefix :
+                v.append ('%s:' % k)
+            v.append (val)
+        rv = self.delimiter.join (v)
+        lv = syncer.get (id, self.name)
+        if self.no_sync_necessary (lv, rv) :
+            return
+        syncer.set (id, self.name, rv)
+    # end def sync
+
+# end class Sync_Attribute_To_Local_Concatenate
+
+class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
+    """ A Sync attribute that is read-only in the remote tracker.
+        We simply take the value in the remote tracker and update
+        the local attribute if the value has changed. The only
+        complication is that the local value is a multilink but with
+        only one (the remote) value.
+        Things get more complicated if we have defaults, if both values
+        are None and we have an r_default, it is applied.
+        If use_r_default is True, a lookup of the item in the Multilink
+        will use the given r_default.
+    """
+
+    def __init__ \
+        ( self
+        , local_name
+        , remote_name   = None
+        , only_update   = False
+        , only_create   = False
+        , l_default     = None
+        , r_default     = None
+        , map           = None
+        , imap          = None
+        , strip_prefix  = None
+        , use_r_default = False
+        ) :
+        self.__super.__init__ \
+            ( local_name
+            , remote_name
+            , only_update
+            , only_create
+            , l_default
+            , r_default
+            , map
+            , imap
+            , strip_prefix
+            )
+        self.use_r_default = use_r_default
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        rv = remote_issue.get (self.remote_name, None)
+        if rv is None and self.r_default :
+            rv = self.r_default
+        lnk, attr = self.name.split ('.', 1)
+        cl = syncer.get_classname (syncer.default_class, lnk)
+        try :
+            rv = [syncer.lookup (cl, rv)]
+        except KeyError :
+            if not self.use_r_default or self.r_default is None :
+                raise
+            rv = [syncer.lookup (cl, self.r_default)]
+        lv = syncer.get (id, self.name)
+        if self.no_sync_necessary (lv, rv) :
+            return
+        syncer.set (id, self.name, rv)
+    # end def sync
+
+# end class Sync_Attribute_To_Local_Multilink
+
 class Sync_Attribute_To_Remote (Sync_Attribute) :
     """ Unconditionally synchronize a local attribute to the remote
         tracker. Typical use-case is to set the local tracker issue

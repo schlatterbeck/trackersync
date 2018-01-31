@@ -45,6 +45,21 @@ KPM_ATTRIBUTES = \
         , update       = False
         , value        = 'Closed'
         )
+    , roundup_sync.Sync_Attribute_To_Local_Default
+        ( local_name   = 'project.key'
+        , remote_name  = None
+        , r_default    = 'project-key-in-jira'
+        )
+    , roundup_sync.Sync_Attribute_To_Local_Default
+        ( local_name   = 'issuetype.name'
+        , remote_name  = None
+        , r_default    = 'Defect'
+        )
+    , roundup_sync.Sync_Attribute_To_Local_Default
+        ( local_name   = 'security.name'
+        , remote_name  = None
+        , r_default    = 'Project Insider'
+        )
     # "External Ticket" field in Jira
     , roundup_sync.Sync_Attribute_To_Local
         ( local_name   = 'customfield_13000'
@@ -62,30 +77,27 @@ KPM_ATTRIBUTES = \
 #        ( local_name   = 'labels'
 #        , remote_names = ['Status']
 #        )
-# FIXME: Implement Sync_Attribute_To_Local_Multilink
-#    , roundup_sync.Sync_Attribute_To_Local_Multilink
-#        ( local_name   = 'versions.name'
-#        , remote_name  = 'Softwarestand (verurs.)'
-#        , remote_class = 'version'
-#        )
-# FIXME: Put into "Description" in Jira, concatenate fields with a
-# prefix
-# implement Sync_Attribute_To_Local_Concatenate
-#    , roundup_sync.Sync_Attribute_To_Local_Concatenate
-#        ( local_name   = 'description'
-#        , remote_names =
-#          [ 'Analyse'
-#          , 'Problembeschreibung'
-#          , 'Problemlösungsverantwortlicher Benutzer'
-#          ]
-#        , only_update  = True
-#        )
+    , roundup_sync.Sync_Attribute_To_Local_Multilink
+        ( local_name    = 'versions.id'
+        , remote_name   = 'Softwarestand (verurs.)'
+        , r_default     = 'defaultversion'
+        , use_r_default = True
+        )
+    , roundup_sync.Sync_Attribute_To_Local_Concatenate
+        ( local_name   = 'description'
+        , remote_names =
+          [ 'Analyse'
+          , 'Problembeschreibung'
+          , 'Softwarestand (verurs.)'
+          , 'Problemlösungsverantwortlicher Benutzer'
+          ]
+        , only_update  = True
+        )
     # "Release Note" field in Jira
     , roundup_sync.Sync_Attribute_To_Remote
         ( local_name   = 'customfield_12009'
         , remote_name  = 'Lieferantenaussage'
         )
-# FIXME: Implement Sync_Attribute_To_Local_Concatenate
 #    , roundup_sync.Sync_Attribute_To_Local_Concatenate
 #        ( local_name   = 'environment'
 #        , remote_names =

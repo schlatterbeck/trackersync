@@ -41,6 +41,10 @@ Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
 Sync_Attribute_To_Remote_Default = tracker_sync.Sync_Attribute_To_Remote_Default
 Sync_Attribute_Two_Way           = tracker_sync.Sync_Attribute_Two_Way
+Sync_Attribute_To_Local_Concatenate = \
+    tracker_sync.Sync_Attribute_To_Local_Concatenate
+Sync_Attribute_To_Local_Multilink = \
+    tracker_sync.Sync_Attribute_To_Local_Multilink
 
 def rup_date (datestring) :
     """ String roundup XMLRPC date and extract date/time in the format

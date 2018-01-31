@@ -41,6 +41,10 @@ Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
 Sync_Attribute_To_Remote_Default = tracker_sync.Sync_Attribute_To_Remote_Default
 Sync_Attribute_Two_Way           = tracker_sync.Sync_Attribute_Two_Way
+Sync_Attribute_To_Local_Concatenate = \
+    tracker_sync.Sync_Attribute_To_Local_Concatenate
+Sync_Attribute_To_Local_Multilink = \
+    tracker_sync.Sync_Attribute_To_Local_Multilink
 
 class Syncer (tracker_sync.Syncer) :
     """ Synchronisation Framework
@@ -48,6 +52,14 @@ class Syncer (tracker_sync.Syncer) :
         The type of attribute indicates the action to perform.
     """
     json_header = { 'content-type' : 'application/json' }
+    schema_classes = \
+        ( 'priority'
+        , 'status'
+        , 'project'
+        , 'issuetype'
+        , 'securitylevel'
+        , 'version'
+        )
 
     def __init__ (self, remote_name, attributes, opt) :
         self.url          = opt.url
@@ -82,18 +94,38 @@ class Syncer (tracker_sync.Syncer) :
                 type = ('Link', type)
             s [name] = type
         # Some day find out if we can discover the schema via REST
-        for k in 'priority', 'status' :
+        for k in self.schema_classes :
             self.schema [k] = dict (id = 'string', name = 'string')
+        self.schema ['project']['key'] = 'string'
         self.default_class = 'issue'
+        # Special hack to get all versions allowed. We query
+        # /issue/createmeta?expand=projects.issuetypes.fields
+        # and find out all versions. Note that we *should* do this only
+        # for the default project we're using but we don't have the
+        # project in a sync type. The project could be selected with the
+        # additional parameter ?projectKeys=<key> in the request.
+        self.allowed_versions = {}
+        cm = self.getitem \
+            ('issue', 'createmeta?expand=projects.issuetypes.fields')
+        for k in cm ['projects'] :
+            for type in k ['issuetypes'] :
+                if 'versions' in type ['fields'] :
+                    v = type ['fields']['versions']
+                    if not v ['allowedValues'] :
+                        continue
+                    for av in v ['allowedValues'] :
+                        self.allowed_versions [av ['name']] = av ['id']
     # end def compute_schema
 
     def _create (self, cls, ** kw) :
         """ Debug and dryrun is handled by base class create. """
         u = self.url + '/' + cls
+        d = dict (fields = kw)
         r = self.session.post \
-            (u, data = json.dumps (kw), headers = self.json_header)
+            (u, data = json.dumps (d), headers = self.json_header)
+        if not r.ok or r.status_code not in (200, 201) :
+            raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
         j = r.json ()
-        import pdb; pdb.set_trace ()
         return j ['key']
     # end def _create
 
@@ -102,13 +134,11 @@ class Syncer (tracker_sync.Syncer) :
     # end def filter
 
     def fix_attributes (self, classname, attrs) :
-        """ Fix transitive attributes. Two possibilities:
-            - a Link to a remote class and the attribute after the dot
-              is the key
-            - The attribute is named 'content' and is the content of a
-              message attribute
-            In the first case we simply perform a lookup, in the second
-            case we create the message and store the id.
+        """ Fix transitive attributes.
+            In case of links, we can use the name or the id (and
+            sometimes a key) in jira. But this has to be passed as a
+            dictionary, e.g. the value is something like
+            {'name' : 'name-of-entity'}
         """
         new = dict ()
         for k in attrs :
@@ -118,8 +148,18 @@ class Syncer (tracker_sync.Syncer) :
             if l == 2 :
                 # Special case: We may reference link values with the
                 # name instead of the id in jira's REST api
-                if lst [-1] == 'name' :
-                    new [lst [0]] = attrs [k]
+                cls, attrname = lst
+                if attrname in ('name', 'id', 'key') :
+                    if cls == 'versions' :
+                        assert len (attrs [k]) == 1
+                        new [cls] = [dict (id = attrs [k][0])]
+                    else :
+                        if cls not in new :
+                            new [cls] = {attrname : attrs [k]}
+                        else :
+                            new [cls][attrname] = attrs [k]
+                else :
+                    raise AttributeError ("Unknown jira Link: %s" % k)
             else :
                 new [k] = attrs [k]
         return new
@@ -138,14 +178,20 @@ class Syncer (tracker_sync.Syncer) :
         """
         u = self.url + '/' + cls + '/' + id
         r = self.session.get (u)
+        if not r.ok or r.status_code != 200 :
+            raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
         return r.json ()
     # end def getitem
 
     def lookup (self, cls, key) :
         """ Should work like getitem in jira
         """
-        r = self.getitem (cls, key)
-        j = r.json ()
+        if cls == 'version' :
+            return self.allowed_versions [key]
+        try :
+            j = self.getitem (cls, key)
+        except RuntimeError as err :
+            raise KeyError (err.message)
         if 'key' in j :
             return j ['key']
         return j ['id']
@@ -159,6 +205,8 @@ class Syncer (tracker_sync.Syncer) :
         u = self.url + '/' + cls + '/' + id
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
+        if not r.ok or r.status_code != 200 :
+            raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
     # end def _setitem
 
     def sync_new_local_issues (self, new_remote_issue) :
