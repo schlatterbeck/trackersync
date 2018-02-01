@@ -104,17 +104,21 @@ class Syncer (tracker_sync.Syncer) :
         # for the default project we're using but we don't have the
         # project in a sync type. The project could be selected with the
         # additional parameter ?projectKeys=<key> in the request.
-        self.allowed_versions = {}
+        self.versions_by_project = {}
         cm = self.getitem \
             ('issue', 'createmeta?expand=projects.issuetypes.fields')
-        for k in cm ['projects'] :
-            for type in k ['issuetypes'] :
+        for project in cm ['projects'] :
+            pkey = project ['key']
+            for type in project ['issuetypes'] :
                 if 'versions' in type ['fields'] :
-                    v = type ['fields']['versions']
-                    if not v ['allowedValues'] :
+                    ver = type ['fields']['versions']
+                    if not ver ['allowedValues'] :
                         continue
-                    for av in v ['allowedValues'] :
-                        self.allowed_versions [av ['name']] = av ['id']
+                    if pkey not in self.versions_by_project :
+                        self.versions_by_project [pkey] = {}
+                    for av in ver ['allowedValues'] :
+                        vn = av ['name']
+                        self.versions_by_project [pkey][vn] = av ['id']
     # end def compute_schema
 
     def _create (self, cls, ** kw) :
@@ -186,8 +190,10 @@ class Syncer (tracker_sync.Syncer) :
     def lookup (self, cls, key) :
         """ Should work like getitem in jira
         """
+        # Note: This needs the project.key in the current issue
         if cls == 'version' :
-            return self.allowed_versions [key]
+            pkey = self.get (self.current_id, 'project.key')
+            return self.versions_by_project [pkey][key]
         try :
             j = self.getitem (cls, key)
         except RuntimeError as err :

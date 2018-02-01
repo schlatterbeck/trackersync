@@ -938,6 +938,7 @@ class Trackersync_Syncer (autosuper) :
             # attributes and doesn't restrict them to a subset:
             do_sync = not remote_issue.attributes
             self.newvalues [id] = {}
+        self.current_id = id
         # If the following is non-empty, sync only an explicit subset of
         # attributes.
         attr = remote_issue.attributes
