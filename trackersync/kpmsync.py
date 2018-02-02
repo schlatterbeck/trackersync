@@ -969,6 +969,12 @@ def main () :
         , help    = "KPM login password"
         )
     cmd.add_argument \
+        ( "-s", "--syncdir"
+        , help    = "Sync directory, not used by all local trackers, "
+                    "default: %(default)s"
+        , default = './syncdir'
+        )
+    cmd.add_argument \
         ( "-u", "--url"
         , help    = "Local Tracker URL for XMLRPC/REST"
         )

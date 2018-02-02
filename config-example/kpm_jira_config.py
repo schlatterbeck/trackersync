@@ -77,7 +77,7 @@ KPM_ATTRIBUTES = \
 #        ( local_name   = 'labels'
 #        , remote_names = ['Status']
 #        )
-    , roundup_sync.Sync_Attribute_To_Local_Multilink
+    , roundup_sync.Sync_Attribute_To_Local_Multilink_Default
         ( local_name    = 'versions.id'
         , remote_name   = 'Softwarestand (verurs.)'
         , r_default     = 'defaultversion'
@@ -91,7 +91,6 @@ KPM_ATTRIBUTES = \
           , 'Softwarestand (verurs.)'
           , 'Problemlösungsverantwortlicher Benutzer'
           ]
-        , only_update  = True
         )
     # "Release Note" field in Jira
     , roundup_sync.Sync_Attribute_To_Remote
@@ -151,11 +150,10 @@ KPM_ATTRIBUTES = \
         ( local_name   = 'key'
         , remote_name  = 'L-Fehlernummer'
         )
-# FIXME: Implement Sync_Attribute_Multilink_To_Remote
-# Concatenate local attribute names with commas
-#    , roundup_sync.Sync_Attribute_Multilink_To_Remote
-#        ( local_name   = 'fixVersions.name'
-#        , remote_name  = 'L-System-IO'
-#        )
+    , roundup_sync.Sync_Attribute_To_Remote
+        ( local_name     = 'fixVersions.name'
+        , remote_name    = 'L-System-IO'
+        , join_multilink = True
+        )
     )
 

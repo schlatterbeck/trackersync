@@ -25,13 +25,9 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import absolute_import
 
-import xmlrpclib
+import os
 import json
-import numbers
-import ssl
-from   time             import sleep
 from   rsclib.autosuper import autosuper
-from   rsclib.pycompat  import ustr, text_type
 
 class Remote_Issue (autosuper) :
     """ This models a remote issue.
@@ -107,10 +103,13 @@ class Remote_Issue (autosuper) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def add_message
 
-    def as_json (self) :
-        """ Only return non-empty values in json dump. """
+    def as_json (self, ** kw) :
+        """ Only return non-empty values in json dump.
+            Optionally update the dumped data with some settings in kw.
+        """
         d = dict ((k, v) for k, v in self.record.iteritems () if v)
         d.update ((k, v) for k, v in self.newvalues.iteritems ())
+        d.update (kw)
         return json.dumps (d, sort_keys = True, indent = 4)
     # end def as_json
 
@@ -277,29 +276,38 @@ class Sync_Attribute (autosuper) :
         Note that if both, a map/imap and l_default or r_default is
         specified, the default values must be the values *after*
         applying the map (or imap).
+
+        We can automagically join local multilinks into a separated
+        field in the target tracker. This only works for one-direction
+        sync To_Remote variants. For this you specify join_multilink
+        as True and optionally change the separator from the default.
     """
 
     def __init__ \
         ( self
         , local_name
-        , remote_name  = None
-        , only_update  = False
-        , only_create  = False
-        , l_default    = None
-        , r_default    = None
-        , map          = None
-        , imap         = None
-        , strip_prefix = None
+        , remote_name    = None
+        , only_update    = False
+        , only_create    = False
+        , l_default      = None
+        , r_default      = None
+        , map            = None
+        , imap           = None
+        , strip_prefix   = None
+        , join_multilink = False
+        , separator      = ', '
         ) :
-        self.name         = local_name
-        self.remote_name  = remote_name
-        self.only_update  = only_update
-        self.only_create  = only_create
-        self.l_default    = l_default
-        self.r_default    = r_default
-        self.map          = map
-        self.imap         = imap
-        self.strip_prefix = strip_prefix
+        self.name           = local_name
+        self.remote_name    = remote_name
+        self.only_update    = only_update
+        self.only_create    = only_create
+        self.l_default      = l_default
+        self.r_default      = r_default
+        self.map            = map
+        self.imap           = imap
+        self.strip_prefix   = strip_prefix
+        self.join_multilink = join_multilink
+        self.separator      = separator
         if not self.imap and self.map :
             self.imap = dict ((v, k) for k, v in  map.iteritems ())
         if not self.map and self.imap :
@@ -453,16 +461,14 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
         ( self
         , local_name
         , remote_names = None
-        , only_update  = False
-        , only_create  = False
         , delimiter    = '\n'
         , add_prefix   = True
         ) :
         self.name         = local_name
         self.remote_names = remote_names
         self.remote_name  = ', '.join (remote_names) # for debug messages
-        self.only_update  = only_update
-        self.only_create  = only_create
+        self.only_update  = False # only relevant for to remote sync
+        self.only_create  = False # only relevant for to remote sync
         self.delimiter    = delimiter
         self.add_prefix   = add_prefix
         self.strip_prefix = False
@@ -503,8 +509,6 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
         ( self
         , local_name
         , remote_name   = None
-        , only_update   = False
-        , only_create   = False
         , l_default     = None
         , r_default     = None
         , map           = None
@@ -515,15 +519,16 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
         self.__super.__init__ \
             ( local_name
             , remote_name
-            , only_update
-            , only_create
+            , False # only_update only relevant for to remote sync
+            , False # only_create only relevant for to remote sync
             , l_default
             , r_default
             , map
             , imap
             , strip_prefix
             )
-        self.use_r_default = use_r_default
+        self.use_r_default   = use_r_default
+        self.do_only_default = False
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -539,12 +544,26 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
                 raise
             rv = [syncer.lookup (cl, self.r_default)]
         lv = syncer.get (id, self.name)
+        if not isinstance (lv, list) :
+            lv = [lv]
+        if self.do_only_default and lv is not None :
+            return
         if self.no_sync_necessary (lv, rv) :
             return
         syncer.set (id, self.name, rv)
     # end def sync
 
 # end class Sync_Attribute_To_Local_Multilink
+
+class Sync_Attribute_To_Local_Multilink_Default \
+    (Sync_Attribute_To_Local_Multilink) :
+
+    def __init__ (self, local_name, ** kw) :
+        self.__super.__init__ (local_name, ** kw)
+        self.do_only_default = True
+    # end def __init__
+
+# end class Sync_Attribute_To_Local_Multilink_Default
 
 class Sync_Attribute_To_Remote (Sync_Attribute) :
     """ Unconditionally synchronize a local attribute to the remote
@@ -570,7 +589,12 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
         lv = syncer.get (id, self.name)
         nosync = self.no_sync_necessary (lv, rv)
         if self.imap :
-            rv = self.imap.get (rv, None)
+            if self.join_multilink and isinstance (rv, list) :
+                rv = [self.imap.get (x, None) for x in rv]
+            else :
+                rv = self.imap.get (rv, None)
+        if self.join_multilink and isinstance (rv, list) :
+            rv = self.separator.join (rv)
         if self.map :
             lv = self.map.get (lv, self.l_default)
         if lv is None and rv is None and self.l_default is not None :
@@ -674,6 +698,7 @@ class Trackersync_Syncer (autosuper) :
     def __init__ (self, remote_name, attributes, opt) :
         self.remote_name     = remote_name
         self.attributes      = attributes
+        self.opt             = opt
         self.oldvalues       = {}
         self.newvalues       = {}
         self.newcount        = 0
@@ -723,9 +748,11 @@ class Trackersync_Syncer (autosuper) :
 	raise NotImplementedError
     # end def filter
 
-    def fix_attributes (self, classname, attrs) :
+    def fix_attributes (self, classname, attrs, create=False) :
         """ Fix transitive attributes. Take care of special cases like
             e.g. roundup's 'content' property
+            We distinguish creation and update (transformation might be
+            different) via the create flag.
         """
 	return attrs
     # end def fix_attributes
@@ -747,9 +774,7 @@ class Trackersync_Syncer (autosuper) :
             return self.newvalues [id][name]
         if name not in self.oldvalues [id] :
             classname, path = self.split_name (name)
-            sid = None
-            if int (id) > 0 :
-                sid = id
+            sid = self.get_existing_id (id)
             if name.startswith ('/') and sid :
                 d = {self.default_class : id}
                 # Probably only relevant for roundup:
@@ -781,6 +806,26 @@ class Trackersync_Syncer (autosuper) :
             v = None
         return v
     # end def get_default
+
+    def get_existing_id (self, id) :
+        """ An existing id is either a non-empty string that cannot be
+            converted to an integer or a positive integer. Non-existing
+            ids are negative integers. Note that ids currently must
+            evaluate to True in a boolean context (no empty strings or
+            None allowed and a 0 for an id is also not allowed).
+        """
+        assert bool (id)
+        try :
+            if int (id) < 0 :
+                return None
+        except ValueError :
+            return id
+        return id
+    # end def get_existing_id
+
+    def get_sync_filename (self, remoteid) :
+        return os.path.join (self.opt.syncdir, remoteid)
+    # end def get_sync_filename
 
     def get_transitive_item (self, classname, path, id) :
         """ Return the value of the given transitive item.
@@ -870,7 +915,7 @@ class Trackersync_Syncer (autosuper) :
             attributes are 'key = value' pairs.
         """
         if self.debug :
-            print ("srv.set %s%s %s" % (cls, id, kw))
+            print ("setitem %s:%s %s" % (cls, id, kw))
         if not self.dry_run :
             return self._setitem (cls, id, ** kw)
     # end def setitem
@@ -960,18 +1005,26 @@ class Trackersync_Syncer (autosuper) :
                     if self.verbose :
                         print ("Not syncing: %s" % id)
                     return
-        self.update_sync_db (id, remote_id, remote_issue)
         if id < 0 :
             if not remote_issue.attributes :
                 if self.verbose :
                     print ("create issue: %s" % self.newvalues [id])
                 classdict = self.split_newvalues (id)
                 attr = self.fix_attributes \
-                    (self.default_class, classdict [self.default_class])
+                    (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
+                self.current_id = iid
+                # update_sync_db must come before update_aux_classes
+                # because update_sync_db may update attributes that are
+                # written by update_aux_classes
+                self.update_sync_db (iid, remote_id, remote_issue)
                 del classdict [self.default_class]
                 self.update_aux_classes (iid, classdict)
         elif self.newvalues [id] :
+            # update_sync_db must come before update_aux_classes
+            # because update_sync_db may update attributes that are
+            # written by update_aux_classes
+            self.update_sync_db (id, remote_id, remote_issue)
             self.update_issue (id)
         if  (   remote_issue.newvalues
             and not self.dry_run
@@ -989,7 +1042,25 @@ class Trackersync_Syncer (autosuper) :
         """
         id = None
         self.oldremote = {}
-        # FIXME: Read json of old remote issue and find out id
+        fn = self.get_sync_filename (remote_id)
+        j  = None
+        try :
+            with open (fn, 'r') as f :
+                j = f.read ()
+        except EnvironmentError :
+            pass
+        if j :
+            self.old_as_json = j
+            d  = json.loads (self.old_as_json)
+            id = d ['__local_id__']
+            # Check that local issue really exists
+            # The id may be bogus if sync didn't work or a dry_run was
+            # performed
+            try :
+                self.get_transitive_item (self.default_class, 'id', id)
+            except RuntimeError as err :
+                if err.message.startswith ('Error 404') :
+                    id = None
         return id
     # end def sync_status
 
@@ -1057,8 +1128,9 @@ class Trackersync_Syncer (autosuper) :
     # end def update_issue
 
     def update_sync_db (self, iid, rid, remote_issue) :
-        pass
-        # FIXME: save the status of the remote issue here
+        fn = self.get_sync_filename (rid)
+        with open (fn, "w") as f :
+            f.write (remote_issue.as_json (__local_id__ = iid))
     # end def update_sync_db
 
 # end class Trackersync_Syncer

@@ -45,6 +45,8 @@ Sync_Attribute_To_Local_Concatenate = \
     tracker_sync.Sync_Attribute_To_Local_Concatenate
 Sync_Attribute_To_Local_Multilink = \
     tracker_sync.Sync_Attribute_To_Local_Multilink
+Sync_Attribute_To_Local_Multilink_Default = \
+    tracker_sync.Sync_Attribute_To_Local_Multilink_Default
 
 def rup_date (datestring) :
     """ String roundup XMLRPC date and extract date/time in the format
@@ -395,7 +397,7 @@ class Syncer (tracker_sync.Syncer) :
         return self.srv.filter (classname, None, searchdict)
     # end def filter
 
-    def fix_attributes (self, classname, attrs) :
+    def fix_attributes (self, classname, attrs, create = False) :
         """ Fix transitive attributes. Two possibilities:
             - a Link to a remote class and the attribute after the dot
               is the key
@@ -403,6 +405,8 @@ class Syncer (tracker_sync.Syncer) :
               message attribute
             In the first case we simply perform a lookup, in the second
             case we create the message and store the id.
+            Transformation is the same for creation and update, so we
+            ignore the create flag.
         """
         new = dict ()
         for k in attrs :

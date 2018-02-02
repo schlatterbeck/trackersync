@@ -45,6 +45,8 @@ Sync_Attribute_To_Local_Concatenate = \
     tracker_sync.Sync_Attribute_To_Local_Concatenate
 Sync_Attribute_To_Local_Multilink = \
     tracker_sync.Sync_Attribute_To_Local_Multilink
+Sync_Attribute_To_Local_Multilink_Default = \
+    tracker_sync.Sync_Attribute_To_Local_Multilink_Default
 
 class Syncer (tracker_sync.Syncer) :
     """ Synchronisation Framework
@@ -93,6 +95,11 @@ class Syncer (tracker_sync.Syncer) :
             elif type not in ('string', 'number') :
                 type = ('Link', type)
             s [name] = type
+        # The default class 'issue' contains property 'id' which is not
+        # discovered automagically: id and key are not in fields but in
+        # the upper-level object
+        s ['id']  = 'string'
+        s ['key'] = 'string'
         # Some day find out if we can discover the schema via REST
         for k in self.schema_classes :
             self.schema [k] = dict (id = 'string', name = 'string')
@@ -127,7 +134,7 @@ class Syncer (tracker_sync.Syncer) :
         d = dict (fields = kw)
         r = self.session.post \
             (u, data = json.dumps (d), headers = self.json_header)
-        if not r.ok or r.status_code not in (200, 201) :
+        if not r.ok or not 200 <= r.status_code < 300 :
             raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
         j = r.json ()
         return j ['key']
@@ -137,12 +144,14 @@ class Syncer (tracker_sync.Syncer) :
         raise NotImplementedError
     # end def filter
 
-    def fix_attributes (self, classname, attrs) :
+    def fix_attributes (self, classname, attrs, create = False) :
         """ Fix transitive attributes.
             In case of links, we can use the name or the id (and
             sometimes a key) in jira. But this has to be passed as a
             dictionary, e.g. the value is something like
             {'name' : 'name-of-entity'}
+            We distinguish creation and update (transformation might be
+            different) via the create flag.
         """
         new = dict ()
         for k in attrs :
@@ -166,6 +175,8 @@ class Syncer (tracker_sync.Syncer) :
                     raise AttributeError ("Unknown jira Link: %s" % k)
             else :
                 new [k] = attrs [k]
+        if not create :
+            return dict (fields = new)
         return new
     # end def fix_attributes
 
@@ -182,9 +193,35 @@ class Syncer (tracker_sync.Syncer) :
         """
         u = self.url + '/' + cls + '/' + id
         r = self.session.get (u)
-        if not r.ok or r.status_code != 200 :
+        if not r.ok or not 200 <= r.status_code < 300 :
             raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
-        return r.json ()
+        j = r.json ()
+        if 'fields' in j :
+            d = {}
+            for n in j ['fields'] :
+                v = j ['fields'][n]
+                if isinstance (v, dict) and ('id' in v or 'key' in v) :
+                    if 'id' in v :
+                        d [n] = v ['id']
+                    else :
+                        d [n] = v ['key']
+                elif isinstance (v, list) and v and isinstance (v [0], dict) :
+                    d [n] = []
+                    for item in v :
+                        assert 'id' in item or 'key' in item
+                        if 'id' in item :
+                            d [n].append (item ['id'])
+                        else :
+                            d [n].append (item ['key'])
+                else :
+                    d [n] = v
+                # id and key are not in fields but in the upper-level object
+                if 'id' in j :
+                    d ['id'] = j ['id']
+                if 'key' in j :
+                    d ['key'] = j ['key']
+            return d
+        return j
     # end def getitem
 
     def lookup (self, cls, key) :
@@ -211,7 +248,7 @@ class Syncer (tracker_sync.Syncer) :
         u = self.url + '/' + cls + '/' + id
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
-        if not r.ok or r.status_code != 200 :
+        if not r.ok or not 200 <= r.status_code < 300 :
             raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
     # end def _setitem
 
