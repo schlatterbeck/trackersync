@@ -64,6 +64,7 @@ KPM_ATTRIBUTES = \
     , jira_sync.Sync_Attribute_To_Local
         ( local_name   = 'customfield_13000'
         , remote_name  = 'Nummer'
+        , local_prefix = 'KPM-'
         )
     , jira_sync.Sync_Attribute_To_Local
         ( local_name   = 'summary'
@@ -71,9 +72,10 @@ KPM_ATTRIBUTES = \
         , r_default    = '?'
         )
     , jira_sync.Sync_Attribute_To_Local_Multistring
-        ( local_name   = 'labels'
-        , remote_name  = 'Status'
-        , prefix       = 'KPM-Status-'
+        ( local_name    = 'labels'
+        , remote_name   = 'FB-Status'
+        , prefix        = 'KPM-FB-Status-'
+        , l_only_update = True
         )
     , jira_sync.Sync_Attribute_To_Local_Multilink_Default
         ( local_name    = 'versions.id'
@@ -82,27 +84,34 @@ KPM_ATTRIBUTES = \
         , use_r_default = True
         )
     , jira_sync.Sync_Attribute_To_Local_Concatenate
-        ( local_name   = 'description'
-        , remote_names =
-          [ 'Analyse'
-          , 'Problembeschreibung'
+        ( local_name    = 'description'
+        , remote_names  =
+          [ 'Problembeschreibung'
+          , 'Analyse'
+          , 'Bewertung'
           , 'Softwarestand (verurs.)'
+          , 'Hardwarestand'
+          , 'Reproduzierbar'
+          , 'Fehlerhäufigkeit'
           , 'Problemlösungsverantwortlicher Benutzer'
           ]
+        , delimiter     = '\n\n'
+        , field_prefix  = '*'
+        , field_postfix = ':*\n'
+        )
+    # "Release Note" field in Jira
+    , jira_sync.Sync_Attribute_To_Local_Default
+        ( local_name    = 'customfield_12009'
+        , remote_name   = 'Lieferantenaussage'
+        , r_default     = 'Under Investigation'
+        , strip_prefix  = 'Lieferantenaussage:\n\n'
+        , l_only_update = True
         )
     # "Release Note" field in Jira
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'customfield_12009'
         , remote_name  = 'Lieferantenaussage'
         )
-#    , jira_sync.Sync_Attribute_To_Local_Concatenate
-#        ( local_name   = 'environment'
-#        , remote_names =
-#          [ 'Reproduzierbar'
-#          , 'Fehlerhäufigkeit'
-#          , 'Hardwarestand'
-#          ]
-#        )
     # priority can currently only be set during creation
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'priority.name'

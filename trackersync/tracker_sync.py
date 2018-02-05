@@ -28,6 +28,7 @@ from __future__ import absolute_import
 import os
 import json
 from   rsclib.autosuper import autosuper
+from   rsclib.pycompat  import string_types
 
 class Remote_Issue (autosuper) :
     """ This models a remote issue.
@@ -265,6 +266,8 @@ class Sync_Attribute (autosuper) :
         phase (when the remote issue is already existing).
         If only_create is specified, the sync is run only for creation
         of the remote issue (when it doesn't exist yet).
+        The l_only_update flag indicates that for To_Local sync variants
+        the sync should only be run if the local issue exists.
         The default is to run a sync during both phases.
 
         The map attribute is an optional map of local values to remote
@@ -281,6 +284,9 @@ class Sync_Attribute (autosuper) :
         field in the target tracker. This only works for one-direction
         sync To_Remote variants. For this you specify join_multilink
         as True and optionally change the separator from the default.
+
+        Note that local_prefix is used only in To_Local variants not in
+        Two_Way (due to resulting roundtrip problems).
     """
 
     def __init__ \
@@ -296,6 +302,8 @@ class Sync_Attribute (autosuper) :
         , strip_prefix   = None
         , join_multilink = False
         , separator      = ', '
+        , local_prefix   = None
+        , l_only_update  = False
         ) :
         self.name           = local_name
         self.remote_name    = remote_name
@@ -308,6 +316,8 @@ class Sync_Attribute (autosuper) :
         self.strip_prefix   = strip_prefix
         self.join_multilink = join_multilink
         self.separator      = separator
+        self.local_prefix   = local_prefix
+        self.l_only_update  = l_only_update
         if not self.imap and self.map :
             self.imap = dict ((v, k) for k, v in  map.iteritems ())
         if not self.map and self.imap :
@@ -414,7 +424,11 @@ class Sync_Attribute_To_Local (Sync_Attribute) :
     """
 
     def sync (self, syncer, id, remote_issue) :
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         rv = remote_issue.get (self.remote_name, None)
+        if isinstance (rv, string_types) and self.local_prefix :
+            rv = self.local_prefix + rv
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv) :
             return
@@ -435,11 +449,15 @@ class Sync_Attribute_To_Local_Default (Sync_Attribute) :
     """
 
     def sync (self, syncer, id, remote_issue) :
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         v = remote_issue.get (self.remote_name)
         if self.imap :
             v = self.imap.get (v, self.r_default)
         elif v is None and self.r_default :
             v = self.r_default
+        if isinstance (v, string_types) and self.local_prefix :
+            v = local_prefix + v
         if syncer.get (id, self.name) is None :
             syncer.set (id, self.name, v)
     # end def sync
@@ -460,31 +478,45 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
     def __init__ \
         ( self
         , local_name
-        , remote_names = None
-        , delimiter    = '\n'
-        , add_prefix   = True
+        , remote_names   = None
+        , delimiter      = '\n'
+        , field_prefix   = ''
+        , field_postfix  = ':\n'
+        , add_prefix     = True
+        , l_only_update  = False
         ) :
-        self.name         = local_name
-        self.remote_names = remote_names
-        self.remote_name  = ', '.join (remote_names) # for debug messages
-        self.only_update  = False # only relevant for to remote sync
-        self.only_create  = False # only relevant for to remote sync
-        self.delimiter    = delimiter
-        self.add_prefix   = add_prefix
-        self.strip_prefix = False
+        self.name          = local_name
+        self.remote_names  = remote_names
+        self.remote_name   = ', '.join (remote_names) # for debug messages
+        self.only_update   = False # only relevant for to remote sync
+        self.only_create   = False # only relevant for to remote sync
+        self.delimiter     = delimiter
+        self.field_prefix  = field_prefix
+        self.field_postfix = field_postfix
+        self.add_prefix    = add_prefix
+        self.strip_prefix  = False
+        self.l_only_update = l_only_update
         self.map = self.imap = None
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         v = []
-        for k in self.remote_names :
+        for n, k in enumerate (self.remote_names) :
             val = remote_issue.get (k, None)
             if not val :
                 continue
             if self.add_prefix :
-                v.append ('%s:' % k)
+                if self.field_prefix :
+                    v.append (self.field_prefix)
+                v.append (k)
+                if self.field_postfix :
+                    v.append (self.field_postfix)
             v.append (val)
-        rv = self.delimiter.join (v)
+            if n != len (self.remote_names) - 1 :
+                v.append (self.delimiter)
+        rv = ''.join (v)
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv) :
             return
@@ -515,6 +547,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
         , imap          = None
         , strip_prefix  = None
         , use_r_default = False
+        , l_only_update = False
         ) :
         self.__super.__init__ \
             ( local_name
@@ -526,12 +559,15 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
             , map
             , imap
             , strip_prefix
+            , l_only_update = l_only_update
             )
         self.use_r_default   = use_r_default
         self.do_only_default = False
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         rv = remote_issue.get (self.remote_name, None)
         if rv is None and self.r_default :
             rv = self.r_default
@@ -544,10 +580,10 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
                 raise
             rv = [syncer.lookup (cl, self.r_default)]
         lv = syncer.get (id, self.name)
-        if not isinstance (lv, list) :
-            lv = [lv]
         if self.do_only_default and lv is not None :
             return
+        if not isinstance (lv, list) :
+            lv = [lv]
         if self.no_sync_necessary (lv, rv) :
             return
         syncer.set (id, self.name, rv)
@@ -584,6 +620,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
         , map           = None
         , imap          = None
         , prefix        = None
+        , l_only_update = False
         ) :
         self.__super.__init__ \
             ( local_name
@@ -594,7 +631,8 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
             , r_default
             , map
             , imap
-            , strip_prefix = None
+            , strip_prefix  = None
+            , l_only_update = l_only_update
             )
         self.prefix = prefix
         if not prefix :
@@ -602,15 +640,20 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         rval = remote_issue.get (self.remote_name, None)
         if self.imap :
             rval = self.imap.get (rval, self.r_default)
         elif rval is None and self.r_default :
             rval = self.r_default
         lv = syncer.get (id, self.name)
-        assert isinstance (lv, list)
-        lv = list (sorted (lv))
-        rv = [k for k in lv if not k.startswith (self.prefix)]
+        if isinstance (lv, list) :
+            lv = list (sorted (lv))
+            rv = [k for k in lv if not k.startswith (self.prefix)]
+        else :
+            assert not rv
+            rv = []
         rv.append (self.prefix + rval)
         rv = list (sorted (rv))
         if self.no_sync_necessary (lv, rv) :
@@ -638,7 +681,7 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
         # Default values of local issue are assigned during creation, so
         # we can't sync these to the remote site during this sync (they
         # would get empty values).
-        if id < 0 :
+        if syncer.get_existing_id (id) is None :
             return None, None, True
         rv = remote_issue.get (self.remote_name, None)
         lv = syncer.get (id, self.name)
@@ -1043,7 +1086,7 @@ class Trackersync_Syncer (autosuper) :
         # attributes.
         attr = remote_issue.attributes
         # Don't sync a subset of attributes if local issue doesn't exist
-        if id < 0 and attr :
+        if self.get_existing_id (id) is None and attr :
             return
         for a in self.attributes :
             if a.only_create :
@@ -1060,7 +1103,7 @@ class Trackersync_Syncer (autosuper) :
                     if self.verbose :
                         print ("Not syncing: %s" % id)
                     return
-        if id < 0 :
+        if self.get_existing_id (id) is None :
             if not remote_issue.attributes :
                 if self.verbose :
                     print ("create issue: %s" % self.newvalues [id])
