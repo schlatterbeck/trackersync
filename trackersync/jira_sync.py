@@ -47,6 +47,8 @@ Sync_Attribute_To_Local_Multilink = \
     tracker_sync.Sync_Attribute_To_Local_Multilink
 Sync_Attribute_To_Local_Multilink_Default = \
     tracker_sync.Sync_Attribute_To_Local_Multilink_Default
+Sync_Attribute_To_Local_Multistring = \
+    tracker_sync.Sync_Attribute_To_Local_Multistring
 
 class Syncer (tracker_sync.Syncer) :
     """ Synchronisation Framework

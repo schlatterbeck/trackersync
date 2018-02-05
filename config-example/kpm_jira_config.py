@@ -26,7 +26,7 @@ from __future__ import absolute_import
 
 """ Example configuration for KPM Sync with Jira """
 
-from trackersync import roundup_sync
+from trackersync import jira_sync
 
 KPM_USERNAME   = 'user'
 KPM_PASSWORD   = 'secret'
@@ -38,52 +38,50 @@ LOCAL_PASSWORD = 'localsecret'
 LOCAL_TRACKER  = 'jira'
 
 KPM_ATTRIBUTES = \
-    ( roundup_sync.Sync_Attribute_Check
+    ( jira_sync.Sync_Attribute_Check
         ( local_name   = 'status.name'
         , remote_name  = None
         , invert       = True
         , update       = False
         , value        = 'Closed'
         )
-    , roundup_sync.Sync_Attribute_To_Local_Default
+    , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'project.key'
         , remote_name  = None
         , r_default    = 'project-key-in-jira'
         )
-    , roundup_sync.Sync_Attribute_To_Local_Default
+    , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'issuetype.name'
         , remote_name  = None
         , r_default    = 'Defect'
         )
-    , roundup_sync.Sync_Attribute_To_Local_Default
+    , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'security.name'
         , remote_name  = None
         , r_default    = 'Project Insider'
         )
     # "External Ticket" field in Jira
-    , roundup_sync.Sync_Attribute_To_Local
+    , jira_sync.Sync_Attribute_To_Local
         ( local_name   = 'customfield_13000'
         , remote_name  = 'Nummer'
         )
-    , roundup_sync.Sync_Attribute_To_Local
+    , jira_sync.Sync_Attribute_To_Local
         ( local_name   = 'summary'
         , remote_name  = 'Kurztext'
         , r_default    = '?'
         )
-# FIXME: Implement Sync_Attribute_To_Local_Multistring, note that
-# remote_names is plural, we may want to sync several remote fields to
-# the same local Multi-String field
-#    , roundup_sync.Sync_Attribute_To_Local_Multistring
-#        ( local_name   = 'labels'
-#        , remote_names = ['Status']
-#        )
-    , roundup_sync.Sync_Attribute_To_Local_Multilink_Default
+    , jira_sync.Sync_Attribute_To_Local_Multistring
+        ( local_name   = 'labels'
+        , remote_name  = 'Status'
+        , prefix       = 'KPM-Status-'
+        )
+    , jira_sync.Sync_Attribute_To_Local_Multilink_Default
         ( local_name    = 'versions.id'
         , remote_name   = 'Softwarestand (verurs.)'
         , r_default     = 'defaultversion'
         , use_r_default = True
         )
-    , roundup_sync.Sync_Attribute_To_Local_Concatenate
+    , jira_sync.Sync_Attribute_To_Local_Concatenate
         ( local_name   = 'description'
         , remote_names =
           [ 'Analyse'
@@ -93,11 +91,11 @@ KPM_ATTRIBUTES = \
           ]
         )
     # "Release Note" field in Jira
-    , roundup_sync.Sync_Attribute_To_Remote
+    , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'customfield_12009'
         , remote_name  = 'Lieferantenaussage'
         )
-#    , roundup_sync.Sync_Attribute_To_Local_Concatenate
+#    , jira_sync.Sync_Attribute_To_Local_Concatenate
 #        ( local_name   = 'environment'
 #        , remote_names =
 #          [ 'Reproduzierbar'
@@ -105,7 +103,7 @@ KPM_ATTRIBUTES = \
 #          , 'Hardwarestand'
 #          ]
 #        )
-    , roundup_sync.Sync_Attribute_To_Local
+    , jira_sync.Sync_Attribute_To_Local
         ( local_name   = 'priority.name'
         , remote_name  = 'Bewertung'
         , r_default    = 'Minor'
@@ -121,7 +119,7 @@ KPM_ATTRIBUTES = \
             , DV = 'Minor'
             )
         )
-    , roundup_sync.Sync_Attribute_To_Remote
+    , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'status.name'
         , remote_name  = 'L-Status [Code]'
         , map =
@@ -146,11 +144,11 @@ KPM_ATTRIBUTES = \
             , 'Exempt from Calibration'    : '5'
             }
         )
-    , roundup_sync.Sync_Attribute_To_Remote
+    , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'key'
         , remote_name  = 'L-Fehlernummer'
         )
-    , roundup_sync.Sync_Attribute_To_Remote
+    , jira_sync.Sync_Attribute_To_Remote
         ( local_name     = 'fixVersions.name'
         , remote_name    = 'L-System-IO'
         , join_multilink = True

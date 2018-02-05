@@ -565,6 +565,61 @@ class Sync_Attribute_To_Local_Multilink_Default \
 
 # end class Sync_Attribute_To_Local_Multilink_Default
 
+class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
+    """ A variant that synchronizes a single attribute at the remote
+        side to a Multi-String value locally. It uses a prefix and
+        removes all local strings with this prefix before it stores the
+        new values. Equality is determined by sorting the strings before
+        comparing.
+        Note that not all backends know of Multistring values. An
+        example backend that supports it is Jira.
+    """
+
+    def __init__ \
+        ( self
+        , local_name
+        , remote_name   = None
+        , l_default     = None
+        , r_default     = None
+        , map           = None
+        , imap          = None
+        , prefix        = None
+        ) :
+        self.__super.__init__ \
+            ( local_name
+            , remote_name
+            , False # only_update only relevant for to remote sync
+            , False # only_create only relevant for to remote sync
+            , l_default
+            , r_default
+            , map
+            , imap
+            , strip_prefix = None
+            )
+        self.prefix = prefix
+        if not prefix :
+            raise ValueError ("The prefix is required")
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        rval = remote_issue.get (self.remote_name, None)
+        if self.imap :
+            rval = self.imap.get (rval, self.r_default)
+        elif rval is None and self.r_default :
+            rval = self.r_default
+        lv = syncer.get (id, self.name)
+        assert isinstance (lv, list)
+        lv = list (sorted (lv))
+        rv = [k for k in lv if not k.startswith (self.prefix)]
+        rv.append (self.prefix + rval)
+        rv = list (sorted (rv))
+        if self.no_sync_necessary (lv, rv) :
+            return
+        syncer.set (id, self.name, rv)
+    # end def sync
+
+# end class Sync_Attribute_To_Local_Multistring
+
 class Sync_Attribute_To_Remote (Sync_Attribute) :
     """ Unconditionally synchronize a local attribute to the remote
         tracker. Typical use-case is to set the local tracker issue
