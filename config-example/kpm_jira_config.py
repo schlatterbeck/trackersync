@@ -103,7 +103,8 @@ KPM_ATTRIBUTES = \
 #          , 'Hardwarestand'
 #          ]
 #        )
-    , jira_sync.Sync_Attribute_To_Local
+    # priority can currently only be set during creation
+    , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'priority.name'
         , remote_name  = 'Bewertung'
         , r_default    = 'Minor'
