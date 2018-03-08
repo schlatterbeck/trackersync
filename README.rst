@@ -1,9 +1,3 @@
-.. image:: http://sflogo.sourceforge.net/sflogo.php?group_id=212955&type=7
-    :height: 62
-    :width: 210
-    :alt: SourceForge.net Logo
-    :target: http://sourceforge.net/projects/trackersync
-
 Tracker Sync: Tool for Synchronizing Issue Trackers
 ===================================================
 
