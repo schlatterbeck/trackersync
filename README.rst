@@ -21,7 +21,8 @@ issue tracker and certain issues in the customer's tracker are for you.
 
 This project solves this requirement. Currently the local issue tracker
 (the one *you* are running) is limited to roundup_, an open source issue
-tracker. For the remote tracker we're currently supporting KPMweb, the
+tracker or jira_ a well-known commercial offering.
+For the remote tracker we're currently supporting KPMweb, the
 issue tracker run by VW/Audi with access for their suppliers -- if
 you're one of them you know how to access it. Other remote trackers are
 currently being implemented, notably support for jira_.
