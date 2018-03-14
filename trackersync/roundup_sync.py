@@ -518,7 +518,7 @@ class Syncer (tracker_sync.Syncer) :
                         , 'ext_id', 'ext_attributes', 'issue'
                         )
                     if di ['ext_id'] == remote_id :
-                        id = int (di ['issue'])
+                        id = str (int (di ['issue']))
                         break
         # Either old schema or old *and* new schema and never synced
         # with new schema:
@@ -532,7 +532,7 @@ class Syncer (tracker_sync.Syncer) :
                 di = self.srv.display \
                     ('issue%s' % i, 'ext_id', 'ext_attributes')
                 if di ['ext_id'] == remote_id :
-                    id = int (i)
+                    id = str (int (i))
                     # Update local schema in any case if we have
                     # new-style schema in database but got data from
                     # old-style schema.
