@@ -845,6 +845,7 @@ class KPM (Log, Lock_Mixin) :
         , verbose = False
         , debug   = False
         , lang    = 'german'
+        , lock    = None
         , ** kw
         ) :
         self.site     = site
@@ -857,6 +858,8 @@ class KPM (Log, Lock_Mixin) :
         self.session  = requests.Session ()
         if timeout :
             self.session.timeout = timeout
+        if lock :
+            self.lockfile = lock
         self.__super.__init__ (** kw)
     # end def __init__
 
@@ -946,6 +949,14 @@ def main () :
         , dest    = 'remote_dry_run'
         )
     cmd.add_argument \
+        ( "-p", "--local-password"
+        , help    = "Password for local tracker"
+        )
+    cmd.add_argument \
+        ( "-P", "--password"
+        , help    = "KPM login password"
+        )
+    cmd.add_argument \
         ( "-R", "--remote-change"
         , help    = "Treat remote values as changed if non-empty. "
                     "Set local value to remote value for two-way sync "
@@ -959,14 +970,6 @@ def main () :
         , dest    = 'remote_change'
         , action  = 'store_true'
         , default = False
-        )
-    cmd.add_argument \
-        ( "-p", "--local-password"
-        , help    = "Password for local tracker"
-        )
-    cmd.add_argument \
-        ( "-P", "--password"
-        , help    = "KPM login password"
         )
     cmd.add_argument \
         ( "-s", "--syncdir"
@@ -988,6 +991,12 @@ def main () :
         , action  = 'store_true'
         , default = False
         )
+    cmd.add_argument \
+        ( "--lock-name"
+        , help    = "Locking-filename -- note that this is "
+                    "dangerous, you should not have two instances of "
+                    "kpmsync writing to KPM."
+        )
     opt     = cmd.parse_args ()
     config  = Config.config
     cfgpath = Config.path
@@ -996,7 +1005,11 @@ def main () :
         config = os.path.splitext (config) [0]
     cfg = Config (path = cfgpath, config = config)
     kpm = KPM \
-        (verbose = opt.verbose, debug = opt.debug, lang = cfg.KPM_LANGUAGE)
+        ( verbose = opt.verbose
+        , debug   = opt.debug
+        , lang    = cfg.KPM_LANGUAGE
+        , lock    = opt.lock_name
+        )
     username  = opt.username    or cfg.KPM_USERNAME
     password  = opt.password    or cfg.KPM_PASSWORD
     address   = opt.address     or cfg.KPM_ADDRESS
