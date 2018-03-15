@@ -1112,6 +1112,10 @@ class Trackersync_Syncer (autosuper) :
                     (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
                 self.current_id = iid
+                # Need to set up newvalues/oldvalues for this new id so
+                # that self.get keeps working
+                self.newvalues [iid] = {}
+                self.oldvalues [iid] = {}
                 # update_sync_db must come before update_aux_classes
                 # because update_sync_db may update attributes that are
                 # written by update_aux_classes
