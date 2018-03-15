@@ -354,6 +354,8 @@ class Sync_Attribute (autosuper) :
     # end def sync
 
     def type (self, syncer) :
+        if self.name is None :
+            return None
         return syncer.get_transitive_schema (self.name)
     # end def type
 
