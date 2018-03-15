@@ -727,7 +727,10 @@ class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
             and not remote_issue.get (self.remote_name, None)
             and lv
             ) :
-            remote_issue.set (self.remote_name, lv, self.type (syncer))
+            type = None
+            if self.name :
+                type = self.type (syncer)
+            remote_issue.set (self.remote_name, lv, type)
     # end def sync
 
 # end class Sync_Attribute_To_Remote_Default
