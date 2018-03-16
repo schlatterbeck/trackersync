@@ -417,6 +417,51 @@ class Sync_Attribute_Check (Sync_Attribute) :
 
 # end class Sync_Attribute_Check
 
+class Sync_Attribute_Check_Remote (Sync_Attribute) :
+    """ A boolean remote attribute used to check if the issue should
+        be synced. Note that no sync is done, only the check of this
+        attribute is performed. The local_name should be None.
+
+        If 'invert' is set, the logic is inverted, it is checked that
+        the attribute does *not* exist. Consequently if 'update' is set
+        it should update the property to False (or a python equivalent
+        that evaluates to a boolean False).
+        If an optional value is given, it is checked if the remote value
+        matches the given value. If yes and invert is not set, the sync
+        is performed. If yes and invert is set, the sync is *not*
+        performed.
+        Note that we don't currently support a map / imap.
+    """
+
+    def __init__ \
+        ( self
+        , local_name
+        , remote_name = None
+        , invert      = False
+        , value       = None
+        , ** kw
+        ) :
+        self.invert    = invert
+        self.value     = value
+        self.__super.__init__ (local_name, remote_name, ** kw)
+        assert self.remote_name is not None
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        rv = remote_issue.get (self.remote_name, None)
+
+        if self.value :
+            stop = rv != self.value
+        else :
+            stop = not rv
+        if self.invert :
+            stop = not stop
+        if stop :
+            return True
+    # end def sync
+
+# end class Sync_Attribute_Check_Remote
+
 class Sync_Attribute_To_Local (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update

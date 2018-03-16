@@ -45,6 +45,11 @@ KPM_ATTRIBUTES = \
         , update       = False
         , value        = 'Closed'
         )
+    , jira_sync.Sync_Attribute_Check_Remote
+        ( local_name   = None
+        , remote_name  = 'FB-Status'
+        , value        = '2'
+        )
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'project.key'
         , remote_name  = None

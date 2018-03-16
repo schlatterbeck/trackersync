@@ -36,6 +36,7 @@ from   trackersync      import tracker_sync
 
 Sync_Attribute                   = tracker_sync.Sync_Attribute
 Sync_Attribute_Check             = tracker_sync.Sync_Attribute_Check
+Sync_Attribute_Check_Remote      = tracker_sync.Sync_Attribute_Check_Remote
 Sync_Attribute_To_Local          = tracker_sync.Sync_Attribute_To_Local
 Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
