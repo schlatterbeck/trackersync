@@ -448,6 +448,8 @@ class Syncer (tracker_sync.Syncer) :
                 value = value.encode ('utf-8')
             return xmlrpclib.Binary \
                 (key.encode ('ascii') + '='.encode ('ascii') + value)
+        elif value is None :
+            return '%s=' % key
         elif not isinstance (value, text_type) :
             return xmlrpclib.Binary \
                 (key.encode ('ascii') + '='.encode ('ascii') + value)
