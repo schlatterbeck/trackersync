@@ -80,9 +80,12 @@ class Syncer (tracker_sync.Syncer) :
         j = r.json ()
         self.schema = {}
         self.schema ['issue'] = {}
+        self.schema_namemap = {}
         s = self.schema ['issue']
         for k in j :
             name = k ['id']
+            if 'name' in k :
+                self.schema_namemap [k ['name']] = name
             if 'schema' not in k :
                 type = 'string'
             else :
@@ -186,6 +189,14 @@ class Syncer (tracker_sync.Syncer) :
     def from_date (self, date) :
         return jira_utctime (date)
     # end def from_date
+
+    def get_name_translation (self, classname, name) :
+        """ Map user-given name to jira backend name
+        """
+        if classname == self.default_class :
+            return self.schema_namemap.get (name, name)
+        return name
+    # end def get_name_translation
 
     def getitem (self, cls, id, *attr) :
         """ Get all or given list of attributes of an item of the given cls.

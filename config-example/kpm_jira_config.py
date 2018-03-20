@@ -65,9 +65,9 @@ KPM_ATTRIBUTES = \
         , remote_name  = None
         , r_default    = 'Project Insider'
         )
-    # "External Ticket" field in Jira
+    # "External Ticket" field in Jira, e.g. customfield_13000
     , jira_sync.Sync_Attribute_To_Local
-        ( local_name   = 'customfield_13000'
+        ( local_name   = 'External Ticket'
         , remote_name  = 'Nummer'
         , local_prefix = 'KPM-'
         )
@@ -104,17 +104,17 @@ KPM_ATTRIBUTES = \
         , field_prefix  = '*'
         , field_postfix = ':*\n'
         )
-    # "Release Note" field in Jira
+    # "Release Note" field in Jira, some customfield_12009
     , jira_sync.Sync_Attribute_To_Local_Default
-        ( local_name    = 'customfield_12009'
+        ( local_name    = 'Release Note'
         , remote_name   = 'Lieferantenaussage'
         , r_default     = 'Under Investigation'
         , strip_prefix  = 'Lieferantenaussage:\n\n'
         , l_only_update = True
         )
-    # "Release Note" field in Jira
+    # "Release Note" field in Jira, e.g. customfield_12009
     , jira_sync.Sync_Attribute_To_Remote
-        ( local_name   = 'customfield_12009'
+        ( local_name   = 'Release Note'
         , remote_name  = 'Lieferantenaussage'
         )
     # priority can currently only be set during creation

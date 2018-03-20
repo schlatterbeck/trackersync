@@ -916,6 +916,7 @@ class Trackersync_Syncer (autosuper) :
     # end def from_date
 
     def get (self, id, name) :
+        name = self.get_name_translation (self.default_class, name)
         if name is None :
             return None
         if name in self.newvalues [id] :
@@ -941,13 +942,14 @@ class Trackersync_Syncer (autosuper) :
 
     def get_classname (self, classname, name) :
         """ Get the classname of a Link or Multilink property """
-        assert isinstance (self.schema [classname][name], tuple)
-        return self.schema [classname][name][1]
+        se = self.get_schema_entry (classname, name)
+        assert isinstance (se, tuple)
+        return se [1]
     # end def get_classname
 
     def get_default (self, classname, name) :
         """ Get default value for a property 'name' of the given class """
-        t = self.schema [classname][name]
+        t = self.get_schema_entry (classname, name)
         if isinstance (t, tuple) and t [0] == 'Multilink' :
             v = []
         else :
@@ -971,6 +973,21 @@ class Trackersync_Syncer (autosuper) :
         return id
     # end def get_existing_id
 
+    def get_name_translation (self, classname, name) :
+        """ We may have user-defined names for properties that need to
+            be translated.
+        """
+        return name
+    # end def get_name_translation
+
+    def get_schema_entry (self, classname, name) :
+        """ In some backends, e.g., Jira, we can have symbolic names,
+            too.
+        """
+        name = self.get_name_translation (classname, name)
+        return self.schema [classname][name]
+    # end def get_schema_entry
+
     def get_sync_filename (self, remoteid) :
         return os.path.join (self.opt.syncdir, remoteid)
     # end def get_sync_filename
@@ -985,6 +1002,7 @@ class Trackersync_Syncer (autosuper) :
             of the form %Y-%m-%d.%H:%M:%S where seconds are with 3
             decimal places, e.g.  2015-09-06.13:51:38.840
         """
+        path = self.get_name_translation (classname, path)
         classname, p, id = self.get_transitive_prop (classname, path, id)
         if id :
             if isinstance (id, list) :
@@ -992,7 +1010,7 @@ class Trackersync_Syncer (autosuper) :
                 r = ','.join (r)
             else :
                 r = self.getitem (classname, id, p) [p]
-            if r and self.schema [classname][p] == 'date' :
+            if r and self.get_schema_entry (classname, p) == 'date' :
                 return self.from_date (r)
             return r
         return self.get_default (classname, p)
@@ -1004,6 +1022,7 @@ class Trackersync_Syncer (autosuper) :
             Note that id may become a list when processing multilinks on
             the way.
         """
+        path = self.get_name_translation (classname, path)
         path = path.split ('.')
         for p in path [:-1] :
             assert self.get_type (classname, p) in ('Link', 'Multilink')
@@ -1024,14 +1043,14 @@ class Trackersync_Syncer (autosuper) :
         """
         classname, path = self.split_name (name)
         classname, prop, id = self.get_transitive_prop (classname, path)
-        return self.schema [classname][prop]
+        return self.get_schema_entry (classname, prop)
     # end def get_transitive_schema
 
     def get_type (self, classname, name) :
         """ Get type of property 'name', either a scalar or Link or
             Multilink
         """
-        t = self.schema [classname][name]
+        t = self.get_schema_entry (classname, name)
         if isinstance (t, tuple) :
             return t [0]
         return t
@@ -1055,7 +1074,8 @@ class Trackersync_Syncer (autosuper) :
     # end def lookup
 
     def set (self, id, attrname, value) :
-        self.newvalues [id][attrname] = value
+        name = self.get_name_translation (self.default_class, attrname)
+        self.newvalues [id][name] = value
     # end def set
 
     def setitem (self, cls, id, ** kw) :
@@ -1065,7 +1085,11 @@ class Trackersync_Syncer (autosuper) :
         if self.debug :
             print ("setitem %s:%s %s" % (cls, id, kw))
         if not self.dry_run :
-            return self._setitem (cls, id, ** kw)
+            items = dict \
+                ((self.get_name_translation (cls, k), v)
+                 for k, v in kw.items ()
+                )
+            return self._setitem (cls, id, ** items)
     # end def setitem
 
     def split_name (self, name) :
