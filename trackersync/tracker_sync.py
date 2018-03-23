@@ -48,6 +48,7 @@ class Remote_Issue (autosuper) :
     def __init__ (self, record, sync_attributes = {}) :
         self.record     = record
         self.newvalues  = {}
+        self.dirty      = False
         self.attributes = sync_attributes
     # end def __init__
 
@@ -207,6 +208,7 @@ class Remote_Issue (autosuper) :
             Note that type is one of 'string', 'date', 'number', 'bool'
             We call conversion methods accordingly if existing.
         """
+        self.dirty = True
         conv = None
         if type :
             conv = getattr (self, 'convert_%s' % type, None)

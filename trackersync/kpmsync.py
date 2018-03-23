@@ -337,7 +337,8 @@ class Problem (tracker_sync.Remote_Issue) :
     def update (self, syncer) :
         """ Update remote issue tracker with self.newvalues.
         """
-        self._update ('U')
+        if self.dirty :
+            self._update ('U')
     # end def update
 
 # end def Problem
