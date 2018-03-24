@@ -1183,20 +1183,23 @@ class Trackersync_Syncer (autosuper) :
             if not remote_issue.attributes :
                 if self.verbose :
                     print ("create issue: %s" % self.newvalues [id])
+                # update_sync_db must come before update_aux_classes
+                # because update_sync_db may update attributes that are
+                # written by update_aux_classes. It also needs to be
+                # before split_newvalues
+                self.update_sync_db (id, remote_id, remote_issue)
                 classdict = self.split_newvalues (id)
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
+                del classdict [self.default_class]
                 self.current_id = iid
                 # Need to set up newvalues/oldvalues for this new id so
                 # that self.get keeps working
-                self.newvalues [iid] = {}
-                self.oldvalues [iid] = {}
-                # update_sync_db must come before update_aux_classes
-                # because update_sync_db may update attributes that are
-                # written by update_aux_classes
-                self.update_sync_db (iid, remote_id, remote_issue)
-                del classdict [self.default_class]
+                self.newvalues [iid] = self.newvalues [id]
+                self.oldvalues [iid] = self.oldvalues [id]
+                del self.newvalues [id]
+                del self.oldvalues [id]
                 self.update_aux_classes (iid, classdict)
         elif self.newvalues [id] :
             # update_sync_db must come before update_aux_classes
