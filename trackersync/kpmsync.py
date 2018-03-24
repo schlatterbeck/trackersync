@@ -659,6 +659,8 @@ class Export (autosuper) :
             try :
                 syncer.sync (p_id, p)
             except (StandardError, xmlrpclib.Fault) :
+                syncer.log.error ("Error syncing %s" % p_id)
+                syncer.log_exception ()
                 print ("Error syncing %s" % p_id)
                 print_exc ()
         syncer.sync_new_local_issues \

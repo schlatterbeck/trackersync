@@ -29,6 +29,7 @@ import os
 import json
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import string_types
+from   rsclib.execute   import Log
 
 class Remote_Issue (autosuper) :
     """ This models a remote issue.
@@ -835,7 +836,7 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 
 # end class Sync_Attribute_Two_Way
 
-class Trackersync_Syncer (autosuper) :
+class Trackersync_Syncer (Log) :
     """ Synchronisation Framework
         We get the mapping of remote attributes to local attributes.
         The type of attribute indicates the action to perform.
@@ -881,11 +882,10 @@ class Trackersync_Syncer (autosuper) :
         """ Create local item with given attributes,
             attributes are 'key = value' pairs.
         """
-        if self.debug :
-            if cls == 'file' :
-                print ("srv.create %s %s" % (cls, kw.get('name', '?')))
-            else :
-                print ("srv.create %s %s" % (cls, kw))
+        if cls == 'file' :
+            self.log_debug ("srv.create %s %s" % (cls, kw.get('name', '?')))
+        else :
+            self.log_debug ("srv.create %s %s" % (cls, kw))
 	if self.dry_run :
 	    return "9999999"
 	return self._create (cls, ** kw)
@@ -1068,6 +1068,18 @@ class Trackersync_Syncer (autosuper) :
         raise NotImplementedError
     # end def getitem
 
+    def log_debug (self, msg, *args) :
+        if self.debug :
+            print (msg, *args)
+            self.log.debug (msg)
+    # end def log_debug
+
+    def log_verbose (self, msg, *args) :
+        if self.verbose :
+            print (msg, *args)
+            self.log.info (msg)
+    # end def log_verbose
+
     def lookup (self, cls, key) :
         """ Look up an item of the given class by key (e.g. name)
             and return the ID
@@ -1084,8 +1096,7 @@ class Trackersync_Syncer (autosuper) :
         """ Set attributes of an item of the given cls,
             attributes are 'key = value' pairs.
         """
-        if self.debug :
-            print ("setitem %s:%s %s" % (cls, id, kw))
+        self.log_debug ("setitem %s:%s %s" % (cls, id, kw))
         if not self.dry_run :
             items = dict \
                 ((self.get_name_translation (cls, k), v)
@@ -1170,19 +1181,16 @@ class Trackersync_Syncer (autosuper) :
             if a.strip_prefix :
                 remote_issue.strip_prefix (a.remote_name, a.strip_prefix)
             if not attr or a.remote_name in attr :
-                if self.debug :
-                    print \
-                        ( "sa: %s %s %s"
-                        % (a.__class__.__name__, a.name, a.remote_name)
-                        )
+                self.log_debug \
+                    ( "sa: id:%s %s %s %s"
+                    % (id, a.__class__.__name__, a.name, a.remote_name)
+                    )
                 if a.sync (self, id, remote_issue) :
-                    if self.verbose :
-                        print ("Not syncing: %s" % id)
+                    self.log_verbose ("Not syncing: %s" % id)
                     return
         if self.get_existing_id (id) is None :
             if not remote_issue.attributes :
-                if self.verbose :
-                    print ("create issue: %s" % self.newvalues [id])
+                self.log_verbose ("create issue: %s" % self.newvalues [id])
                 # update_sync_db must come before update_aux_classes
                 # because update_sync_db may update attributes that are
                 # written by update_aux_classes. It also needs to be
@@ -1192,6 +1200,7 @@ class Trackersync_Syncer (autosuper) :
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
+                self.log_verbose ("created issue: %s" % iid)
                 del classdict [self.default_class]
                 self.current_id = iid
                 # Need to set up newvalues/oldvalues for this new id so
@@ -1211,8 +1220,7 @@ class Trackersync_Syncer (autosuper) :
             and not self.dry_run
             and not self.remote_dry_run
             ) :
-            if self.verbose :
-                print ("Update remote:", remote_issue.newvalues)
+            self.log_verbose ("Update remote:", remote_issue.newvalues)
             remote_issue.update (self)
     # end def sync
 
@@ -1258,15 +1266,17 @@ class Trackersync_Syncer (autosuper) :
         for a in self.attributes :
             if a.only_update :
                 continue
+            self.log_debug \
+                ( "sa: id:%s %s %s %s"
+                % (iid, a.__class__.__name__, a.name, a.remote_name)
+                )
             if a.sync (self, iid, remote_issue) :
-                if self.verbose :
-                    print ("Not syncing: %s" % iid)
+                self.log_verbose ("Not syncing: %s" % iid)
                 do_sync = False
                 break
         if not do_sync :
             return
-        if self.verbose :
-            print ("remote_issue.create", remote_issue.newvalues)
+        self.log_verbose ("remote_issue.create", remote_issue.newvalues)
         rid = remote_issue.create ()
         if not rid :
             raise ValueError ("Didn't receive correct remote issue on creation")
@@ -1297,8 +1307,7 @@ class Trackersync_Syncer (autosuper) :
     # end def update_aux_classes
 
     def update_issue (self, id) :
-        if self.verbose :
-            print ("set issue %s: %s" % (id, self.newvalues [id]))
+        self.log_verbose ("set issue %s: %s" % (id, self.newvalues [id]))
         classdict = self.split_newvalues (id)
         attr = self.fix_attributes \
             (self.default_class, classdict [self.default_class])
