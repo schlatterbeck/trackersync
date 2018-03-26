@@ -1191,11 +1191,6 @@ class Trackersync_Syncer (Log) :
         if self.get_existing_id (id) is None :
             if not remote_issue.attributes :
                 self.log_verbose ("create issue: %s" % self.newvalues [id])
-                # update_sync_db must come before update_aux_classes
-                # because update_sync_db may update attributes that are
-                # written by update_aux_classes. It also needs to be
-                # before split_newvalues
-                self.update_sync_db (id, remote_id, remote_issue)
                 classdict = self.split_newvalues (id)
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
@@ -1209,13 +1204,10 @@ class Trackersync_Syncer (Log) :
                 self.oldvalues [iid] = self.oldvalues [id]
                 del self.newvalues [id]
                 del self.oldvalues [id]
-                self.update_aux_classes (iid, classdict)
+                self.update_aux_classes \
+                    (iid, remote_id, remote_issue, classdict)
         elif self.newvalues [id] :
-            # update_sync_db must come before update_aux_classes
-            # because update_sync_db may update attributes that are
-            # written by update_aux_classes
-            self.update_sync_db (id, remote_id, remote_issue)
-            self.update_issue (id)
+            self.update_issue (id, remote_id, remote_issue)
         if  (   remote_issue.newvalues
             and not self.dry_run
             and not self.remote_dry_run
@@ -1280,11 +1272,7 @@ class Trackersync_Syncer (Log) :
         rid = remote_issue.create ()
         if not rid :
             raise ValueError ("Didn't receive correct remote issue on creation")
-        self.update_sync_db (iid, rid, remote_issue)
-        # We might keep some sync state in the local issue which was
-        # updated by update_sync_db above, does nothing if we didn't
-        # update self.newvalues [iid]
-        self.update_issue (iid)
+        self.update_issue (iid, rid, remote_issue)
     # end def sync_new_local_issue
 
     def sync_new_local_issues (self, new_remote_issue) :
@@ -1298,15 +1286,18 @@ class Trackersync_Syncer (Log) :
         pass
     # end def sync_new_local_issues
 
-    def update_aux_classes (self, id, classdict) :
+    def update_aux_classes (self, id, remote_id, remote_issue, classdict) :
         """ Auxiliary classes, e.g. for KPM an item that links to issue
             and holds additional attributes. 
             All of those must have a Link named 'issue' to the current issue.
+            update_sync_db must come at the start of update_aux_classes
+            because it may update attributes that are written by
+            update_aux_classes.
         """
-        pass
+        self.update_sync_db (id, remote_id, remote_issue, classdict)
     # end def update_aux_classes
 
-    def update_issue (self, id) :
+    def update_issue (self, id, remote_id, remote_issue) :
         self.log_verbose ("set issue %s: %s" % (id, self.newvalues [id]))
         classdict = self.split_newvalues (id)
         attr = self.fix_attributes \
@@ -1314,10 +1305,10 @@ class Trackersync_Syncer (Log) :
         if attr :
             self.setitem (self.default_class, id, ** attr)
         del classdict [self.default_class]
-        self.update_aux_classes (id, classdict)
+        self.update_aux_classes (id, remote_id, remote_issue, classdict)
     # end def update_issue
 
-    def update_sync_db (self, iid, rid, remote_issue) :
+    def update_sync_db (self, iid, rid, remote_issue, classdict) :
         fn = self.get_sync_filename (rid)
         with open (fn, "w") as f :
             f.write (remote_issue.as_json (__local_id__ = iid))

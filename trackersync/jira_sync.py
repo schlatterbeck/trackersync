@@ -274,14 +274,4 @@ class Syncer (tracker_sync.Syncer) :
         pass
     # end def sync_new_local_issues
 
-    def update_aux_classes (self, id, classdict) :
-        """ Auxiliary classes, e.g. for KPM an item that links to issue
-            and holds additional attributes. We also see
-            ext_tracker_status as such an aux class.
-            All of those have a Link named 'issue' to the current issue.
-            We don't have these in Jira currently
-        """
-        pass
-    # end def update_aux_classes
-
 # end class Syncer

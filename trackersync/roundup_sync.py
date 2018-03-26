@@ -572,12 +572,13 @@ class Syncer (tracker_sync.Syncer) :
             self.sync_new_local_issue (iid)
     # end def sync_new_local_issues
 
-    def update_aux_classes (self, id, classdict) :
+    def update_aux_classes (self, id, rid, remote_issue, classdict) :
         """ Auxiliary classes, e.g. for KPM an item that links to issue
             and holds additional attributes. We also see
             ext_tracker_status as such an aux class.
             All of those have a Link named 'issue' to the current issue.
         """
+        self.__super.update_aux_classes (id, rid, remote_issue, classdict)
         for cls in classdict :
             attr = self.fix_attributes (cls, classdict [cls])
             # Check if we already have an item
@@ -596,29 +597,31 @@ class Syncer (tracker_sync.Syncer) :
                 self.create (cls, ** attr)
     # end def update_aux_classes
 
-    def update_sync_db (self, id, rid, remote_issue) :
+    def update_sync_db (self, id, rid, remote_issue, classdict) :
         """ Note that update_state is only used for old roundup schema
             migration
         """
+        assert 'ext_tracker_state' in classdict
+        et = classdict ['ext_tracker_state']
         if  (self.get (id, '/ext_tracker_state/ext_tracker') != self.tracker) :
-            self.newvalues [id]['ext_tracker'] = self.tracker
+            et ['ext_tracker'] = self.tracker
         if 'ext_id' not in self.newvalues [id] :
             if  (  self.oldvalues [id].get ('ext_id') != rid
                 or self.update_state
                 ) :
-                self.newvalues [id]['ext_id'] = rid
+                et ['ext_id'] = rid
         if  (   'ext_attributes' not in self.newvalues [id]
             and    json.dumps (self.oldremote, sort_keys = True, indent = 4)
                 != remote_issue.as_json ()
             ) :
             newmsg = self.create ('msg', content = remote_issue.as_json ())
-            self.newvalues [id]['ext_attributes'] = newmsg
+            et ['ext_attributes'] = newmsg
         if self.update_state :
             for attr in 'ext_attributes', 'ext_status' :
                 # get will return newvalues if existing so this is
                 # idempotent if already set
-                self.newvalues [id][attr] = self.get (id, attr)
-            self.newvalues [id]['ext_tracker'] = self.tracker
+                et [attr] = self.get (id, attr)
+            et ['ext_tracker'] = self.tracker
     # end def update_sync_db
 
 # end class Syncer
