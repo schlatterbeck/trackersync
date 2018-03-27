@@ -1186,7 +1186,7 @@ class Trackersync_Syncer (Log) :
                     % (id, a.__class__.__name__, a.name, a.remote_name)
                     )
                 if a.sync (self, id, remote_issue) :
-                    self.log_verbose ("Not syncing: %s" % id)
+                    self.log_verbose ("Not syncing: %s/%s" % (id, remote_id))
                     return
         if self.get_existing_id (id) is None :
             if not remote_issue.attributes :
@@ -1195,7 +1195,7 @@ class Trackersync_Syncer (Log) :
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
-                self.log_verbose ("created issue: %s" % iid)
+                self.log_verbose ("created issue: %s/%s" % (iid, remote_id))
                 del classdict [self.default_class]
                 self.current_id = iid
                 # Need to set up newvalues/oldvalues for this new id so
@@ -1295,6 +1295,7 @@ class Trackersync_Syncer (Log) :
             update_aux_classes.
         """
         self.update_sync_db (id, remote_id, remote_issue, classdict)
+        self.log_verbose ("updated aux: %s/%s" % (id, remote_id))
     # end def update_aux_classes
 
     def update_issue (self, id, remote_id, remote_issue) :
@@ -1306,6 +1307,7 @@ class Trackersync_Syncer (Log) :
             self.setitem (self.default_class, id, ** attr)
         del classdict [self.default_class]
         self.update_aux_classes (id, remote_id, remote_issue, classdict)
+        self.log_verbose ("Synced: %s/%s" % (id, remote_id))
     # end def update_issue
 
     def update_sync_db (self, iid, rid, remote_issue, classdict) :
