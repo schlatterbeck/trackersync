@@ -226,7 +226,8 @@ class Problem (tracker_sync.Remote_Issue) :
                     fn = p.split ('=', 1) [-1].strip ('"')
                     info ['name'] = '#'.join ((docid, fn))
                     break
-        return result.content
+        # Allow content to be None, we create an empty file in this case
+        return result.content or ''
     # end def document_content
 
     def document_fixer (self, namedict) :
