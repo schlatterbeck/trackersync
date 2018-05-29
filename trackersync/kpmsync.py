@@ -578,7 +578,7 @@ class KPM_Language (autosuper) :
             fix  = self.fix_kpm_attr_english
             lang = "english"
         if first [fix [0][0] - 1] != fix [0][1] :
-            raise ValueError ("Non-implemented language detected")
+            raise ValueError ("Non-implemented language detected: %s" % first)
         if self.language and lang != self.language :
             raise ValueError \
                 ( "Invalid Language, detected: %s, configured: %s"
