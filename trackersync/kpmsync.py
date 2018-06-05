@@ -625,6 +625,8 @@ class Export (autosuper) :
         self.kpm      = kpm
         self.lang     = KPM_Language \
             (delimiter = str (';'), language = kpm.lang)
+        if content is None :
+            raise ValueError ("Got empty content")
         if self.debug :
             fo = open ('%s.csv' % self.debug, 'w')
             for line in content :
@@ -643,7 +645,7 @@ class Export (autosuper) :
 
     def add (self, problem) :
         if problem.number in self.problems :
-            raise ValueError, "Duplicate Problem: %s" % problem.number
+            raise ValueError ("Duplicate Problem: %s" % problem.number)
         self.problems [problem.number] = problem
     # end def add
 
@@ -1043,6 +1045,8 @@ def main () :
     old_xp = None
     for j in jobs :
         j.poll ()
+        if j.state == 3 :
+            raise ValueError ("KPM Job returned error: %s" % repr (j.msg))
         xp = j.export ()
         # Remove duplicates, seems KPM sometimes returns a problem in
         # both, the normal list and the cancelled problems. In that case
