@@ -1208,12 +1208,12 @@ class Trackersync_Syncer (Log) :
                     (iid, remote_id, remote_issue, classdict)
         elif self.newvalues [id] :
             self.update_issue (id, remote_id, remote_issue)
-        if  (   remote_issue.newvalues
-            and not self.dry_run
-            and not self.remote_dry_run
-            ) :
-            self.log_verbose ("Update remote:", remote_issue.newvalues)
-            remote_issue.update (self)
+        if remote_issue.newvalues :
+            if not self.dry_run and not self.remote_dry_run :
+                self.log_verbose ("Update remote:", remote_issue.newvalues)
+                remote_issue.update (self)
+            else :
+                self.log_verbose ("DRYRUN upd remote:", remote_issue.newvalues)
     # end def sync
 
     def sync_status (self, remote_id, remote_issue) :
