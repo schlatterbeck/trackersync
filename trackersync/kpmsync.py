@@ -787,9 +787,16 @@ class Job (autosuper) :
 
     def poll (self) :
         self.query ()
-        while self.state < 2 :
+        count = 0
+        while self.state < 2 and count < 1000 :
             sleep (10)
-            self.query ()
+            try :
+                self.query ()
+            except ElementTree.ParseError as err :
+                self.kpm.log.error ("Error parsing JOB-XML: %s" % err)
+            count += 1
+        if count >= 1000 :
+            raise ValueError ("Too many retries accessing KPM")
     # end def poll
 
     def query (self) :
