@@ -45,6 +45,7 @@ from traceback          import print_exc
 from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
+from rsclib.pycompat    import string_types
 
 from trackersync        import tracker_sync
 from trackersync        import roundup_sync
@@ -260,6 +261,17 @@ class Problem (tracker_sync.Remote_Issue) :
                 ids.extend (parsed ['dokTs'])
         return ids
     # end def document_ids
+
+    def equal (self, lv, rv) :
+        """ Comparison method for remote and local value.
+            Since KPM uses latin-1 and other backends use unicode we
+            need to (lossyly) convert to latin-1 and compare the result.
+        """
+        if isinstance (lv, string_types) and isinstance (rv, string_types) :
+            # Lossy-convert to latin1 and back to unicode
+            lv = unicode (lv).encode ('latin1', 'replace').decode ('latin1')
+        return self.__super.equal (lv, rv)
+    # end def equal
 
     def __getitem__ (self, name) :
         if name in ('action', 'number') :

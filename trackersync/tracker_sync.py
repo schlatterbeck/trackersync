@@ -30,6 +30,7 @@ import json
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import string_types
 from   rsclib.execute   import Log
+from   rsclib.pycompat  import string_types
 
 class Remote_Issue (autosuper) :
     """ This models a remote issue.
@@ -182,6 +183,18 @@ class Remote_Issue (autosuper) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def create
 
+    def equal (self, lv, rv) :
+        """ Comparison method for remote and local value.
+            By default we only make newlines equivalent for both issues
+            (if they're both of string type). But some backends need to
+            take encoding issues (utf-8 vs latin-1) into account.
+        """
+        if isinstance (lv, string_types) and isinstance (rv, string_types) :
+            lv = lv.replace ('\r\n', '\n')
+            rv = rv.replace ('\r\n', '\n')
+        return lv == rv
+    # end def equal
+
     def get (self, name, default = None) :
         try :
             return self [name]
@@ -327,7 +340,7 @@ class Sync_Attribute (autosuper) :
             self.map  = dict ((v, k) for k, v in imap.iteritems ())
     # end def __init__
 
-    def no_sync_necessary (self, lv, rv) :
+    def no_sync_necessary (self, lv, rv, remote_issue) :
         l_def = getattr (self, 'l_default', None)
         r_def = getattr (self, 'r_default', None)
         if self.map :
@@ -339,7 +352,7 @@ class Sync_Attribute (autosuper) :
                 or self.imap.get (rv, None)  == lv
                 )
         else :
-            equal = lv == rv
+            equal = remote_issue.equal (lv, rv)
         return  (   equal
                 and (   not (lv is None and rv is None)
                     or  not (l_def or r_def)
@@ -480,7 +493,7 @@ class Sync_Attribute_To_Local (Sync_Attribute) :
         if isinstance (rv, string_types) and self.local_prefix :
             rv = self.local_prefix + rv
         lv = syncer.get (id, self.name)
-        if self.no_sync_necessary (lv, rv) :
+        if self.no_sync_necessary (lv, rv, remote_issue) :
             return
         if self.imap :
             rv = self.imap.get (rv, self.r_default)
@@ -568,7 +581,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
                 v.append (self.delimiter)
         rv = ''.join (v)
         lv = syncer.get (id, self.name)
-        if self.no_sync_necessary (lv, rv) :
+        if self.no_sync_necessary (lv, rv, remote_issue) :
             return
         syncer.set (id, self.name, rv)
     # end def sync
@@ -634,7 +647,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
             return
         if not isinstance (lv, list) :
             lv = [lv]
-        if self.no_sync_necessary (lv, rv) :
+        if self.no_sync_necessary (lv, rv, remote_issue) :
             return
         syncer.set (id, self.name, rv)
     # end def sync
@@ -706,7 +719,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
             rv = []
         rv.append (self.prefix + rval)
         rv = list (sorted (rv))
-        if self.no_sync_necessary (lv, rv) :
+        if self.no_sync_necessary (lv, rv, remote_issue) :
             return
         syncer.set (id, self.name, rv)
     # end def sync
@@ -735,7 +748,7 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
             return None, None, True
         rv = remote_issue.get (self.remote_name, None)
         lv = syncer.get (id, self.name)
-        nosync = self.no_sync_necessary (lv, rv)
+        nosync = self.no_sync_necessary (lv, rv, remote_issue)
         if self.imap :
             if self.join_multilink and isinstance (rv, list) :
                 rv = [self.imap.get (x, None) for x in rv]
@@ -807,7 +820,7 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
     def sync (self, syncer, id, remote_issue) :
         rv      = remote_issue.get (self.remote_name, None)
         lv      = syncer.get (id, self.name)
-        nosync  = self.no_sync_necessary (lv, rv)
+        nosync  = self.no_sync_necessary (lv, rv, remote_issue)
         old     = syncer.oldremote.get (self.remote_name, None)
         changed = old != rv
         if self.map :
