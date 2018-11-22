@@ -273,9 +273,10 @@ class Problem (tracker_sync.Remote_Issue) :
             lv = unicode (lv).encode ('latin1', 'replace').decode ('latin1')
             # Remove trailing whitespace at end of lines for both, the
             # local and the remote value, seems kpm make certain
-            # "corrections" here.
-            lv = '\n'.join (x.rstrip () for x in lv.split ('\n'))
-            rv = '\n'.join (x.rstrip () for x in rv.split ('\n'))
+            # "corrections" here. We also remove empty lines, KPM seems
+            # to do the same.
+            lv = '\n'.join (x.rstrip () for x in lv.split ('\n') if x.rstrip ())
+            rv = '\n'.join (x.rstrip () for x in rv.split ('\n') if x.rstrip ())
         return self.__super.equal (lv, rv)
     # end def equal
 
