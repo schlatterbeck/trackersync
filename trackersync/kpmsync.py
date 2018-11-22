@@ -277,6 +277,9 @@ class Problem (tracker_sync.Remote_Issue) :
             # to do the same.
             lv = '\n'.join (x.rstrip () for x in lv.split ('\n') if x.rstrip ())
             rv = '\n'.join (x.rstrip () for x in rv.split ('\n') if x.rstrip ())
+            # KPM seems to sometimes convert non-breaking space \xa0 to space
+            lv = lv.replace ('\xa0', ' ')
+            rv = rv.replace ('\xa0', ' ')
         return self.__super.equal (lv, rv)
     # end def equal
 
