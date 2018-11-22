@@ -266,10 +266,16 @@ class Problem (tracker_sync.Remote_Issue) :
         """ Comparison method for remote and local value.
             Since KPM uses latin-1 and other backends use unicode we
             need to (lossyly) convert to latin-1 and compare the result.
+            And KPM seems to remove whitespace at end of line.
         """
         if isinstance (lv, string_types) and isinstance (rv, string_types) :
             # Lossy-convert to latin1 and back to unicode
             lv = unicode (lv).encode ('latin1', 'replace').decode ('latin1')
+            # Remove trailing whitespace at end of lines for both, the
+            # local and the remote value, seems kpm make certain
+            # "corrections" here.
+            lv = '\n'.join (x.rstrip () for x in lv.split ('\n'))
+            rv = '\n'.join (x.rstrip () for x in rv.split ('\n'))
         return self.__super.equal (lv, rv)
     # end def equal
 
