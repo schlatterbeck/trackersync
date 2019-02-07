@@ -878,7 +878,7 @@ class Trackersync_Syncer (Log) :
     # end def __init__
     
     def compute_schema (self) :
-	""" Compute the schema. The schema is a dictionary of
+        """ Compute the schema. The schema is a dictionary of
             dictionaries. The top-level dictionary is indexed by class
             name. The inner dictionaries map attributes names to types.
             The type is either a 2-tuple consisting of 'Link' or
@@ -888,7 +888,7 @@ class Trackersync_Syncer (Log) :
 
             This method must compute also the default_class attribute.
         """
-	raise NotImplementedError ("Child must implement schema computation")
+        raise NotImplementedError ("Child must implement schema computation")
     # end def compute_schema
 
     def create (self, cls, ** kw) :
@@ -899,16 +899,16 @@ class Trackersync_Syncer (Log) :
             self.log_debug ("srv.create %s %s" % (cls, kw.get('name', '?')))
         else :
             self.log_debug ("srv.create %s %s" % (cls, kw))
-	if self.dry_run :
-	    return "9999999"
-	return self._create (cls, ** kw)
+        if self.dry_run :
+            return "9999999"
+        return self._create (cls, ** kw)
     # end def create
 
     def filter (self, classname, searchdict) :
         """ Search for all properties in searchdict and return ids of
             found objects.
         """
-	raise NotImplementedError
+        raise NotImplementedError
     # end def filter
 
     def fix_attributes (self, classname, attrs, create=False) :
@@ -917,7 +917,7 @@ class Trackersync_Syncer (Log) :
             We distinguish creation and update (transformation might be
             different) via the create flag.
         """
-	return attrs
+        return attrs
     # end def fix_attributes
 
     def from_date (self, date) :

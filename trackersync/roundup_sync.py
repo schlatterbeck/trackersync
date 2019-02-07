@@ -548,7 +548,7 @@ class Syncer (tracker_sync.Syncer) :
                 m = self.getitem ('msg', di ['ext_attributes'])
                 self.old_as_json = m ['content']
             self.oldvalues [id] = di
-	return id
+        return id
     # end def sync_status
 
     def sync_new_local_issues (self, new_remote_issue) :
