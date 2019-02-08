@@ -166,14 +166,74 @@ class Config (Config_File) :
 
 # end class Config
 
+class KPM_File_Attachment (tracker_sync.File_Attachment) :
+
+    def __init__ (self, issue, **kw) :
+        self._content = self._name = self._type = None
+        for k in 'content', 'name', 'type' :
+            setattr (self, '_' + k, kw.get (k, None))
+            if k in kw :
+                del kw [k]
+        self.__super.__init__ (issue, **kw)
+    # end def __init__
+
+    @property
+    def content (self) :
+        if self._content is None :
+            self._get_file ()
+        return self._content
+    # end def content
+
+    @property
+    def name (self) :
+        if self._name is None :
+            self._get_file ()
+        return self._name
+    # end def name
+
+    @property
+    def type (self) :
+        if self._type is None :
+            self._get_file ()
+        return self._type
+    # end def type
+
+    def _get_file (self) :
+        result = self.issue.kpm.get \
+            ( 'problem.base.dokument.download.do'
+            , actionCommand = 'downloadDokumentAsAttachment'
+            , dokTs         = self.id
+            )
+        h = result.headers
+        if 'content-type' in h :
+            self._type = h ['content-type'].decode ('latin1')
+        else :
+            self._type = 'application/octet-stream'
+        if 'content-disposition' in h :
+            parts = h ['content-disposition'].decode ('latin1').split (';')
+            for p in parts :
+                if p.startswith ('filename=') :
+                    fn = p.split ('=', 1) [-1].strip ('"')
+                    self._name = fn
+                    break
+        if self._name is None :
+            self._name = self.id
+        # Allow content to be None, we create an empty file in this case
+        self._content = result.content or ''
+    # end def _get_file
+
+# end class KPM_File_Attachment
+
 class Problem (tracker_sync.Remote_Issue) :
 
+    File_Attachment_Class = KPM_File_Attachment
+
     def __init__ (self, kpm, record, lang, canceled = False) :
-        self.kpm      = kpm
-        self.debug    = self.kpm.debug
-        self.canceled = canceled
-        self.lang     = lang
-        self.docinfo  = {}
+        self.kpm         = kpm
+        self.debug       = self.kpm.debug
+        self.canceled    = canceled
+        self.lang        = lang
+        self.attachments = None
         rec = {}
         for k, v in record.iteritems () :
             if v is not None and v != str ('') :
@@ -201,66 +261,21 @@ class Problem (tracker_sync.Remote_Issue) :
         return dt.strftime ('%d.%m.%Y')
     # end def convert_date
 
-    def document_attributes (self, docid) :
-        if docid in self.docinfo and self.docinfo [docid] :
-            if 'type' not in self.docinfo [docid] :
-                self.docinfo [docid].update \
-                    (self.__super.document_attributes (docid))
-            return self.docinfo [docid]
-        return self.__super.document_attributes (docid)
-    # end def document_attributes
-
-    def document_content (self, docid) :
-        result = self.kpm.get \
-            ( 'problem.base.dokument.download.do'
-            , actionCommand = 'downloadDokumentAsAttachment'
-            , dokTs         = docid
-            )
-        h = result.headers
-        info = self.docinfo [docid] = {}
-        if 'content-type' in h :
-            info ['type'] = h ['content-type'].decode ('latin1')
-        if 'content-disposition' in h :
-            parts = h ['content-disposition'].decode ('latin1').split (';')
-            for p in parts :
-                if p.startswith ('filename=') :
-                    fn = p.split ('=', 1) [-1].strip ('"')
-                    info ['name'] = '#'.join ((docid, fn))
-                    break
-        # Allow content to be None, we create an empty file in this case
-        return result.content or ''
-    # end def document_content
-
-    def document_fixer (self, namedict) :
-        """ We replace filenames with a '#' in them. This is the naming
-            convention for preserving the docid *and* the remote
-            filename. Note that for legacy reasons files may not have
-            the original filename preserved (or are files not attached
-            via kpm), these are preserved as-is.
-        """
-        d = {}
-        for fn in namedict :
-            docid = fn
-            if '#' in fn :
-                docid = fn.split ('#', 1) [0]
-            d [docid] = namedict [fn]
-        return d
-    # end def document_fixer
-
-    def document_ids (self) :
-        docs = self.get ('Dokumente')
-        if not docs :
-            return []
-        ids  = []
-        self.kpm.log.info ("docs: %r" % docs)
-        for doc in docs.split () :
-            parsed = parse_qs (doc)
-            if 'dokTs' not in parsed :
-                self.kpm.log.error ("Error parsing doc: %r" % parsed)
-            else :
-                ids.extend (parsed ['dokTs'])
-        return ids
-    # end def document_ids
+    def file_attachments (self, name = None) :
+        if self.attachments is None :
+            self.attachments = []
+            docs = self.get ('Dokumente')
+            if docs :
+                self.kpm.log.info ("docs: %r" % docs)
+                for doc in docs.split () :
+                    parsed = parse_qs (doc)
+                    if 'dokTs' not in parsed :
+                        self.kpm.log.error ("Error parsing doc: %r" % parsed)
+                    else :
+                        f = KPM_File_Attachment (self, id = parsed ['dokTs'][0])
+                        self.attachments.append (f)
+        return self.attachments
+    # end def file_attachments
 
     def equal (self, lv, rv) :
         """ Comparison method for remote and local value.
@@ -1013,6 +1028,11 @@ def main () :
         , default = './syncdir'
         )
     cmd.add_argument \
+        ( "--schema-only"
+        , help    = "Display Jira Schema and stop"
+        , action  = 'store_true'
+        )
+    cmd.add_argument \
         ( "-u", "--url"
         , help    = "Local Tracker URL for XMLRPC/REST"
         )
@@ -1056,21 +1076,25 @@ def main () :
     opt.local_username = lusername
     opt.url            = url
     opt.local_tracker  = ltracker
-    kpm.login  (username = username, password = password)
-    jobs = []
-    if (opt.job) :
-        for j in opt.job :
-            jobs.append (Job (kpm, j, debug = opt.debug, reuse = True))
-    if not jobs :
-        # get active and canceled issues
-        jobs.append (kpm.search (address = address))
-        jobs.append (kpm.search (address = address, canceled = True))
+    if not opt.schema_only :
+        kpm.login  (username = username, password = password)
+        jobs = []
+        if (opt.job) :
+            for j in opt.job :
+                jobs.append (Job (kpm, j, debug = opt.debug, reuse = True))
+        if not jobs :
+            # get active and canceled issues
+            jobs.append (kpm.search (address = address))
+            jobs.append (kpm.search (address = address, canceled = True))
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES') :
         if opt.unverified_ssl_context :
             syncargs ['unverified'] = True
         syncer = local_trackers [opt.local_tracker] \
             ('KPM', cfg.KPM_ATTRIBUTES, opt)
+    if opt.schema_only :
+        syncer.dump_schema ()
+        sys.exit (0)
     old_xp = None
     for j in jobs :
         j.poll ()

@@ -37,6 +37,7 @@ from   trackersync      import tracker_sync
 Sync_Attribute                   = tracker_sync.Sync_Attribute
 Sync_Attribute_Check             = tracker_sync.Sync_Attribute_Check
 Sync_Attribute_Check_Remote      = tracker_sync.Sync_Attribute_Check_Remote
+Sync_Attribute_Files             = tracker_sync.Sync_Attribute_Files
 Sync_Attribute_To_Local          = tracker_sync.Sync_Attribute_To_Local
 Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
@@ -58,6 +59,31 @@ def rup_date (datestring) :
     ret = datestring [6:-1]
     return ret
 # end def rup_date
+
+class Roundup_File_Attachment (tracker_sync.File_Attachment) :
+
+    def __init__ (self, issue, **kw) :
+        self._content = None
+        if 'content' in kw :
+            self._content = kw ['content']
+            del kw ['content']
+        self.__super.__init__ (issue, **kw)
+    # end def __init__
+
+    @property
+    def content (self) :
+        if self._content is None :
+            self._content = self.issue.getitem \
+                ('file', self.id, 'content') ['content']
+        return self._content
+    # end def content
+
+    def create (self) :
+        self.id = self.issue.create \
+            ('file', name = self.name, type = self.type, content = self.content)
+    # end def create
+
+# end class Roundup_File_Attachment
 
 class Sync_Attribute_Messages (Sync_Attribute) :
     """ Synchronize messages of the remote tracker with the messages in
@@ -218,85 +244,6 @@ class Sync_Attribute_Default_Message (Sync_Attribute) :
     # end def sync
 # end class Sync_Attribute_Default_Message
 
-class Sync_Attribute_Files (Sync_Attribute) :
-    """ A Sync attribute that sync the files attached to a remote issue
-        to the local issue. See the documentation of
-        remote_issue.document_ids for details of how the documents are
-        checked against local documents.
-        If the optional prefix is given, files with a name starting with
-        the given prefix are synchronized *to* the remote system. In
-        case the prefix is empty (zero-length string), *all* files not
-        coming from the remote tracker are created in the remote
-        tracker. Note that with such a setup (with empty prefix) it is
-        almost impossible to delete a file in both trackers -- the file
-        would have to be deleted in both systems by hand before starting
-        the next sync.
-        Note that files synchronized *to* the remote system are renamed
-        to the naming convention enforced by the remote system. This is
-        done to ensure that they are not created again in roundup on next
-        sync. The user used for synchronisation must have write
-        permission on the file.name attribute in roundup.
-    """
-
-    def __init__ (self, prefix = None, ** kw) :
-        self.prefix = prefix
-        self.__super.__init__ ('files', remote_name = None, ** kw)
-    # end def __init__
-
-    def sync (self, syncer, id, remote_issue) :
-        fids    = syncer.get (id, self.name)
-        filids  = dict.fromkeys (fids)
-        fields  = ('id', 'name', 'type')
-        files   = [syncer.getitem ('file', i, *fields) for i in fids]
-        attrs   = dict ((f ['id'], f) for f in files)
-        by_name = dict ((f ['name'], f ['id']) for f in files)
-        by_name = remote_issue.document_fixer (by_name)
-        created = False
-        for docid in remote_issue.document_ids () :
-            # content needs to be fetched because some backends get
-            # their document_attributes with the content.
-            content    = remote_issue.document_content (docid)
-            attributes = remote_issue.document_attributes (docid)
-            if docid in by_name :
-                did = by_name [docid]
-                d  = {}
-                for k in attributes :
-                    if k in attrs [did] and attributes [k] != attrs [did][k] :
-                        d [k] = attributes [k]
-                if d :
-                    syncer.setitem ('file', did, ** d)
-                del filids [did]
-            else :
-                if 'name' not in attributes :
-                    attributes ['name'] = docid
-                newfile = syncer.create \
-                    ( 'file'
-                    , content = content
-                    , ** attributes
-                    )
-                fids.append (newfile)
-                created = True
-        if created :
-            syncer.set (id, self.name, fids)
-        if self.prefix is not None and not self.remote_dry_run :
-            files = [syncer.getitem ('file', i, 'name', 'id', 'type')
-                     for i in filids
-                    ]
-            for f in files :
-                name = f ['name']
-                if name.startswith (self.prefix) :
-                    fid     = f ['id']
-                    name    = name [len (self.prefix):] or 'File'
-                    content = syncer.getitem ('file', fid, 'content')['content']
-                    n = remote_issue.attach_file (name, f ['type'], content)
-                    syncer.setitem ('file', fid, name = n)
-                    if syncer.verbose :
-                        k = remote_issue ['key']
-                        print ("Remote Attach (%s): %s" % (k, n))
-    # end def sync
-
-# end class Sync_Attribute_Files
-
 class Retry_Server_Proxy (autosuper) :
 
     def __init__ (self, retries, sleeptime, *args, **kw) :
@@ -330,6 +277,33 @@ class Retry_Server_Proxy (autosuper) :
 
 # end class Retry_Server_Proxy
 
+class Roundup_Local_Issue (tracker_sync.Local_Issue) :
+
+    def attach_file (self, other_file, name) :
+        self.log.debug ("Attach file: %s to issue %s" % (name, self.id))
+        if not self.dry_run :
+            fids = self.get (name)
+            cls  = Roundup_File_Attachment
+            f    = self.__super._attach_file (cls, other_file, name)
+            f.create ()
+            fids.append (f.id)
+            self.set (name, fids)
+    # end def attach_file
+
+    def file_attachments (self, name = 'files') :
+        if self.attachments is None :
+            self.attachments = []
+            fids    = self.get (name)
+            fields  = ('id', 'name', 'type')
+            for fid in fids :
+                d = self.getitem ('file', fid, *fields)
+                f = self.File_Attachment_Class (self, **d)
+                self.attachments.append (f)
+        return self.attachments
+    # end def file_attachments
+
+# end class Roundup_Local_Issue
+
 class Syncer (tracker_sync.Syncer) :
     """ Synchronisation Framework
         We get the mapping of remote attributes to roundup attributes.
@@ -339,6 +313,9 @@ class Syncer (tracker_sync.Syncer) :
         Note that the parameter 'unverified' denotes an unverified SSL
         connection if applicable.
     """
+
+    File_Attachment_Class = Roundup_File_Attachment
+    Local_Issue_Class     = Roundup_Local_Issue
 
     ext_names = dict.fromkeys \
         (('ext_attributes', 'ext_id', 'ext_status', 'ext_tracker'))
@@ -357,6 +334,7 @@ class Syncer (tracker_sync.Syncer) :
             srvargs ['context'] = context
         self.srv = Retry_Server_Proxy (3, 0, url, **srvargs)
         self.tracker         = self.srv.lookup ('ext_tracker', remote_name)
+        self.attachments     = None
         # This initializes schema and already need server connection
         self.__super.__init__ (remote_name, attributes, opt)
     # end def __init__
@@ -543,12 +521,13 @@ class Syncer (tracker_sync.Syncer) :
                         self.update_state = True
                     break
         self.old_as_json = None
+        oldv = {}
         if id :
             if di ['ext_attributes'] :
                 m = self.getitem ('msg', di ['ext_attributes'])
                 self.old_as_json = m ['content']
-            self.oldvalues [id] = di
-        return id
+            oldv = di
+        return id, oldv
     # end def sync_status
 
     def sync_new_local_issues (self, new_remote_issue) :
@@ -605,12 +584,12 @@ class Syncer (tracker_sync.Syncer) :
         et = classdict ['ext_tracker_state']
         if  (self.get (id, '/ext_tracker_state/ext_tracker') != self.tracker) :
             et ['ext_tracker'] = self.tracker
-        if 'ext_id' not in self.newvalues [id] :
-            if  (  self.oldvalues [id].get ('ext_id') != rid
+        if 'ext_id' not in self.localissues [id].newvalues :
+            if  (  self.localissues [id].oldvalues.get ('ext_id') != rid
                 or self.update_state
                 ) :
                 et ['ext_id'] = rid
-        if  (   'ext_attributes' not in self.newvalues [id]
+        if  (   'ext_attributes' not in self.localissues [id].newvalues
             and    json.dumps (self.oldremote, sort_keys = True, indent = 4)
                 != remote_issue.as_json ()
             ) :

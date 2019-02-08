@@ -36,6 +36,7 @@ from rsclib.Config_File import Config_File
 from rsclib.pycompat    import ustr
 from trackersync        import roundup_sync
 from trackersync        import tracker_sync
+from trackersync        import jira_sync
 
 class Config (Config_File) :
 
@@ -52,117 +53,44 @@ class Config (Config_File) :
 
 # end class Config
 
-def jira_utctime (jiratime) :
-    """ Time with numeric timestamp converted to UTC.
-        Note that roundup strips trailing decimal places to 0.
-    >>> jira_utctime ('2014-10-28T13:29:22.585+0100')
-    '2014-10-28.12:29:22.000+0000'
-    >>> jira_utctime ('2014-10-28T13:29:22.385+0100')
-    '2014-10-28.12:29:22.000+0000'
-    >>> jira_utctime ('2014-10-28T13:29:59.385+0100')
-    '2014-10-28.12:29:59.000+0000'
-    >>> jira_utctime ('2014-10-28T13:29:59.585+0100')
-    '2014-10-28.12:29:59.000+0000'
-    >>> jira_utctime ('2014-10-28T13:29:59.0+0100')
-    '2014-10-28.12:29:59.000+0000'
-    >>> jira_utctime ('2014-10-28T13:29:59+0100')
-    '2014-10-28.12:29:59.000+0000'
-    >>> jira_utctime ('2015-04-21T08:27:46+0200')
-    '2015-04-21.06:27:46.000+0000'
-    """
-    fmt = fmts = "%Y-%m-%dT%H:%M:%S.%f"
-    fmtnos     = "%Y-%m-%dT%H:%M:%S"
-    d, tz = jiratime.split ('+')
-    tz = int (tz)
-    h  = tz / 100
-    m  = tz % 100
-    if '.' not in d :
-        fmt = fmtnos
-    d  = datetime.strptime (d, fmt)
-    d  = d + timedelta (hours = -h, minutes = -m)
-    return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
-# end def jira_utctime
-
-class Jira_Issue (tracker_sync.Remote_Issue) :
+class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue) :
 
     multilevel = True
 
     def __init__ (self, jira, record) :
-        self.jira     = jira
-        self.doc_meta = {}
+        self.jira        = jira
+        self.session     = jira.session
+        self.doc_meta    = {}
+        self.attachments = None
         self.__super.__init__ (record)
         # Remove these or we'll get a new ext_attributes on every sync
         del self.record ['lastViewed']
         del self.record ['updated']
     # end def __init__
 
-    def add_message (self, roundup_msg) :
-        """ Add the given roundup_msg to the current jira issue.
-            As indicated in base class, roundup_msg is a dictionary of
+    def add_message (self, local_msg) :
+        """ Add the given local_msg to the current jira issue.
+            As indicated in base class, local_msg is a dictionary of
             all message properties with current values.
         """
-        d  = dict (body = roundup_msg ['content'])
+        d  = dict (body = local_msg ['content'])
         u  = self.jira.url + '/issue/' + self.id + '/comment'
         h  = { 'content-type' : 'application/json' }
-        r  = self.jira.session.post (u, data = json.dumps (d), headers = h)
+        r  = self.session.post (u, data = json.dumps (d), headers = h)
         j  = r.json ()
         return j ['id']
     # end def add_message
 
-    def attach_file (self, name, type, content) :
-        u = self.jira.url + '/issue/' + self.id + '/attachments'
-        h = {'X-Atlassian-Token': 'nocheck'}
-        f = dict (file = (name, content, type))
-        r = self.jira.session.post (u, files = f, headers = h)
-        j = r.json ()
-        assert len (j) == 1
-        return self._docid (j [0])
-    # end def attach_file
-
-    def attachment_iter (self) :
-        u = self.jira.url + '/issue/' + self.id + '?fields=attachment'
-        r = self.jira.session.get (u)
-        j = r.json ()
-        for a in j ['fields']['attachment'] :
-            yield a
-    # end def attachment_iter
-
-    def _docid (self, attachment_meta) :
-        a = attachment_meta
-        return ':'.join ((a ['filename'], a ['id']))
-    # end def _docid
-
-    def document_attributes (self, id) :
-        return dict (type = self.doc_meta [id]['mimeType'])
-    # end def document_attributes
-
-    def document_content (self, id) :
-        r = self.jira.session.get (self.doc_meta [id]['content'])
-        return r.content
-    # end def document_content
-
-    def document_ids (self) :
-        ids = []
-        if self.doc_meta :
-            for a in doc_meta.itervalues () :
-                ids.append (self._docid (a))
-        else :
-            for a in self.attachment_iter () :
-                ids.append (self._docid (a))
-                self.doc_meta [self._docid (a)] = a
-        return ids
-    # end def document_ids
-
     def messages (self) :
         u = self.jira.url + '/issue/' + self.id + '/comment'
-        r = self.jira.session.get (u)
+        r = self.session.get (u)
         j = r.json ()
         if not j ['comments'] :
             assert j ['startAt'] == j ['total'] == 0
         for c in j ['comments'] :
             yield dict \
                 ( content = c ['body']
-                , date    = jira_utctime (c ['updated'])
+                , date    = jira_sync.jira_utctime (c ['updated'])
                 , id      = c ['id']
                 )
     # end def messages
@@ -175,7 +103,7 @@ class Jira_Issue (tracker_sync.Remote_Issue) :
                 raise ValueError ("Update on non-atomic value")
         u = self.jira.url + '/issue/' + self.id
         h = { 'content-type' : 'application/json' }
-        r = self.jira.session.put \
+        r = self.session.put \
             (u, headers = h, data = json.dumps (dict (fields = self.newvalues)))
         r.raise_for_status ()
     # end def update

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2018 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-19 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -32,11 +32,11 @@ from   time                 import sleep
 from   rsclib.autosuper     import autosuper
 from   rsclib.pycompat      import ustr, text_type
 from   trackersync          import tracker_sync
-from   trackersync.jirasync import jira_utctime
 
 Sync_Attribute                   = tracker_sync.Sync_Attribute
 Sync_Attribute_Check             = tracker_sync.Sync_Attribute_Check
 Sync_Attribute_Check_Remote      = tracker_sync.Sync_Attribute_Check_Remote
+Sync_Attribute_Files             = tracker_sync.Sync_Attribute_Files
 Sync_Attribute_To_Local          = tracker_sync.Sync_Attribute_To_Local
 Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
@@ -51,11 +51,146 @@ Sync_Attribute_To_Local_Multilink_Default = \
 Sync_Attribute_To_Local_Multistring = \
     tracker_sync.Sync_Attribute_To_Local_Multistring
 
+def jira_utctime (jiratime) :
+    """ Time with numeric timestamp converted to UTC.
+        Note that roundup strips trailing decimal places to 0.
+    >>> jira_utctime ('2014-10-28T13:29:22.585+0100')
+    '2014-10-28.12:29:22.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:22.385+0100')
+    '2014-10-28.12:29:22.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59.385+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59.585+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59.0+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2014-10-28T13:29:59+0100')
+    '2014-10-28.12:29:59.000+0000'
+    >>> jira_utctime ('2015-04-21T08:27:46+0200')
+    '2015-04-21.06:27:46.000+0000'
+    """
+    fmt = fmts = "%Y-%m-%dT%H:%M:%S.%f"
+    fmtnos     = "%Y-%m-%dT%H:%M:%S"
+    d, tz = jiratime.split ('+')
+    tz = int (tz)
+    h  = tz / 100
+    m  = tz % 100
+    if '.' not in d :
+        fmt = fmtnos
+    d  = datetime.strptime (d, fmt)
+    d  = d + timedelta (hours = -h, minutes = -m)
+    return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
+# end def jira_utctime
+
+class Jira_File_Attachment (tracker_sync.File_Attachment) :
+
+    def __init__ (self, issue, url = None, **kw) :
+        """ Either the url or the content must be given
+        """
+        self.url      = url
+        self.dirty    = False
+        self._content = None
+        if 'content' in kw :
+            self._content = kw ['content']
+            del kw ['content']
+        self.__super.__init__ (issue, **kw)
+    # end def __init__
+
+    @property
+    def content (self) :
+        if self._content is None :
+            r = self.session.get (self.url)
+            if not r.ok :
+                self.issue.raise_error (r)
+            self._content = r.content
+        return self._content
+    # end def content
+
+    def create (self) :
+        assert self._content is not None
+        u = self.issue.url + '/issue/' + self.issue.id + '/attachments'
+        h = {'X-Atlassian-Token': 'nocheck'}
+        f = dict (file = (self.name, self.content, self.type))
+        r = self.issue.session.post (u, files = f, headers = h)
+        if not r.ok :
+            self.issue.raise_error (r)
+        j = r.json ()
+	if len (j) != 1 :
+	    raise ValueError ("Invalid json on file creation: %s" % self.name)
+        self.id = j [0]['id']
+    # end def create
+
+# end class Jira_File_Attachment
+
+class Jira_Backend (autosuper) :
+    """ Mixin for common function for Jira used when Jira is the
+        local tracker as well as when Jira is the remote tracker
+    """
+
+    def _attachment_iter (self) :
+        u = self.url + '/issue/' + self.id + '?fields=attachment'
+        r = self.session.get (u)
+        if not r.ok :
+            self.raise_error (r)
+        j = r.json ()
+        for a in j ['fields']['attachment'] :
+            yield a
+    # end def _attachment_iter
+
+    def file_attachments (self, name = None) :
+        if self.attachments is None :
+            self.attachments = []
+            for a in self._attachment_iter () :
+                f = Jira_File_Attachment \
+                    ( self
+                    , id   = a ['id']
+                    , type = a ['mimeType']
+                    , url  = a ['content']
+                    , name = a ['filename']
+                    )
+                self.attachments.append (f)
+        return self.attachments
+    # end def file_attachments
+
+    def attach_file (self, other_file, name = None) :
+        cls = Jira_File_Attachment
+        f   = self._attach_file (cls, other_file, name)
+        f.dirty = True
+        if self.attachments is None :
+            self.attachments = []
+        self.attachments.append (f)
+        self.dirty = True
+    # end def attach_file
+
+    @classmethod
+    def raise_error (cls, r) :
+        """ Used for errors whenever r (the result of a http method) has
+            an error.
+        """
+        msg = []
+        for k in 'X-Seraph-LoginReason', 'X-Authentication-Denied-Reason' :
+            if k in r.headers :
+                msg.append (r.headers [k])
+        msg = ' '.join (msg)
+        if msg :
+            msg = ': ' + msg
+        raise RuntimeError ("Error %s%s" % (r.status_code, msg))
+    # end def raise_error
+
+# end class Jira_Backend
+
+class Jira_Local_Issue (Jira_Backend, tracker_sync.Local_Issue) :
+    pass
+# end class Jira_Local_Issue
+
 class Syncer (tracker_sync.Syncer) :
     """ Synchronisation Framework
         We get the mapping of remote attributes to jira attributes.
         The type of attribute indicates the action to perform.
     """
+    Local_Issue_Class = Jira_Local_Issue
+    File_Attachment_Class = Jira_File_Attachment
+    raise_error = Local_Issue_Class.raise_error
     json_header = { 'content-type' : 'application/json' }
     schema_classes = \
         ( 'priority'
@@ -77,6 +212,8 @@ class Syncer (tracker_sync.Syncer) :
     def compute_schema (self) :
         u = self.url + '/' + 'field'
         r = self.session.get (u)
+        if not r.ok or not 200 <= r.status_code < 300 :
+            self.raise_error (r)
         j = r.json ()
         self.schema = {}
         self.schema ['issue'] = {}
@@ -141,10 +278,17 @@ class Syncer (tracker_sync.Syncer) :
         r = self.session.post \
             (u, data = json.dumps (d), headers = self.json_header)
         if not r.ok or not 200 <= r.status_code < 300 :
-            raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
+            self.raise_error (r)
         j = r.json ()
         return j ['key']
     # end def _create
+
+    def dump_schema (self) :
+        self.__super.dump_schema ()
+        print ('NAMES:')
+        for n in self.schema_namemap :
+            print ("%s: %s" % (n, self.schema_namemap [n]))
+    # end def dump_schema
 
     def filter (self, classname, searchdict) :
         raise NotImplementedError
@@ -208,7 +352,7 @@ class Syncer (tracker_sync.Syncer) :
         u = self.url + '/' + cls + '/' + id
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300 :
-            raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
+            self.raise_error (r)
         j = r.json ()
         if 'fields' in j :
             d = {}
@@ -263,7 +407,7 @@ class Syncer (tracker_sync.Syncer) :
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
         if not r.ok or not 200 <= r.status_code < 300 :
-            raise RuntimeError ("Error %s: %s" % (r.status_code, r.content))
+            self.raise_error (r)
     # end def _setitem
 
     def sync_new_local_issues (self, new_remote_issue) :
@@ -273,5 +417,12 @@ class Syncer (tracker_sync.Syncer) :
         """
         pass
     # end def sync_new_local_issues
+
+    def update_aux_classes (self, id, r_id, r_issue, classdict) :
+        for f in self.localissues [id].attachments :
+            if f.dirty :
+                f.create ()
+        self.__super.update_aux_classes (id, r_id, r_issue, classdict)
+    # end def update_aux_classes
 
 # end class Syncer

@@ -32,7 +32,93 @@ from   rsclib.pycompat  import string_types
 from   rsclib.execute   import Log
 from   rsclib.pycompat  import string_types
 
-class Remote_Issue (autosuper) :
+class File_Attachment (autosuper) :
+    """ Model a local or remote file attachment.
+        This has to be subclassed in both, the local and the remote
+        backend. The constructor isn't called by the framework code but
+        there is a method that gets all file attachments as a list which
+        is called by the framework for both, the local and the remote
+        backends, so the backend is free to change the signature of the
+        constructor. Note that evaluation (especially for the content
+        property) may be lazy, therefore some attributes are not
+        required in the constructor.
+        The issue is the remote or local issue to which this file
+        belongs. The name is the remote file name without any '/' in it.
+        The id is the id in the local/remote system, it can be a
+        path-name with '/' in it (e.g. for the PFIFF backend where we
+        get file attachments in a .zip file) and might therefore not be
+        useable for a local/remote file name. The type is the MIME
+        content-type.
+    """
+
+    def __init__ (self, issue, **kw) :
+        self.issue   = issue
+        self.id      = kw.get ('id', None)
+        # Some attributes may be @property and unsettable
+        for k in 'name', 'type', 'content' :
+            try :
+                setattr (self, k, kw.get (k, None))
+            except AttributeError :
+                pass
+    # end def __init__
+
+    def create (self) :
+        """ Create this file in the backend.
+            Note that self.id may be created on creation.
+        """
+        raise NotImplementedError ("Needs to be implemented in backend")
+    # end def create
+
+# end class File_Attachment
+
+class Backend_Common (autosuper) :
+    """ Common methods of Syncer and Remote_Issue
+    """
+
+    # Needs to be overridden in child. Note that if the signature of
+    # File_Attachment constructor changes, the attach_file method below
+    # must be reimplemented in child.
+    File_Attachment_Class = File_Attachment
+
+    def _attach_file (self, cls, other_file, name) :
+        f = cls \
+            ( self
+            , name    = other_file.name
+            , type    = other_file.type
+            , content = other_file.content
+            )
+        return f
+    # end def _attach_file
+
+    def attach_file (self, other_file, name = None) :
+        """ Create new file from other side file.
+            The name is the name of the attribute in the issue.
+            Note that depending on the backend we might not be able to
+            use the default constructor.
+            The file is *not* persisted yet, this is done by the write
+            method of the generated file.
+            Note that some backend my need additionale attributes of a
+            file and will therefore re-implement this method and the
+            corresponding File_Attachment class.
+            Also persisting this is left to the backend.
+            Note that backend implementation must honor self.dry_run.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def attach_file
+
+    def file_attachments (self, name = None) :
+        """ Returns a list of File_Attachment_Class objects that belong
+            to this issue. The name is the name of the attribute in the
+            issue. The name may be hardcoded for many backends.
+            Note that for a non-existing issue the special case of an
+            empty attachment list is taken care of in the Syncer.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def file_attachments
+
+# end def Backend_Common
+
+class Remote_Issue (Backend_Common) :
     """ This models a remote issue.
         The default (if sync_attributes is an empty dict) to synchronize
         *all* attributes for which a Sync_Attribute (see below) is
@@ -117,17 +203,6 @@ class Remote_Issue (autosuper) :
         return json.dumps (d, sort_keys = True, indent = 4)
     # end def as_json
 
-    def attach_file (self, name, type, content) :
-        """ Attach a file with the given filename to this remote issue.
-            Return the unique filename of the remote issue. Note that
-            care must be taken to return the new document id as returned
-            by the document_ids method. The local issue will be
-            updated with this new name to make sure that no duplicate
-            attachments are created.
-        """
-        raise NotImplementedError ("Needs to be implemented in child class")
-    # end def attach_file
-
     def check_sync_callback (self, syncer, id) :
         """ Override a no-sync decision. If this returns False, a sync
             for this issue is performed, even if other no-sync checks of
@@ -135,23 +210,6 @@ class Remote_Issue (autosuper) :
         """
         return True
     # end def check_sync_callback
-
-    def document_attributes (self, docid) :
-        """ Additional attributes for a file (document) attached to an
-            issue. By default the local issue only has the MIME-Type
-            here named 'type'. But schemas can be changed (e.g. in
-            roundup). This should return a dictionary of all local
-            attributes to be set.
-        """
-        return dict (type = 'application/octet-stream')
-    # end def document_attributes
-
-    def document_content (self, docid) :
-        """ This gets a document id (unique for this issue) and
-            retrieves and returns the document content.
-        """
-        raise NotImplementedError ("Needs to be implemented in child class")
-    # end def document_content
 
     def document_fixer (self, namedict) :
         """ Allow the remote issue to correct document names, i.e.,
@@ -164,16 +222,6 @@ class Remote_Issue (autosuper) :
         """
         return namedict
     # end def document_fixer
-
-    def document_ids (self) :
-        """ This returns a list of document ids for this issue. Note
-            that the IDs need to be unique for this issue. The IDs are
-            used to decide if a file is already attached to the local
-            issue, no files are compared for the decision. The filenames
-            in the local tracker are the IDs returned by this method.
-        """
-        raise NotImplementedError ("Needs to be implemented in child class")
-    # end def document_ids
 
     def create (self) :
         """ Create new remote issue from data here. This is called by
@@ -477,6 +525,43 @@ class Sync_Attribute_Check_Remote (Sync_Attribute) :
     # end def sync
 
 # end class Sync_Attribute_Check_Remote
+
+class Sync_Attribute_Files (Sync_Attribute) :
+    """ A Sync attribute that sync the files attached to a remote issue
+        to the local issue.
+        If the optional prefix is given, files with a name starting with
+        the given prefix are synchronized *to* the remote system. In
+        case the prefix is empty (zero-length string), *all* files not
+        coming from the remote tracker are created in the remote
+        tracker. Note that such a setup is risky if remote files are not
+        identified correctly another file could be created during each
+        sync. In addition collisions of filenames may happen where a
+        file with the same name is created on both sides and never
+        synced.
+    """
+
+    def __init__ (self, prefix = None, local_name = 'files', ** kw) :
+        self.prefix = prefix
+        self.__super.__init__ (local_name = local_name, ** kw)
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        lfiles = syncer.file_attachments (id, self.name)
+        rfiles = remote_issue.file_attachments (self.remote_name)
+        lnames = dict ((x.name, x) for x in lfiles)
+        rnames = dict ((x.name, x) for x in rfiles)
+
+        for n in rnames :
+            if n not in lnames :
+                syncer.attach_file (id, rnames [n], self.name)
+
+        if self.prefix is not None and not self.remote_dry_run :
+            for n in lnames :
+                if n.startswith (self.prefix) and n not in rnames :
+                    remote_issue.attach_file (lnames [n], self.remote_name)
+    # end def sync
+
+# end class Sync_Attribute_Files
 
 class Sync_Attribute_To_Local (Sync_Attribute) :
     """ A Sync attribute that is read-only in the remote tracker.
@@ -849,6 +934,80 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 
 # end class Sync_Attribute_Two_Way
 
+class Local_Issue (Backend_Common, autosuper) :
+
+    def __init__ (self, syncer, id, oldvals) :
+        self.attachments   = None
+        self.syncer        = syncer
+        self.newvalues     = {}
+        self.oldvalues     = oldvals
+        self.id            = id
+        self.dirty         = False
+        self.default_class = syncer.default_class
+    # end def __init__
+
+    def __getattr__ (self, name) :
+        return getattr (self.syncer, name)
+    # end def __getattr__
+
+    def get (self, name) :
+        name = self.syncer.get_name_translation (self.default_class, name)
+        if name is None :
+            return None
+        if name in self.newvalues :
+            return self.newvalues [name]
+        if name not in self.oldvalues :
+            classname, path = self.split_name (name)
+            sid = self.syncer.get_existing_id (self.id)
+            if name.startswith ('/') and sid :
+                d = {self.default_class : self.id}
+                # Probably only relevant for roundup:
+                if 'ext_tracker' in self.schema [classname] :
+                    d ['ext_tracker'] = self.tracker
+                itms = self.filter (classname, d)
+                assert len (itms) <= 1
+                if itms :
+                    sid = itms [0]
+                else :
+                    sid = None
+            self.oldvalues [name] = self.get_transitive_item \
+                (classname, path, sid)
+        return self.oldvalues [name]
+    # end def get
+
+    def set (self, attrname, value) :
+        name = self.syncer.get_name_translation (self.default_class, attrname)
+        self.newvalues [name] = value
+        self.dirty = True
+    # end def set
+
+    def split_newvalues (self) :
+        """ Split self.newvalues into attributes belonging to issue and
+            attributes belonging to ext_tracker_state. After this
+            transformation we have all attributes that are in the
+            default_class schema under default_class hierarchy in the
+            dictionary.
+        """
+        classes = { self.default_class : {} }
+        if 'ext_tracker_state' in self.schema :
+            classes ['ext_tracker_state'] = {}
+        for k in self.newvalues :
+            if k.startswith ('/') :
+                # FIXME: Check if rest is composite
+                classname, rest = k.strip ('/').split ('/', 1)
+                if classname not in classes :
+                    classes [classname] = {}
+                classes [classname][rest] = self.newvalues [k]
+            elif k in self.ext_names :
+                classes ['ext_tracker_state'][k] = self.newvalues [k]
+            else :
+                # FIXME: Check if k is composite
+                classes [self.default_class][k] = self.newvalues [k]
+        return classes
+    # end def split_newvalues
+
+# end class Local_Issue
+
 class Trackersync_Syncer (Log) :
     """ Synchronisation Framework
         We get the mapping of remote attributes to local attributes.
@@ -859,12 +1018,14 @@ class Trackersync_Syncer (Log) :
 
     ext_names = {}
 
+    # Change in derived class if necessary
+    Local_Issue_Class = Local_Issue
+
     def __init__ (self, remote_name, attributes, opt) :
         self.remote_name     = remote_name
         self.attributes      = attributes
         self.opt             = opt
-        self.oldvalues       = {}
-        self.newvalues       = {}
+        self.localissues     = {} # By id
         self.newcount        = 0
         self.remote_change   = opt.remote_change
         self.verbose         = opt.verbose
@@ -876,6 +1037,11 @@ class Trackersync_Syncer (Log) :
         self.__super.__init__ ()
         self.compute_schema   ()
     # end def __init__
+
+    # Don't override in derived class, see Local_Issue
+    def attach_file (self, id, file, name) :
+        return self.localissues [id].attach_file (file, name)
+    # end def attach_file
     
     def compute_schema (self) :
         """ Compute the schema. The schema is a dictionary of
@@ -904,6 +1070,22 @@ class Trackersync_Syncer (Log) :
         return self._create (cls, ** kw)
     # end def create
 
+    def dump_schema (self) :
+        for cls in self.schema :
+            print (cls)
+            props = self.schema [cls]
+            for pn in props :
+                v = props [pn]
+                print ("    %s: %s" % (pn, v))
+    # end def dump_schema
+
+    # Don't override in derived class, see Local_Issue
+    def file_attachments (self, id, name) :
+        if self.get_existing_id (id) is None :
+            return []
+        return self.localissues [id].file_attachments (name)
+    # end def file_attachments
+
     def filter (self, classname, searchdict) :
         """ Search for all properties in searchdict and return ids of
             found objects.
@@ -931,28 +1113,7 @@ class Trackersync_Syncer (Log) :
     # end def from_date
 
     def get (self, id, name) :
-        name = self.get_name_translation (self.default_class, name)
-        if name is None :
-            return None
-        if name in self.newvalues [id] :
-            return self.newvalues [id][name]
-        if name not in self.oldvalues [id] :
-            classname, path = self.split_name (name)
-            sid = self.get_existing_id (id)
-            if name.startswith ('/') and sid :
-                d = {self.default_class : id}
-                # Probably only relevant for roundup:
-                if 'ext_tracker' in self.schema [classname] :
-                    d ['ext_tracker'] = self.tracker
-                itms = self.filter (classname, d)
-                assert len (itms) <= 1
-                if itms :
-                    sid = itms [0]
-                else :
-                    sid = None
-            self.oldvalues [id][name] = self.get_transitive_item \
-                (classname, path, sid)
-        return self.oldvalues [id][name]
+        return self.localissues [id].get (name)
     # end def get
 
     def get_classname (self, classname, name) :
@@ -1101,8 +1262,7 @@ class Trackersync_Syncer (Log) :
     # end def lookup
 
     def set (self, id, attrname, value) :
-        name = self.get_name_translation (self.default_class, attrname)
-        self.newvalues [id][name] = value
+        self.localissues [id].set (attrname, value)
     # end def set
 
     def setitem (self, cls, id, ** kw) :
@@ -1129,31 +1289,6 @@ class Trackersync_Syncer (Log) :
         return classname, path
     # end split_name
 
-    def split_newvalues (self, id) :
-        """ Split self.newvalues into attributes belonging to issue and
-            attributes belonging to ext_tracker_state. After this
-            transformation we have all attributes that are in the
-            default_class schema under default_class hierarchy in the
-            dictionary.
-        """
-        classes = { self.default_class : {} }
-        if 'ext_tracker_state' in self.schema :
-            classes ['ext_tracker_state'] = {}
-        for k in self.newvalues [id] :
-            if k.startswith ('/') :
-                # FIXME: Check if rest is composite
-                classname, rest = k.strip ('/').split ('/', 1)
-                if classname not in classes :
-                    classes [classname] = {}
-                classes [classname][rest] = self.newvalues [id][k]
-            elif k in self.ext_names :
-                classes ['ext_tracker_state'][k] = self.newvalues [id][k]
-            else :
-                # FIXME: Check if k is composite
-                classes [self.default_class][k] = self.newvalues [id][k]
-        return classes
-    # end def split_newvalues
-
     def sync (self, remote_id, remote_issue) :
         """ We try to find issue with the given remote_id and then call
             the sync framework. If no issue with the given remote_id is
@@ -1161,7 +1296,7 @@ class Trackersync_Syncer (Log) :
             been synced.
         """
         do_sync = False
-        id = self.sync_status (remote_id, remote_issue)
+        id, oldval = self.sync_status (remote_id, remote_issue)
 
         if id :
             if self.old_as_json :
@@ -1170,17 +1305,16 @@ class Trackersync_Syncer (Log) :
                 self.oldremote = json.loads (self.old_as_json)
             else :
                 do_sync = True
-            self.newvalues [id] = {}
-            if id not in self.oldvalues :
-                self.oldvalues [id] = {}
+            assert id not in self.localissues
+            self.localissues [id] = self.Local_Issue_Class (self, id, oldval)
         else :
             self.newcount += 1
             id = -self.newcount
-            self.oldvalues [id] = {}
+            assert id not in self.localissues
+            self.localissues [id] = self.Local_Issue_Class (self, id, oldval)
             # create new issue only if the remote issue has all required
             # attributes and doesn't restrict them to a subset:
             do_sync = not remote_issue.attributes
-            self.newvalues [id] = {}
         self.current_id = id
         # If the following is non-empty, sync only an explicit subset of
         # attributes.
@@ -1188,6 +1322,7 @@ class Trackersync_Syncer (Log) :
         # Don't sync a subset of attributes if local issue doesn't exist
         if self.get_existing_id (id) is None and attr :
             return
+        self.id = id
         for a in self.attributes :
             if a.only_create :
                 continue
@@ -1203,23 +1338,23 @@ class Trackersync_Syncer (Log) :
                     return
         if self.get_existing_id (id) is None :
             if not remote_issue.attributes :
-                self.log_verbose ("create issue: %s" % self.newvalues [id])
-                classdict = self.split_newvalues (id)
+                self.log_verbose \
+                    ("create issue: %s" % self.localissues [id].newvalues)
+                classdict = self.localissues [id].split_newvalues ()
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
                 self.log_verbose ("created issue: %s/%s" % (iid, remote_id))
                 del classdict [self.default_class]
                 self.current_id = iid
-                # Need to set up newvalues/oldvalues for this new id so
+                # Need to set up localissues for this new id so
                 # that self.get keeps working
-                self.newvalues [iid] = self.newvalues [id]
-                self.oldvalues [iid] = self.oldvalues [id]
-                del self.newvalues [id]
-                del self.oldvalues [id]
+                self.localissues [iid] = self.localissues [id]
+                self.localissues [id].id = iid
+                del self.localissues [id]
                 self.update_aux_classes \
                     (iid, remote_id, remote_issue, classdict)
-        elif self.newvalues [id] :
+        elif self.localissues [id].dirty :
             self.update_issue (id, remote_id, remote_issue)
         if remote_issue.newvalues :
             if not self.dry_run and not self.remote_dry_run :
@@ -1255,7 +1390,7 @@ class Trackersync_Syncer (Log) :
             except RuntimeError as err :
                 if err.message.startswith ('Error 404') :
                     id = None
-        return id
+        return id, {}
     # end def sync_status
 
     def sync_new_local_issue (self, iid) :
@@ -1265,8 +1400,7 @@ class Trackersync_Syncer (Log) :
             the default method doing nothing.
         """
         remote_issue = self.new_remote_issue ({})
-        self.newvalues [iid] = {}
-        self.oldvalues [iid] = {}
+        self.localissues [iid] = self.Local_Issue_Class (self, iid, {})
         do_sync = True
         for a in self.attributes :
             if a.only_update :
@@ -1312,8 +1446,9 @@ class Trackersync_Syncer (Log) :
     # end def update_aux_classes
 
     def update_issue (self, id, remote_id, remote_issue) :
-        self.log_verbose ("set issue %s: %s" % (id, self.newvalues [id]))
-        classdict = self.split_newvalues (id)
+        self.log_verbose \
+            ("set issue %s: %s" % (id, self.localissues [id].newvalues))
+        classdict = self.localissues [id].split_newvalues ()
         attr = self.fix_attributes \
             (self.default_class, classdict [self.default_class])
         if attr :
