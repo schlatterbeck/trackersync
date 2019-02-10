@@ -239,6 +239,7 @@ class Pfiff (Log, Lock_Mixin) :
     # end def close
 
     def parse (self, xml) :
+        self.team_members = {}
         tree = ElementTree.fromstring (xml)
         if tree.tag != 'MSR-ISSUE' :
             raise ValueError ("Invalid xml start-tag: %s" % tree.tag)
@@ -247,6 +248,16 @@ class Pfiff (Log, Lock_Mixin) :
             sn = cd.find ('SHORT-NAME')
             if self.company in ln.text :
                 self.company_short = sn.text.strip ()
+            ts = cd.find ('TEAM-MEMBERS')
+            if ts is not None :
+                for tm in ts :
+                    assert tm.tag == 'TEAM-MEMBER'
+                    id = tm.get ('ID')
+                    ln = tm.find ('LONG-NAME').text.strip ()
+                    ph = tm.find ('PHONE').text.strip ()
+                    em = tm.find ('EMAIL').text.strip ()
+                    self.team_members [id] = ' '.join \
+                        ((ln, 'Phone:', ph, 'email:', em))
         ad = tree.find ('ADMIN-DATA')
         dt = ad.find ('.//DATE')
         self.date = datetime.strptime (dt.text.strip (), self.date_fmt)
@@ -289,9 +300,10 @@ class Pfiff (Log, Lock_Mixin) :
         elif node.tag == 'ISSUE-RELATED-DOCUMENT' :
             n = node.find ('XDOC')
             self.parse_attachment (n)
-        elif len (node) :
-            for n in node :
-                self.parse_a_node (n)
+        elif node.tag == 'TEAM-MEMBER-REF' :
+            if self.path [-2] == 'COMPANY-ISSUE-INFO' :
+                id = node.get ('ID-REF')
+                self.issue ['owner_fp'] = self.team_members [id]
         elif p in self.from_xml :
             name = self.from_xml [p]
             if name in self.multiline :
@@ -300,6 +312,9 @@ class Pfiff (Log, Lock_Mixin) :
                     self.issue [name] = txt
             elif node.text :
                 self.issue [name] = node.text.strip ()
+        elif len (node) :
+            for n in node :
+                self.parse_a_node (n)
         self.path.pop ()
     # end def parse_a_node
 
@@ -326,8 +341,8 @@ class Pfiff (Log, Lock_Mixin) :
         ref = node.find ('COMPANY-DATA-REF')
         if ref.text.strip () != self.company_short :
             return
-        id  = node.find ('ISSUE-ID')
-        self.parse_a_node (id)
+        for n in node :
+            self.parse_a_node (n)
     # end def parse_company_info
 
     def parse_engineering_object (self, node) :
