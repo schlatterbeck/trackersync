@@ -55,6 +55,8 @@ class Config (Config_File) :
         self.__super.__init__ \
             ( path, config
             , LOCAL_TRACKER = 'jira'
+            , COMPANY       = 'TestPrj Zulieferer'
+            , COMPANY_SHORT = 'TPZ'
             )
     # end def __init__
 
@@ -65,6 +67,7 @@ class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
     def __init__ (self, issue, path, type = 'application/octet-stream', **kw) :
         self.path = path
         self._content = None
+        self.dirty = False
         if 'content' in kw :
             self._content = kw ['content']
             del kw ['content']
@@ -97,6 +100,17 @@ class Problem (tracker_sync.Remote_Issue) :
         self.__super.__init__ (rec, {})
     # end def __init__
 
+    def convert_date (self, value) :
+        """ Convert date from roundup date format (that's the format
+            used internally by syncer) to local format.
+        """
+        if not value :
+            return value
+        value = value.split ('+') [0]
+        dt = datetime.strptime (value, '%Y-%m-%d.%H:%M:%S.%f')
+        return dt.strftime (self.pfiff.date_fmt)
+    # end def convert_date
+
     def file_attachments (self, name = None) :
         assert self.attachments is not None
         return self.attachments
@@ -105,8 +119,133 @@ class Problem (tracker_sync.Remote_Issue) :
     def update (self, syncer) :
         """ Update remote issue tracker with self.newvalues.
         """
-        raise NotImplementedError ("TODO")
-        # FIXME: Generate XML in self.pfiff.output
+        now = datetime.now ().strftime (self.pfiff.date_fmt)
+        id  = self.get ('supplier_company_id')
+        xml = ElementTree.Element ('MSR-ISSUE')
+        xml.set ('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance')
+        xml.set \
+            ('xsi:noNamespaceSchemaLocation', 'PAG_ASAM_ISSUE_SCHEMA_V3.0.xsd')
+
+        cds = ElementTree.SubElement (xml, 'COMPANY-DATAS')
+        cd  = ElementTree.SubElement (cds, 'COMPANY-DATA')
+        ln  = ElementTree.SubElement (cd, 'LONG-NAME')
+        ln.text = self.pfiff.opt.company
+        sn  = ElementTree.SubElement (cd, 'SHORT-NAME')
+        sn.text = self.pfiff.company_short
+
+        cd  = ElementTree.SubElement (cds, 'COMPANY-DATA')
+        ln  = ElementTree.SubElement (cd, 'LONG-NAME')
+        ln.text = self.pfiff.cfg.COMPANY
+        sn  = ElementTree.SubElement (cd, 'SHORT-NAME')
+        sn.text = self.pfiff.cfg.COMPANY_SHORT
+
+        sname  = self.get ('assignee_key', 'DUMMY')
+        ts  = ElementTree.SubElement (cd, 'TEAM-MEMBERS')
+        tm  = ElementTree.SubElement (ts, 'TEAM-MEMBER')
+        tm.set ('ID', sname)
+        ln  = ElementTree.SubElement (tm, 'LONG-NAME')
+        name = sname
+        if 'assignee_name' in self.newvalues :
+            name = self.get ('assignee_name')
+        ln.text = name
+        sn  = ElementTree.SubElement (tm, 'SHORT-NAME')
+        sn.text = sname
+        ElementTree.SubElement (tm, 'DEPARTMENT')
+        ElementTree.SubElement (tm, 'PHONE')
+        ElementTree.SubElement (tm, 'FAX')
+        ElementTree.SubElement (tm, 'EMAIL')
+
+        ad  = ElementTree.SubElement (xml, 'ADMIN-DATA')
+        ds  = ElementTree.SubElement (ad, 'DOC-REVISIONS')
+        dr  = ElementTree.SubElement (ds, 'DOC-REVISION')
+        tr  = ElementTree.SubElement (dr, 'TEAM-MEMBER-REF')
+        tr.set ('ID-REF', sname)
+        dt  = ElementTree.SubElement (dr, 'DATE')
+        if 'updated' in self.newvalues :
+            date = self.get ('updated')
+        else :
+            date = now
+        dt.text = date
+
+        issues = ElementTree.SubElement (xml, 'ISSUES')
+        issue  = ElementTree.SubElement (issues, 'ISSUE')
+
+        ln = ElementTree.SubElement (issue, 'LONG-NAME')
+        ln.text = self.get ('problem_synopsis')
+        sn = ElementTree.SubElement (issue, 'SHORT-NAME')
+        sn.text = self.get ('problem_synopsis')
+        cat = ElementTree.SubElement (issue, 'CATEGORY')
+        cat.text = self.get ('bug_classification')
+
+        desc = ElementTree.SubElement (issue, 'ISSUE-DESC')
+        p = ElementTree.SubElement (desc, 'P')
+        p.text = self.get ('problem_description')
+
+        infos   = ElementTree.SubElement (issue, 'COMPANY-ISSUE-INFOS')
+        info    = ElementTree.SubElement (infos, 'COMPANY-ISSUE-INFO')
+        sn      = ElementTree.SubElement (info, 'COMPANY-DATA-REF')
+        sn.text = self.pfiff.cfg.COMPANY_SHORT
+        id_e    = ElementTree.SubElement (info, 'ISSUE-ID')
+        id_e.text = id
+
+        props = ElementTree.SubElement (issue, 'ISSUE-PROPERTIES')
+        state = ElementTree.SubElement (props, 'ISSUE-CURRENT-STATE')
+        date  = ElementTree.SubElement (state, 'DATE')
+        date.text = date
+        mb    = ElementTree.SubElement (state, 'TEAM-MEMBER-REF')
+        mb.set ('ID-REF', sname)
+        state = ElementTree.SubElement (state, 'ISSUE-STATE')
+        state.text = self.get ('supplier_status')
+        prio  = ElementTree.SubElement (props, 'ISSUE-PRIORITY')
+        prio.text = self.get ('priority')
+        repr  = ElementTree.SubElement (props, 'REPRODUCIBILITY')
+        repr.text = self.get ('reproducibility')
+        mss   = ElementTree.SubElement (props, 'DELIVERY-MILESTONES')
+        lbls  = \
+            ( ('resolve_until_release', 'ESTIMATED')
+            , ('resolved_in_release',    'DELIVERED')
+            )
+        for lbl, cat in lbls :
+            ms    = ElementTree.SubElement (mss,   'DELIVERY-MILESTONE')
+            sl    = ElementTree.SubElement (ms,    'SHORT-LABEL')
+            sl.text = self.get (lbl)
+            cat   = ElementTree.SubElement (ms,    'CATEGORY')
+            cat.text = cat
+            sn    = ElementTree.SubElement (ms,    'COMPANY-DATA-REF')
+            sn.text = self.pfiff.cfg.COMPANY_SHORT
+
+        rds = ElementTree.SubElement (issue, 'ISSUE-RELATED-DOCUMENTS')
+        for f in self.attachments :
+            if f.dirty :
+                rd = ElementTree.SubElement (rds, 'ISSUE-RELATED-DOCUMENT')
+                xd = ElementTree.SubElement (rd,  'XDOC')
+                n  = ElementTree.SubElement (xd,  'LONG-NAME')
+                n.text = f.name
+                u  = ElementTree.SubElement (xd,  'URL')
+                fn = './' + id + '/' + f.name
+                u.text = fn
+                self.pfiff.output.writestr (fn, f.content)
+
+        env = ElementTree.SubElement (issue, 'ISSUE-ENVIRONMENT')
+        obj = ElementTree.SubElement (env,   'ENGINEERING-OBJECTS')
+
+        ri  = ElementTree.SubElement (issue, 'RELATED-ISSUES')
+
+        so  = ElementTree.SubElement (issue, 'ISSUE-SOLUTION')
+        cat = ElementTree.SubElement (so,    'CATEGORY')
+        cat.text = 'PROPOSAL'
+        dsc = ElementTree.SubElement (so,    'ISSUE-SOLUTION-DESC')
+        p   = ElementTree.SubElement (dsc,   'P')
+        p.text = self.get ('supplier_comments')
+
+        an  = ElementTree.SubElement (issue, 'ANNOTATIONS')
+
+        fn = './' + id + '.xml'
+        self.pfiff.output.writestr \
+            ( fn
+            , '<?xml version="1.0" encoding="utf-8"?>\n'
+            + ElementTree.tostring (xml, encoding = 'utf-8')
+            )
     # end def update
 
 # end def Problem
@@ -195,8 +334,9 @@ class Pfiff (Log, Lock_Mixin) :
         )
     multiline = set (('problem_description',))
 
-    def __init__ (self, opt) :
+    def __init__ (self, opt, cfg) :
         self.opt           = opt
+        self.cfg           = cfg
         self.debug         = opt.debug
         self.company       = opt.company
         self.company_short = None
@@ -220,7 +360,6 @@ class Pfiff (Log, Lock_Mixin) :
                 fn = fn [2:]
             if '/' in fn :
                 continue
-            print (fn)
             if fn.endswith ('.xml') or fn.endswith ('.XML') :
                 self.parse (self.zf.read (n))
     # end def __init__
@@ -380,7 +519,7 @@ class Pfiff (Log, Lock_Mixin) :
     def parse_milestone (self, node) :
         cat   = node.find ('CATEGORY')
         # Seems the category is (sometimes?) not exported
-        if cat :
+        if cat is not None :
             cat = cat.text.strip ()
         else :
             cat = 'REQUESTED'
@@ -528,7 +667,7 @@ def main () :
     opt.local_tracker  = ltracker
     syncer = None
     if opt.zipfile :
-        pfiff = Pfiff (opt)
+        pfiff = Pfiff (opt, cfg)
     if url :
         syncer = local_trackers [opt.local_tracker] \
             ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt)
