@@ -80,6 +80,11 @@ class Backend_Common (autosuper) :
     # must be reimplemented in child.
     File_Attachment_Class = File_Attachment
 
+    def __init__ (self, *args, **kw) :
+        self.attachments = None
+        self.__super.__init__ (*args, **kw)
+    # end def __init__
+
     def _attach_file (self, cls, other_file, name) :
         f = cls \
             ( self
@@ -138,6 +143,7 @@ class Remote_Issue (Backend_Common) :
         self.newvalues  = {}
         self.dirty      = False
         self.attributes = sync_attributes
+        self.__super.__init__ ()
     # end def __init__
 
     def __getattr__ (self, name) :
@@ -937,13 +943,13 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 class Local_Issue (Backend_Common, autosuper) :
 
     def __init__ (self, syncer, id, oldvals) :
-        self.attachments   = None
         self.syncer        = syncer
         self.newvalues     = {}
         self.oldvalues     = oldvals
         self.id            = id
         self.dirty         = False
         self.default_class = syncer.default_class
+        self.__super.__init__ ()
     # end def __init__
 
     def __getattr__ (self, name) :

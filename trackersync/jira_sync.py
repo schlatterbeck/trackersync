@@ -419,9 +419,11 @@ class Syncer (tracker_sync.Syncer) :
     # end def sync_new_local_issues
 
     def update_aux_classes (self, id, r_id, r_issue, classdict) :
-        for f in self.localissues [id].attachments :
-            if f.dirty :
-                f.create ()
+        # May be None
+        if self.localissues [id].attachments :
+            for f in self.localissues [id].attachments :
+                if f.dirty :
+                    f.create ()
         self.__super.update_aux_classes (id, r_id, r_issue, classdict)
     # end def update_aux_classes
 

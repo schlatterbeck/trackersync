@@ -233,7 +233,6 @@ class Problem (tracker_sync.Remote_Issue) :
         self.debug       = self.kpm.debug
         self.canceled    = canceled
         self.lang        = lang
-        self.attachments = None
         rec = {}
         for k, v in record.iteritems () :
             if v is not None and v != str ('') :
