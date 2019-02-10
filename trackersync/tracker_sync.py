@@ -862,6 +862,20 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
 
 # end class Sync_Attribute_To_Remote
 
+class Sync_Attribute_To_Remote_If_Dirty (Sync_Attribute_To_Remote) :
+    """ Like Sync_Attribute_To_Remote but only if the remote issue has
+        already changes. Used for timestamps or current owner attributes
+        that must be synced to the remote site but only if something
+        relevant changed.
+    """
+
+    def sync (self, syncer, id, remote_issue) :
+        if remote_issue.dirty :
+            self.__super.sync (syncer, id, remote_issue)
+    # end def sync
+
+# end class Sync_Attribute_To_Remote_If_Dirty
+
 class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
     """ A default, only set if the current value is not set.
         Very useful for required attributes on creation.

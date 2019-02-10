@@ -30,7 +30,6 @@ import requests
 import json
 
 from optparse           import OptionParser
-from datetime           import datetime, timedelta
 from rsclib.autosuper   import autosuper
 from rsclib.Config_File import Config_File
 from rsclib.pycompat    import ustr

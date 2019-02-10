@@ -29,19 +29,22 @@ import requests
 import json
 import numbers
 from   time                 import sleep
+from   datetime             import datetime, timedelta
 from   rsclib.autosuper     import autosuper
 from   rsclib.pycompat      import ustr, text_type
 from   trackersync          import tracker_sync
 
-Sync_Attribute                   = tracker_sync.Sync_Attribute
-Sync_Attribute_Check             = tracker_sync.Sync_Attribute_Check
-Sync_Attribute_Check_Remote      = tracker_sync.Sync_Attribute_Check_Remote
-Sync_Attribute_Files             = tracker_sync.Sync_Attribute_Files
-Sync_Attribute_To_Local          = tracker_sync.Sync_Attribute_To_Local
-Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
-Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
-Sync_Attribute_To_Remote_Default = tracker_sync.Sync_Attribute_To_Remote_Default
-Sync_Attribute_Two_Way           = tracker_sync.Sync_Attribute_Two_Way
+Sync_Attribute                    = tracker_sync.Sync_Attribute
+Sync_Attribute_Check              = tracker_sync.Sync_Attribute_Check
+Sync_Attribute_Check_Remote       = tracker_sync.Sync_Attribute_Check_Remote
+Sync_Attribute_Files              = tracker_sync.Sync_Attribute_Files
+Sync_Attribute_To_Local           = tracker_sync.Sync_Attribute_To_Local
+Sync_Attribute_To_Local_Default   = tracker_sync.Sync_Attribute_To_Local_Default
+Sync_Attribute_To_Remote          = tracker_sync.Sync_Attribute_To_Remote
+Sync_Attribute_To_Remote_If_Dirty = tracker_sync.Sync_Attribute_To_Remote
+Sync_Attribute_Two_Way            = tracker_sync.Sync_Attribute_Two_Way
+Sync_Attribute_To_Remote_Default  = \
+    tracker_sync.Sync_Attribute_To_Remote_Default
 Sync_Attribute_To_Local_Concatenate = \
     tracker_sync.Sync_Attribute_To_Local_Concatenate
 Sync_Attribute_To_Local_Multilink = \
@@ -199,6 +202,7 @@ class Syncer (tracker_sync.Syncer) :
         , 'issuetype'
         , 'securitylevel'
         , 'version'
+        , 'user'
         )
 
     def __init__ (self, remote_name, attributes, opt) :
@@ -246,6 +250,8 @@ class Syncer (tracker_sync.Syncer) :
         # Some day find out if we can discover the schema via REST
         for k in self.schema_classes :
             self.schema [k] = dict (id = 'string', name = 'string')
+        self.schema ['user']['key'] = 'string'
+        self.schema ['user']['displayName'] = 'string'
         self.schema ['project']['key'] = 'string'
         self.default_class = 'issue'
         # Special hack to get all versions allowed. We query
@@ -350,8 +356,11 @@ class Syncer (tracker_sync.Syncer) :
             This returns a dict with a map from attr name to value.
         """
         u = self.url + '/' + cls + '/' + id
+        if cls == 'user' :
+            u = self.url + '/' + cls + '?key=' + id
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300 :
+            import pdb; pdb.set_trace ()
             self.raise_error (r)
         j = r.json ()
         if 'fields' in j :
