@@ -5,6 +5,8 @@ from __future__       import unicode_literals
 from __future__       import print_function
 from rsclib.autosuper import autosuper
 
+import sys
+
 """ This implements enough EDIFACT to generate and parse ENGDAT messages
     Note that this is ENGDAT V2, V3 would use XML.
 """
@@ -163,25 +165,25 @@ msg2 = \
       "'"
 
       'SDE'
-      '+:ABC AG:Hahn Straße 10:50039 KÖln'
+      '+:ABC AG:Hahn Straße 10:50039 Köln'
+      '+DE'
       '+ABCAG'
-      '+'
       '+Abt. DEF:Herr Maier:0211-88-0:3345'
       '+ABC AG'
-      '+'
+      '+DE'
       '+Abt. UEB::3369'
       "'"
 
       'RDE'
       '+:XYZ AG:Postfach 888777:80277 München'
+      '+DE'
       '+XYZAG '
-      '+'
       '+Abt. UVW:Herr Müller:089-4567:4499'
       "'"
       
       'EFC'
       '+2:992647001.exp'
-      '+ NAT:CATIA export WS-Format V4 ISO8859-1:4.2.2'
+      '+NAT:CATIA export WS-Format V4 ISO8859-1:4.2.2'
       '+885'
       '+CATIA RS6000:V4.2.2:CATEXP PROJECT-A '
       '+:Einbauuntersuchung'
@@ -208,6 +210,51 @@ msg2 = \
       "'"
     ).encode ('latin-1')
 
+# From wikipedia
+msg3 = \
+    ( "UNA:+.? '"
+      "UNB+IATB:1+6XPPC:ZZ+LHPPC:ZZ+940101:0950+1'"
+      "UNH+1+PAORES:93:1:IA'"
+      "MSG+1:45'"
+      "IFT+3+XYZCOMPANY AVAILABILITY'"
+      "ERC+A7V:1:AMD'"
+      "IFT+3+NO MORE FLIGHTS'"
+      "ODI'"
+      "TVL+240493:1000::1220+FRA+JFK+DL+400+C'"
+      "PDI++C:3+Y::3+F::1'"
+      "APD+74C:0:::6++++++6X'"
+      "TVL+240493:1740::2030+JFK+MIA+DL+081+C'"
+      "PDI++C:4'"
+      "APD+EM2:0:1630::6+++++++DA'"
+      "UNT+13+1'"
+      "UNZ+1+1'"
+    ).encode ('latin-1')
+
+def brepr (bs) :
+    """ For regression-testing with python2 and python3
+    """
+    r = repr (bs)
+    if not r.startswith ('b') :
+        print ('b' + r)
+        return
+    print (r)
+# end def brepr
+
+def btuple (bs) :
+    """ For regression-testing with python2 and python3
+        Print a tuple of byte values so that it looks like a python 3 repr
+    """
+    if sys.version_info [0] >= 3 :
+        return tuple (bs)
+    t = tuple (bs)
+    r = []
+    for k in t :
+        r.append ('b' + repr (k))
+    e = ')'
+    if len (t) == 1 :
+        e = ',)'
+    print ('(' + ', '.join (r) + e)
+# end def btuple
 
 class UNA (autosuper) :
     """
@@ -251,6 +298,10 @@ class UNA (autosuper) :
         return self.una [-1].encode ('ASCII')
     # end def segment_terminator
 
+    def check (self) :
+        pass
+    # end def check
+
     def from_bytes (self, bytes) :
         assert bytes.startswith (b'UNA')
         self.una = bytes [3:].decode ('ASCII')
@@ -281,19 +332,19 @@ class _Part_Iter (autosuper) :
             una.release_char into account
             Test iterparts:
         >>> e = Edifact_Element (una = una)
-        >>> tuple (e.iterparts (b'Abt. ABT-1??????:Herr Meier', b':'))
+        >>> btuple (e.iterparts (b'Abt. ABT-1??????:Herr Meier', b':'))
         (b'Abt. ABT-1??????', b'Herr Meier')
-        >>> tuple (e.iterparts (b'Abt. ABT-1????:Herr Meier', b':'))
+        >>> btuple (e.iterparts (b'Abt. ABT-1????:Herr Meier', b':'))
         (b'Abt. ABT-1????', b'Herr Meier')
-        >>> tuple (e.iterparts (b'Abt. ABT-1??:Herr Meier', b':'))
+        >>> btuple (e.iterparts (b'Abt. ABT-1??:Herr Meier', b':'))
         (b'Abt. ABT-1??', b'Herr Meier')
-        >>> tuple (e.iterparts (b'Abt. ABT-1:Herr Meier', b':'))
+        >>> btuple (e.iterparts (b'Abt. ABT-1:Herr Meier', b':'))
         (b'Abt. ABT-1', b'Herr Meier')
-        >>> tuple (e.iterparts (b'Abt. ABT-1?:Herr Meier', b':'))
+        >>> btuple (e.iterparts (b'Abt. ABT-1?:Herr Meier', b':'))
         (b'Abt. ABT-1?:Herr Meier',)
-        >>> tuple (e.iterparts (b'DE+ED0590021', b'+'))
+        >>> btuple (e.iterparts (b'DE+ED0590021', b'+'))
         (b'DE', b'ED0590021')
-        >>> tuple (e.iterparts (b':?+49-40:6667788:hemeier@f2.de+bla', b'+'))
+        >>> btuple (e.iterparts (b':?+49-40:6667788:hemeier@f2.de+bla', b'+'))
         (b':?+49-40:6667788:hemeier@f2.de', b'bla')
         """
         l    = len (bytes)
@@ -328,9 +379,15 @@ class Edifact_Message (_Part_Iter) :
     >>> m = Edifact_Message (bytes = msg1)
     >>> m.to_bytes () == msg1
     True
+    >>> m.check ()
     >>> m = Edifact_Message (bytes = msg2)
     >>> m.to_bytes () == msg2
     True
+    >>> m.check ()
+    >>> m = Edifact_Message (bytes = msg3)
+    >>> m.to_bytes () == msg3
+    True
+    >>> m.check ()
     """
 
     def __init__ (self, una = una, bytes = None, *segments) :
@@ -341,6 +398,11 @@ class Edifact_Message (_Part_Iter) :
         else :
             self.segments = segments
     # end def __init__
+
+    def check (self) :
+        for s in self.segments :
+            s.check ()
+    # end def check
 
     def from_bytes (self, bytes) :
         self.segments = []
@@ -382,19 +444,102 @@ class Edifact_Element (_Part_Iter) :
         element separator, usually '+')
     """
 
-    def __init__ (self, encoding = 'latin-1', una = una, bytes = None) :
+    attrs = ( 'encoding', 'una', 'components', 'structure', 'by_name'
+            , 'segment', 'parent'
+            )
+    def __init__ \
+        ( self
+        , encoding  = 'latin-1'
+        , una       = una
+        , bytes     = None
+        , parent    = None
+        , idx       = None
+        ) :
         self.encoding   = encoding
         self.una        = una
         self.components = []
+        self.by_name    = {}
+        self.segment    = None
+        self.parent     = parent
+        self.structure  = None
+        if parent is not None and idx is not None :
+            structure = getattr (parent, 'structure', None)
+            if structure :
+                self.structure = structure [idx]
+        if self.structure :
+            for k, s in enumerate (self.structure [1]) :
+                self.by_name [s [0]] = k
         if bytes :
             self.from_bytes (bytes)
     # end def __init__
+
+    @property
+    def name (self) :
+        n = "<unnamed>"
+        if self.structure :
+            n = self.structure [0][0]
+        if self.parent :
+            return '.'.join ((self.parent.segment_name, n))
+        return n
+    # end def name
 
     def append (self, component_text) :
         """ Append component_text to self.components
         """
         self.components.append (component_text)
     # end def append
+
+    def _check (self, idx) :
+        s = self.structure [1][idx]
+        (n, m, t, l, u) = s [:5]
+        cl = len (self.components)
+        if m == 'm' and cl - 1 < idx :
+            raise ValueError ("Component %s.%s: Missing" % (self.name, n))
+        comp = None
+        ccl  = 0
+        if idx < cl :
+            comp = self.components [idx]
+            ccl  = len (comp)
+        if comp and t == 'n' and not comp.isdigit () :
+            raise ValueError \
+                ( "Component %s.%s: got non-numeric value %s"
+                % (self.name, n, comp)
+                )
+        if comp and t == 'a' and not comp.isalpha () :
+            raise ValueError \
+                ( "Component %s.%s: got non-alpha value %s"
+                % (self.name, n, comp)
+                )
+        if m == 'm' and ccl == 0 :
+            raise ValueError \
+                ("Component %s.%s: Missing mandatory value" % (self.name, n))
+        if (ccl > 0 or m == 'm') and (ccl > u or ccl < l) :
+            import pdb; pdb.set_trace ()
+            raise ValueError \
+                ( "Component %s.%s: Invalid length %s (expect %s-%s)"
+                % (self.name, n, ccl, l, u)
+                )
+    # end def _check
+
+    def check (self) :
+        """ Check against structure, example structure entry:
+            ('name', 'c', 'an', 0, 5)
+            means we have an alphanumeric field which is optional and
+            has maximum length 5.
+        """
+
+        empty = True
+        if self.structure is not None :
+            mandatory = self.structure [0][1] == 'm'
+            cl = len (self.components)
+            for k, s in enumerate (self.structure [1]) :
+                self._check (k)
+                if k < cl and self.components [k] :
+                    empty = False
+            if empty and mandatory :
+                raise ValueError \
+                    ("Element %s: empty mandatory element" % self.name)
+    # end def check
 
     def from_bytes (self, bytes) :
         offs = 0
@@ -413,7 +558,7 @@ class Edifact_Element (_Part_Iter) :
     def quote (self, bytes) :
         """ Add quoting (with release_char)
         >>> x = Edifact_Element (una = una)
-        >>> x.quote (b"+49-40-123-0?'")
+        >>> brepr (x.quote (b"+49-40-123-0?'"))
         b"?+49-40-123-0???'"
         """
         # The release_char must be first, otherwise release chars are
@@ -432,11 +577,11 @@ class Edifact_Element (_Part_Iter) :
     def unquote (self, bytes) :
         """ Remove quoting (with release_char)
         >>> x = Edifact_Element (una = una)
-        >>> x.unquote (b'?+49-40-123-0')
+        >>> brepr (x.unquote (b'?+49-40-123-0'))
         b'+49-40-123-0'
-        >>> x.unquote (b'Abt. ABT-1??')
+        >>> brepr (x.unquote (b'Abt. ABT-1??'))
         b'Abt. ABT-1?'
-        >>> x.unquote (b"?+49-40-123-0???'")
+        >>> brepr (x.unquote (b"?+49-40-123-0???'"))
         b"+49-40-123-0?'"
         """
         r    = []
@@ -450,6 +595,30 @@ class Edifact_Element (_Part_Iter) :
         r.append (bytes [offs:])
         return b''.join (r)
     # end def unquote
+
+    def __getattr__ (self, name) :
+        try :
+            idx = self.by_name [name]
+        except KeyError as e :
+            raise AttributeError (e)
+        if idx > len (self.components) - 1 :
+            return ''
+        return self.components [idx]
+    # end def __getattr__
+
+    def __setattr__ (self, name, value) :
+        if name in self.attrs :
+            self.__super.__setattr__ (name, value)
+        else :
+            try :
+                idx = self.by_name [name]
+            except KeyError as e :
+                raise AttributeError (e)
+            for k in range (len (self.components), idx + 1) :
+                self.components.append ('')
+            self.components [idx] = value
+            self._check (idx)
+    # end def __setattr__
 
     def __str__ (self) :
         r = []
@@ -476,10 +645,11 @@ class Edifact_Segment (_Part_Iter) :
         self.__super.__init__ ()
     # end def __init__
 
-    @property
-    def segment_class_name (self) :
-        return self.__class__.__name__
-    # end def segment_class_name
+    def check (self) :
+        """ Only possible with structure information
+        """
+        pass
+    # end def check
 
     def to_bytes (self) :
         s = [self.segment_name.encode (self.encoding)]
@@ -493,13 +663,16 @@ class Edifact_Segment (_Part_Iter) :
     def from_bytes (self, bytes) :
         self.length = len (bytes)
         self.segment_name = bytes [:3].decode (self.encoding)
-        assert self.length == 3 or bytes [3:4] == self.una.element_sep
+        assert self.length == 4 or bytes [3:4] == self.una.element_sep
         assert bytes [-1:] == self.una.segment_terminator
         offs = 4
         t = self.una.element_sep
         e = self.encoding
         for b in self.iterparts (bytes [offs:-1], t) :
-            self.elements.append (Edifact_Element (encoding = e, bytes = b))
+            l  = len (self.elements)
+            el = Edifact_Element \
+                (encoding = e, bytes = b, parent = self, idx = l)
+            self.elements.append (el)
     # end def from_bytes
 
     def __length__ (self) :
@@ -517,45 +690,389 @@ class Edifact_Segment (_Part_Iter) :
 
 # end class Edifact_Segment
 
-class UNB (Edifact_Segment) :
-    pass
-    # FIXME: put encoding into creating class
+class Named_Edifact_Segment (Edifact_Segment) :
 
-#    serialisation = dict \
-#        { 'Syntax-Identification' :
-#          ( 'syntax'
-#          , 'version'
-#          )
-#        , 'Absender der Uebertragung'
-#          ( 'sender'
-#          , 'sender_q'
-#          )
-#        , 'Empfaenger der Uebertragung'
-#          ( 'receiver'
-#          , 'receiver_q'
-#          )
-#        }
-#
-#    def __init__ \
-#        ( self
-#        , bytes = None
-#        , sender     = ''
-#        , receiver   = ''
-#        , sender_q   = 'OD'
-#        , receiver_q = 'OD'
-#        , syntax     = 'UNOC'
-#        , version    = '1'
-#        ) :
-#        self.sender     = sender
-#        self.receiver   = receiver
-#        self.sender_q   = sender_q
-#        self.receiver_q = receiver_q
-#        self.syntax     = syntax
-#        self.version    = version
-#        self.__super.__init__ (bytes)
-#    # end def __init__
+    def __init__ (self, *args, **kw) :
+        self.segment_name = self.segment_class_name
+        self.__super.__init__ (*args, **kw)
+        self.by_name = {}
+        for k, (ss, se) in enumerate (self.structure) :
+            self.by_name [ss [0]] = k
+    # end def __init__
 
+    @property
+    def segment_class_name (self) :
+        return self.__class__.__name__
+    # end def segment_class_name
+
+    def check (self) :
+        for idx, (ss, se) in enumerate (self.structure) :
+            name, m, n = ss
+            el = len (self.elements)
+            if m == 'm' and el - 1 < idx :
+                raise ValueError \
+                    ("Segment %s: Missing: %s" % (self.segment_class_name, n))
+            if idx < el :
+                self.elements [idx].check ()
+    # end def check
+
+# end class Named_Edifact_Segment
+
+class UNB (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('syntax_identifier', 'm', 1)
+          , ( ('syntax_id',       'm', 'a',  4, 4)
+            , ('version',         'm', 'an', 1, 1)
+            , ('dir_version',     'c', 'an', 0, 6)
+            , ('encoding',        'c', 'an', 0, 3)
+            )
+          )
+        , ( ('interchange_sender', 'm', 1)
+          , ( ('id',              'm', 'an', 0, 35)
+            , ('code_qualifier',  'c', 'an', 0, 4)
+            , ('internal_id',     'c', 'an', 0, 35)
+            , ('internal_sub_id', 'c', 'an', 0, 35)
+            )
+          )
+        , ( ('interchange_recipient', 'm', 1)
+          , ( ('id',              'm', 'an', 0, 35)
+            , ('code_qualifier',  'c', 'an', 0, 4)
+            , ('internal_id',     'c', 'an', 0, 35)
+            , ('internal_sub_id', 'c', 'an', 0, 35)
+            )
+          )
+        , ( ('date_and_time', 'm', 1)
+          , ( ('date',            'm', 'n',  6, 8)
+            , ('time',            'm', 'n',  4, 4)
+            )
+          )
+        , ( ('control_ref', 'm', 1)
+          , ( ('control_ref',     'm', 'an', 0, 14)
+            ,
+            )
+          )
+        , ( ('reference_password', 'c', 1)
+          , ( ('ref_pw',          'm', 'an', 0, 14)
+            , ('qualifier',       'c', 'an', 2, 2)
+            )
+          )
+        , ( ('app_ref', 'c', 1)
+          , ( ('app_ref',         'm', 'an', 0, 14)
+            ,
+            )
+          )
+        , ( ('prio_code', 'c', 1)
+          , ( ('prio_code',       'm', 'a',  1, 1)
+            ,
+            )
+          )
+        , ( ('ack_request', 'c', 1)
+          , ( ('ack_request',     'm', 'n',  1, 1)
+            ,
+            )
+          )
+        , ( ('agreement_id', 'c', 1)
+          , ( ('agreement_id',    'm', 'an', 0, 35)
+            ,
+            )
+          )
+        , ( ('test_indicator', 'c', 1)
+          , ( ('test_indicator',  'm', 'n',  1, 1)
+            ,
+            )
+          )
+        )
 # end class UNB
+
+class UNH (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('message_ref', 'm', 1)
+          , ( ('message_ref',     'm', 'an', 0, 14)
+            ,
+            )
+          )
+        , ( ('message_id', 'm', 1)
+          , ( ('type',            'm', 'an', 0, 6)
+            , ('version',         'm', 'an', 0, 3)
+            , ('release',         'c', 'an', 0, 3)
+            , ('agency',          'c', 'an', 0, 3)
+            , ('assoc_code',      'c', 'an', 0, 6)
+            , ('code_version',    'c', 'an', 0, 6)
+            , ('sub_function_id', 'c', 'an', 0, 6)
+            )
+          )
+        , ( ('access_ref', 'c', 1)
+          , ( ('access_ref',      'm', 'an', 0, 35)
+            ,
+            )
+          )
+        , ( ('transfer_status', 'c', 1)
+          , ( ('sequence',        'm', 'n',  0, 2)
+            , ('first_and_last',  'c', 'a',  1, 1)
+            )
+          )
+        , ( ('message_subset_id', 'c', 1)
+          , ( ('id',              'm', 'an', 0, 14)
+            , ('version',         'c', 'an', 0, 3)
+            , ('release',         'c', 'an', 0, 3)
+            , ('agency',          'c', 'an', 0, 3)
+            )
+          )
+        , ( ('message_implementation_guideline', 'c', 1)
+          , ( ('id',              'm', 'an', 0, 14)
+            , ('version',         'c', 'an', 0, 3)
+            , ('release',         'c', 'an', 0, 3)
+            , ('agency',          'c', 'an', 0, 3)
+            )
+          )
+        , ( ('scenario_identification', 'c', 1)
+          , ( ('id',              'm', 'an', 0, 14)
+            , ('version',         'c', 'an', 0, 3)
+            , ('release',         'c', 'an', 0, 3)
+            , ('agency',          'c', 'an', 0, 3)
+            )
+          )
+        )
+# end class UNH
+
+class UNT (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('number_of_segments', 'm', 1)
+          , ( ('segments',        'm', 'n',  0, 10)
+            ,
+            )
+          )
+        # Must be same as corresponding value in UNH
+        , ( ('message_ref', 'm', 1)
+          , ( ('message_ref',     'm', 'an', 0, 14)
+            ,
+            )
+          )
+        )
+# end class UNT
+
+class UNZ (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('interchange_count', 'm', 1)
+          , ( ('interchange_count', 'm', 'n',  0, 6)
+            ,
+            )
+          )
+        # Must be same as corresponding value in UNB
+        , ( ('control_ref', 'm', 1)
+          , ( ('control_ref',       'm', 'an', 0, 14)
+            ,
+            )
+          )
+        )
+# end class UNT
+
+class MID (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('document_no', 'm', 1)
+          , ( ('document_no',       'm', 'an', 0, 17)
+            ,
+            )
+          )
+        , ( ('date_and_time', 'm', 1)
+          , ( ('date',              'm', 'n',  6, 6)
+            , ('time',              'c', 'n',  4, 4)
+            )
+          )
+        , ( ('auth', 'c', 1)
+          , ( ('control_ref',       'm', 'an', 0, 35)
+            ,
+            )
+          )
+        )
+# end class MID
+
+class SDE (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('sender', 'm', 1)
+          , ( ('sender',            'c', 'an', 0, 20)
+            , ('party_name',        'c', 'an', 0, 35)
+            , ('addr1',             'c', 'an', 0, 35)
+            , ('addr2',             'c', 'an', 0, 35)
+            , ('addr3',             'c', 'an', 0, 35)
+            , ('addr4',             'c', 'an', 0, 35)
+            , ('internal_id',       'c', 'an', 0, 17)
+            )
+          )
+        , ( ('country_contact', 'c', 1)
+          , ( ('country',           'm', 'a',  2, 2)
+            ,
+            )
+          )
+        , ( ('routing', 'c', 1)
+          , ( ('routing',           'm', 'an', 0, 35)
+            ,
+            )
+          )
+        , ( ('contact_details_sender', 'c', 1)
+          , ( ('department1',       'c', 'an', 0, 35)
+            , ('department2',       'c', 'an', 0, 35)
+            , ('telephone',         'c', 'an', 0, 17)
+            , ('extension',         'c', 'an', 0, 17)
+            , ('telex',             'c', 'an', 0, 17)
+            , ('fax',               'c', 'an', 0, 17)
+            , ('teletex',           'c', 'an', 0, 17)
+            , ('email',             'c', 'an', 0, 70)
+            )
+          )
+        , ( ('tech_contact', 'c', 1)
+          , ( ('party_name',        'c', 'an', 0, 35)
+            , ('addr1',             'c', 'an', 0, 35)
+            , ('addr2',             'c', 'an', 0, 35)
+            , ('addr3',             'c', 'an', 0, 35)
+            , ('addr4',             'c', 'an', 0, 35)
+            , ('internal_id',       'c', 'an', 0, 17)
+            )
+          )
+        , ( ('country_tech', 'c', 1)
+          , ( ('country',           'm', 'a',  2, 2)
+            ,
+            )
+          )
+        , ( ('contact_details_tech', 'c', 1)
+          , ( ('department1',       'c', 'an', 0, 35)
+            , ('department2',       'c', 'an', 0, 35)
+            , ('telephone',         'c', 'an', 0, 17)
+            , ('extension',         'c', 'an', 0, 17)
+            , ('telex',             'c', 'an', 0, 17)
+            , ('fax',               'c', 'an', 0, 17)
+            , ('teletex',           'c', 'an', 0, 17)
+            , ('email',             'c', 'an', 0, 70)
+            )
+          )
+        )
+# end class SDE
+
+class RDE (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('receiver', 'm', 1)
+          , ( ('receiver',          'c', 'an', 0, 20)
+            , ('party_name',        'c', 'an', 0, 35)
+            , ('addr1',             'c', 'an', 0, 35)
+            , ('addr2',             'c', 'an', 0, 35)
+            , ('addr3',             'c', 'an', 0, 35)
+            , ('addr4',             'c', 'an', 0, 35)
+            , ('internal_id',       'c', 'an', 0, 17)
+            )
+          )
+        , ( ('country_contact', 'c', 1)
+          , ( ('country',           'm', 'a',  2, 2)
+            ,
+            )
+          )
+        , ( ('routing', 'c', 1)
+          , ( ('routing',           'm', 'an', 0, 35)
+            ,
+            )
+          )
+        , ( ('contact_details_receiver', 'c', 1)
+          , ( ('department1',       'c', 'an', 0, 35)
+            , ('department2',       'c', 'an', 0, 35)
+            , ('telephone',         'c', 'an', 0, 17)
+            , ('extension',         'c', 'an', 0, 17)
+            , ('telex',             'c', 'an', 0, 17)
+            , ('fax',               'c', 'an', 0, 17)
+            , ('teletex',           'c', 'an', 0, 17)
+            , ('email',             'c', 'an', 0, 70)
+            )
+          )
+        , ( ('tech_contact', 'c', 1)
+          , ( ('party_name',        'c', 'an', 0, 35)
+            , ('addr1',             'c', 'an', 0, 35)
+            , ('addr2',             'c', 'an', 0, 35)
+            , ('addr3',             'c', 'an', 0, 35)
+            , ('addr4',             'c', 'an', 0, 35)
+            , ('internal_id',       'c', 'an', 0, 17)
+            )
+          )
+        , ( ('country_tech', 'c', 1)
+          , ( ('country',           'm', 'a',  2, 2)
+            ,
+            )
+          )
+        , ( ('contact_details_tech', 'c', 1)
+          , ( ('department1',       'c', 'an', 0, 35)
+            , ('department2',       'c', 'an', 0, 35)
+            , ('telephone',         'c', 'an', 0, 17)
+            , ('extension',         'c', 'an', 0, 17)
+            , ('telex',             'c', 'an', 0, 17)
+            , ('fax',               'c', 'an', 0, 17)
+            , ('teletex',           'c', 'an', 0, 17)
+            , ('email',             'c', 'an', 0, 70)
+            )
+          )
+        )
+# end class RDE
+
+class EFC (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('file_info', 'm', 1)
+          , ( ('seqno',             'm', 'n',  0, 3)
+            , ('filename',          'c', 'an', 0, 35)
+            )
+          )
+        , ( ('file_format', 'm', 1)
+          , ( ('code',             'c', 'an', 0, 3)
+            , ('file_format',      'c', 'an', 0, 35)
+            , ('version',          'c', 'an', 0, 10)
+            )
+          )
+        , ( ('data_code', 'm', 1)
+          , ( ('code',             'c', 'an', 0, 3)
+            , ('data_code',        'c', 'an', 0, 35)
+            )
+          )
+        , ( ('generating_system', 'm', 1)
+          , ( ('name',             'c', 'an', 0, 35)
+            , ('version',          'c', 'an', 0, 35)
+            , ('command',          'c', 'an', 0, 35)
+            )
+          )
+        , ( ('file_status', 'm', 1)
+          , ( ('code',             'c', 'an', 0, 3)
+            , ('file_status',      'c', 'an', 0, 35)
+            )
+          )
+        , ( ('engineering_department', 'c', 1)
+          , ( ('department',       'c', 'an', 0, 35)
+            ,
+            )
+          )
+        , ( ('data_type', 'c', 1)
+          , ( ('type1',            'm', 'an', 0, 35)
+            , ('type2',            'c', 'an', 0, 35)
+            , ('type3',            'c', 'an', 0, 35)
+            , ('type4',            'c', 'an', 0, 35)
+            )
+          )
+        , ( ('compression', 'c', 1)
+          , ( ('compression',      'c', 'an', 0, 35)
+            ,
+            )
+          )
+        )
+# end class EFC
+
+class TOT (Named_Edifact_Segment) :
+    structure = \
+        ( ( ('quantity', 'm', 1)
+          , ( ('quantity',          'm', 'n',  0, 15)
+            , ('unit',              'c', 'an', 0, 3)
+            )
+          )
+        # Wird in ENGDAT nicht verwendet
+        , ( ('amount', 'c', 1)
+          , ( ('amount',            'c', 'n',  0, 0)
+            , ('currency',          'c', 'an', 0, 0)
+            )
+          )
+        )
+# end class TOT
 
 if __name__ == '__main__' :
     m = Edifact_Message (bytes = msg1)
@@ -568,5 +1085,10 @@ if __name__ == '__main__' :
     #print (m.to_bytes ())
 
     assert m.to_bytes () == msg1
+    m.check ()
     m = Edifact_Message (bytes = msg2)
     assert m.to_bytes () == msg2
+    m.check ()
+    m = Edifact_Message (bytes = msg3)
+    m.to_bytes () == msg3
+    m.check ()
