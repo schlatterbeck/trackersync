@@ -407,7 +407,7 @@ class Edifact_Message (_Part_Iter) :
     def __init__ (self, una = una, bytes = None, *segments) :
         self.una = una
         self.encoding = 'latin-1'
-        self.uniq     = ('UNB', 'UNH', 'UNT', 'UNZ', 'MID', 'SDE', 'RDE')
+        self.uniq     = ('UNB', 'UNH', 'UNT', 'UNZ', 'MID', 'SDE', 'RDE', 'TOT')
         for u in self.uniq :
             setattr (self, u.lower (), None)
         if bytes :
@@ -1242,20 +1242,52 @@ class TOT (Named_Edifact_Segment) :
 # end class TOT
 
 if __name__ == '__main__' :
-    m = Edifact_Message (bytes = msg1)
-    #print (len (m.segments))
-    #print (m)
-    #for k in m.segments :
-    #    print (repr (k.to_bytes ()))
-
-    #print (msg1)
-    #print (m.to_bytes ())
-
-    assert m.to_bytes () == msg1
+    if len (sys.argv) > 1 :
+        with open (sys.argv [1]) as f :
+            m = Edifact_Message (bytes = f.read ())
+    else :
+        m = Edifact_Message (bytes = sys.stdin.read ())
     m.check ()
-    m = Edifact_Message (bytes = msg2)
-    assert m.to_bytes () == msg2
-    m.check ()
-    m = Edifact_Message (bytes = msg3)
-    m.to_bytes () == msg3
-    m.check ()
+    print ("    Sender-ID:", m.unb.interchange_sender.id)
+    print (" Recipient-ID:", m.unb.interchange_recipient.id)
+    print ("    Date/Time:", m.unb.date_and_time.date, m.unb.date_and_time.time)
+    print ("  Control-Ref:", m.unb.control_ref.control_ref)
+    print ("  Message-Ref:", m.unh.message_ref.message_ref)
+    print ("  Document-No:", m.mid.document_no.document_no)
+    print ("MID Date/Time:", m.mid.date_and_time.date, m.mid.date_and_time.time)
+    print ("  Sender-Code:", m.sde.sender.sender)
+    print ("  Sender-Name:", m.sde.sender.party_name)
+    print (" Sender-route:", m.sde.routing.routing)
+    for k in range (1, 5) :
+        a = getattr (m.sde.sender, 'addr%s' %k, '')
+        if a :
+            print ("      Address:", a)
+    print ("      Country:", m.rde.country_contact.country)
+    for k in range (1, 3) :
+        a = getattr (m.sde.contact_details_sender, 'department%s' %k, '')
+        if a :
+            print ("   Department:", a)
+    print (" Sender-email:", m.sde.contact_details_sender.email)
+    print ("Receiver-Code:", m.rde.receiver.receiver)
+    print ("Receiver-Name:", m.rde.receiver.party_name)
+    print ("    Rcv-route:", m.rde.routing.routing)
+    for k in range (1, 5) :
+        a = getattr (m.rde.receiver, 'addr%s' %k, '')
+        if a :
+            print ("      Address:", a)
+    print ("      Country:", m.rde.country_contact.country)
+    for k in range (1, 3) :
+        a = getattr (m.rde.contact_details_receiver, 'department%s' %k, '')
+        if a :
+            print ("   Department:", a)
+    print ("    Rcv-email:", m.rde.contact_details_receiver.email)
+    for p in m.segments :
+        if p.segment_name == 'EFC' :
+            efc = p
+            break
+    print ("   File-seqno:", efc.file_info.seqno)
+    print ("  File-format:", efc.file_format.code)
+    print ("    Data-code:", efc.data_code.code)
+    print ("   Generating:", efc.generating_system.name)
+    print ("  File status:", efc.file_status.file_status)
+    print (" TOT Quantity:", m.tot.quantity.quantity)
