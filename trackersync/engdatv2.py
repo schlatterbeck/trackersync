@@ -4,6 +4,7 @@
 from __future__       import unicode_literals
 from __future__       import print_function
 from rsclib.autosuper import autosuper
+from datetime         import datetime
 
 import sys
 
@@ -230,6 +231,18 @@ msg3 = \
       "UNZ+1+1'"
     ).encode ('latin-1')
 
+msg4 = \
+    ( b"UNB+UNOC:1+O0013006000F2:OD+O0013005466F3:OD+180213:1611+ref'"
+      b"UNH+ref+ENGDAT:001::OD'"
+      b"MID+180213161111XYZZY+180213:1611'"
+      b"SDE+:Z. ulieferer++sender-routingcode+:::::::sender@example.com'"
+      b"RDE+:O. EM++receiver-routingcode+:::::::receiver@example.com'"
+      b"EFC+2+ZIP+815+trackersync+:New sync file'"
+      b"TOT+2'"
+      b"UNT+9+ref'"
+      b"UNZ+1+ref'"
+    )
+
 def brepr (bs) :
     """ For regression-testing with python2 and python3
     """
@@ -319,6 +332,7 @@ class UNA (autosuper) :
         return 'UNA' + self.una
     # end def __str__
     __unicode__ = __str__
+    __repr__ = __str__
 
 # end class UNA
 
@@ -387,21 +401,47 @@ class Edifact_Message (_Part_Iter) :
     >>> m = Edifact_Message (bytes = msg3)
     >>> m.to_bytes () == msg3
     True
-    >>> m.check ()
+    >>> m.check (skip_segment_check = True)
     """
 
     def __init__ (self, una = una, bytes = None, *segments) :
         self.una = una
         self.encoding = 'latin-1'
+        self.uniq     = ('UNB', 'UNH', 'UNT', 'UNZ', 'MID', 'SDE', 'RDE')
+        for u in self.uniq :
+            setattr (self, u.lower (), None)
         if bytes :
             self.from_bytes (bytes)
         else :
-            self.segments = segments
+            self.segments = list (segments)
     # end def __init__
 
-    def check (self) :
+    def append_segment (self, segment) :
+        sn = segment.segment_name
+        if sn in self.uniq :
+            if getattr (self, sn.lower ()) is not None :
+                raise ValueError ("Duplicate %s segment" % sn)
+            setattr (self, sn.lower (), segment)
+        self.segments.append (segment)
+    # end def append_segment
+
+    def check (self, skip_segment_check = False) :
         for s in self.segments :
             s.check ()
+        uniq = self.uniq
+        if skip_segment_check :
+            uniq = ('UNB', 'UNH', 'UNT', 'UNZ')
+        for u in uniq :
+            if getattr (self, u.lower ()) is None :
+                raise ValueError ("Missing %s segment" % u)
+        unzcr = self.unz.control_ref.control_ref
+        unbcr = self.unb.control_ref.control_ref
+        if unzcr != unbcr :
+            raise ValueError ("Inconsistent UNZ.control_ref vs UNB.control_ref")
+        untmsg = self.unt.message_ref.message_ref
+        unhmsg = self.unh.message_ref.message_ref
+        if untmsg != unhmsg :
+            raise ValueError ("Inconsistent UNT.message_ref vs UNH.message_ref")
     # end def check
 
     def from_bytes (self, bytes) :
@@ -410,7 +450,7 @@ class Edifact_Message (_Part_Iter) :
         if bytes.startswith (b'UNA') :
             self.una = UNA (bytes [:9])
             offs = 9
-            self.segments.append (self.una)
+            self.append_segment (self.una)
         else :
             self.una = una
         t = self.una.segment_terminator
@@ -420,7 +460,7 @@ class Edifact_Message (_Part_Iter) :
             e    = self.encoding
             if name in globals () :
                 cls = globals () [name]
-            self.segments.append \
+            self.append_segment \
                 (cls (bytes = b + t, una = self.una, encoding = e))
     # end def from_bytes
 
@@ -436,8 +476,107 @@ class Edifact_Message (_Part_Iter) :
         return '\n'.join (r)
     # end def __str__
     __unicode__ = __str__
+    __repr__ = __str__
 
 # end class Edifact_Message
+
+class Engdat_Message (Edifact_Message) :
+
+    """ Simple Engdat_Message with sensible defaults
+    >>> dt = datetime.strptime ('2018-02-13T16:11:11', '%Y-%m-%dT%H:%M:%S')
+    >>> d = {}
+    >>> d ['sender_name']      = 'Z. ulieferer'
+    >>> d ['sender_id']        = 'O0013006000F2'
+    >>> d ['sender_routing']   = 'sender-routingcode'
+    >>> d ['sender_email']     = 'sender@example.com'
+    >>> d ['receiver_name']    = 'O. EM'
+    >>> d ['receiver_id']      = 'O0013005466F3'
+    >>> d ['receiver_routing'] = 'receiver-routingcode'
+    >>> d ['receiver_email']   = 'receiver@example.com'
+    >>> d ['docno']            = '180213161111XYZZY'
+    >>> d ['docdt']            = dt
+    >>> d ['dt']               = dt
+    >>> em = Engdat_Message (** d)
+    >>> em.to_bytes () == msg4
+    True
+    >>> em.unh.message_id.sub_function_id = ''
+    >>> em.to_bytes () == msg4
+    True
+    """
+
+    def __init__ \
+        (self
+        , sender_name
+        , sender_id
+        , sender_routing
+        , sender_email
+        , receiver_name
+        , receiver_id
+        , receiver_routing
+        , receiver_email
+        , docno
+        , docdt
+        , ref = 'ref'
+        , msgref = 'ref'
+        , dt = None
+        , *args, **kw
+        ) :
+        self.__super.__init__ (*args, **kw)
+        now = dt
+        if now is None :
+            now = datetime.now ()
+        unb = UNB ()
+        unb.interchange_sender.id = sender_id
+        unb.interchange_recipient.id = receiver_id
+        unb.date_and_time.date = now.strftime ('%y%m%d')
+        unb.date_and_time.time = now.strftime ('%H%M')
+        unb.control_ref.control_ref = ref
+        self.append_segment (unb)
+        unh = UNH ()
+        unh.message_ref.message_ref = msgref
+        # create other elements:
+        unh.scenario_identification
+        self.append_segment (unh)
+        mid = MID ()
+        mid.document_no.document_no = docno
+        mid.date_and_time.date = docdt.strftime ('%y%m%d')
+        mid.date_and_time.time = docdt.strftime ('%H%M')
+        self.append_segment (mid)
+        sde = SDE ()
+        sde.sender.party_name = sender_name
+        sde.routing.routing = sender_routing
+        sde.contact_details_sender.email = sender_email
+        self.append_segment (sde)
+        rde = RDE ()
+        rde.receiver.party_name = receiver_name
+        rde.routing.routing = receiver_routing
+        rde.contact_details_receiver.email = receiver_email
+        self.append_segment (rde)
+        # We add one .zip file, if something different is needed this
+        # has to be change in the user of this class. Some of these
+        # values should probably be in the defaults.
+        efc = EFC ()
+        efc.file_info.seqno = '2'
+        efc.file_format.code = 'ZIP'
+        efc.data_code.code = '815' # FIXME
+        efc.generating_system.name = 'trackersync'
+        efc.file_status.file_status = 'New sync file'
+        self.append_segment (efc)
+        tot = TOT ()
+        tot.quantity.quantity = '2'
+        self.append_segment (tot)
+        unt = UNT ()
+        unt.number_of_segments.segments = str (len (self.segments) + 2)
+        unt.message_ref.message_ref = msgref
+        self.append_segment (unt)
+        unz = UNZ ()
+        unz.interchange_count.interchange_count = '1'
+        unz.control_ref.control_ref = ref
+        self.append_segment (unz)
+        self.check ()
+    # end def __init__
+
+# end class Engdat_Message
 
 class Edifact_Element (_Part_Iter) :
     """ An edifact data element (elements are delimited by the data
@@ -471,6 +610,11 @@ class Edifact_Element (_Part_Iter) :
                 self.by_name [s [0]] = k
         if bytes :
             self.from_bytes (bytes)
+        elif self.structure :
+            # Set default values
+            for k, s in enumerate (self.structure [1]) :
+                if len (s) > 5 :
+                    setattr (self, s [0], s [5])
     # end def __init__
 
     @property
@@ -493,6 +637,9 @@ class Edifact_Element (_Part_Iter) :
         s = self.structure [1][idx]
         (n, m, t, l, u) = s [:5]
         cl = len (self.components)
+        # Don't check completely empty element
+        if cl == 0 :
+            return
         if m == 'm' and cl - 1 < idx :
             raise ValueError ("Component %s.%s: Missing" % (self.name, n))
         comp = None
@@ -514,7 +661,6 @@ class Edifact_Element (_Part_Iter) :
             raise ValueError \
                 ("Component %s.%s: Missing mandatory value" % (self.name, n))
         if (ccl > 0 or m == 'm') and (ccl > u or ccl < l) :
-            import pdb; pdb.set_trace ()
             raise ValueError \
                 ( "Component %s.%s: Invalid length %s (expect %s-%s)"
                 % (self.name, n, ccl, l, u)
@@ -552,7 +698,8 @@ class Edifact_Element (_Part_Iter) :
         comps = []
         for c in self.components :
             comps.append (self.quote (c.encode (self.encoding)))
-        return self.una.component_sep.join (comps)
+        r = self.una.component_sep.join (comps).rstrip (self.una.component_sep)
+        return r
     # end def to_bytes
 
     def quote (self, bytes) :
@@ -627,6 +774,7 @@ class Edifact_Element (_Part_Iter) :
         return '\n'.join (r)
     # end def __str__
     __unicode__ = __str__
+    __repr__ = __str__
 
 # end class Edifact_Element
 
@@ -656,6 +804,7 @@ class Edifact_Segment (_Part_Iter) :
         for element in self.elements :
             s.append (element.to_bytes ())
         s = self.una.element_sep.join (s)
+        s = s.rstrip (self.una.element_sep)
         self.length = len (s) + 1
         return s + self.una.segment_terminator
     # end def to_bytes
@@ -687,6 +836,7 @@ class Edifact_Segment (_Part_Iter) :
         return '\n'.join (r)
     # end def __str__
     __unicode__ = __str__
+    __repr__ = __str__
 
 # end class Edifact_Segment
 
@@ -711,32 +861,49 @@ class Named_Edifact_Segment (Edifact_Segment) :
             el = len (self.elements)
             if m == 'm' and el - 1 < idx :
                 raise ValueError \
-                    ("Segment %s: Missing: %s" % (self.segment_class_name, n))
+                    ( "Segment %s: Missing: %s"
+                    % (self.segment_class_name, name)
+                    )
             if idx < el :
                 self.elements [idx].check ()
     # end def check
+
+    def __getattr__ (self, name) :
+        try :
+            idx = self.by_name [name]
+        except KeyError as e :
+            raise AttributeError (e)
+        el = len (self.elements)
+        e  = self.encoding
+        if idx >= el :
+            for i in range (el, idx + 1) :
+                el = Edifact_Element \
+                    (encoding = e, parent = self, idx = i)
+                self.elements.append (el)
+        return self.elements [idx]
+    # end def __getattr__
 
 # end class Named_Edifact_Segment
 
 class UNB (Named_Edifact_Segment) :
     structure = \
         ( ( ('syntax_identifier', 'm', 1)
-          , ( ('syntax_id',       'm', 'a',  4, 4)
-            , ('version',         'm', 'an', 1, 1)
+          , ( ('syntax_id',       'm', 'a',  4, 4, 'UNOC')
+            , ('version',         'm', 'an', 1, 1, '1')
             , ('dir_version',     'c', 'an', 0, 6)
             , ('encoding',        'c', 'an', 0, 3)
             )
           )
         , ( ('interchange_sender', 'm', 1)
           , ( ('id',              'm', 'an', 0, 35)
-            , ('code_qualifier',  'c', 'an', 0, 4)
+            , ('code_qualifier',  'c', 'an', 0, 4, 'OD')
             , ('internal_id',     'c', 'an', 0, 35)
             , ('internal_sub_id', 'c', 'an', 0, 35)
             )
           )
         , ( ('interchange_recipient', 'm', 1)
           , ( ('id',              'm', 'an', 0, 35)
-            , ('code_qualifier',  'c', 'an', 0, 4)
+            , ('code_qualifier',  'c', 'an', 0, 4, 'OD')
             , ('internal_id',     'c', 'an', 0, 35)
             , ('internal_sub_id', 'c', 'an', 0, 35)
             )
@@ -792,10 +959,10 @@ class UNH (Named_Edifact_Segment) :
             )
           )
         , ( ('message_id', 'm', 1)
-          , ( ('type',            'm', 'an', 0, 6)
-            , ('version',         'm', 'an', 0, 3)
+          , ( ('type',            'm', 'an', 0, 6, 'ENGDAT')
+            , ('version',         'm', 'an', 0, 3, '001')
             , ('release',         'c', 'an', 0, 3)
-            , ('agency',          'c', 'an', 0, 3)
+            , ('agency',          'c', 'an', 0, 3, 'OD') # 79?
             , ('assoc_code',      'c', 'an', 0, 6)
             , ('code_version',    'c', 'an', 0, 6)
             , ('sub_function_id', 'c', 'an', 0, 6)
@@ -865,7 +1032,7 @@ class UNZ (Named_Edifact_Segment) :
             )
           )
         )
-# end class UNT
+# end class UNZ
 
 class MID (Named_Edifact_Segment) :
     structure = \
