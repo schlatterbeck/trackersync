@@ -618,14 +618,14 @@ class Edifact_Element (_Part_Iter) :
     # end def __init__
 
     @property
-    def name (self) :
+    def element_name (self) :
         n = "<unnamed>"
         if self.structure :
             n = self.structure [0][0]
         if self.parent :
             return '.'.join ((self.parent.segment_name, n))
         return n
-    # end def name
+    # end def element_name
 
     def append (self, component_text) :
         """ Append component_text to self.components
@@ -641,7 +641,8 @@ class Edifact_Element (_Part_Iter) :
         if cl == 0 :
             return
         if m == 'm' and cl - 1 < idx :
-            raise ValueError ("Component %s.%s: Missing" % (self.name, n))
+            raise ValueError \
+                ("Component %s.%s: Missing" % (self.element_name, n))
         comp = None
         ccl  = 0
         if idx < cl :
@@ -650,20 +651,22 @@ class Edifact_Element (_Part_Iter) :
         if comp and t == 'n' and not comp.isdigit () :
             raise ValueError \
                 ( "Component %s.%s: got non-numeric value %s"
-                % (self.name, n, comp)
+                % (self.element_name, n, comp)
                 )
         if comp and t == 'a' and not comp.isalpha () :
             raise ValueError \
                 ( "Component %s.%s: got non-alpha value %s"
-                % (self.name, n, comp)
+                % (self.element_name, n, comp)
                 )
         if m == 'm' and ccl == 0 :
             raise ValueError \
-                ("Component %s.%s: Missing mandatory value" % (self.name, n))
+                ( "Component %s.%s: Missing mandatory value"
+                % (self.element_name, n)
+                )
         if (ccl > 0 or m == 'm') and (ccl > u or ccl < l) :
             raise ValueError \
                 ( "Component %s.%s: Invalid length %s (expect %s-%s)"
-                % (self.name, n, ccl, l, u)
+                % (self.element_name, n, ccl, l, u)
                 )
     # end def _check
 
@@ -684,7 +687,9 @@ class Edifact_Element (_Part_Iter) :
                     empty = False
             if empty and mandatory :
                 raise ValueError \
-                    ("Element %s: empty mandatory element" % self.name)
+                    ( "Element %s: empty mandatory element"
+                    % self.element_name
+                    )
     # end def check
 
     def from_bytes (self, bytes) :
@@ -1286,8 +1291,12 @@ if __name__ == '__main__' :
             efc = p
             break
     print ("   File-seqno:", efc.file_info.seqno)
+    print ("    File-name:", efc.file_info.filename)
     print ("  File-format:", efc.file_format.code)
+    print ("File-fmt-name:", efc.file_format.file_format)
     print ("    Data-code:", efc.data_code.code)
+    print (" Data-cd-name:", efc.data_code.data_code)
     print ("   Generating:", efc.generating_system.name)
-    print ("  File status:", efc.file_status.file_status)
+    print ("  File status:", efc.file_status.code)
+    print ("EngDepartment:", efc.engineering_department.department)
     print (" TOT Quantity:", m.tot.quantity.quantity)
