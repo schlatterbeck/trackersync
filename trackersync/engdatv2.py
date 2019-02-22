@@ -1,5 +1,26 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# Copyright (C) 2019 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Reichergasse 131, A-3411 Weidling.
+# Web: http://www.runtux.com Email: office@runtux.com
+# All rights reserved
+# ****************************************************************************
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 USA
+# ****************************************************************************
+
 
 from __future__       import unicode_literals
 from __future__       import print_function
@@ -237,7 +258,7 @@ msg4 = \
       b"MID+180213161111XYZZY+180213:1611'"
       b"SDE+:Z. ulieferer++sender-routingcode+:::::::sender@example.com'"
       b"RDE+:O. EM++receiver-routingcode+:::::::receiver@example.com'"
-      b"EFC+2+ZIP+815+trackersync+:New sync file'"
+      b"EFC+002:002.zip+NAT:PKZIP-Archive+OTH:Other+trackersync+INF+null'"
       b"TOT+2'"
       b"UNT+9+ref'"
       b"UNZ+1+ref'"
@@ -464,6 +485,12 @@ class Edifact_Message (_Part_Iter) :
                 (cls (bytes = b + t, una = self.una, encoding = e))
     # end def from_bytes
 
+    def segment_iter (self, segment_name) :
+        for s in self.segments :
+            if s.segment_name == segment_name :
+                yield s
+    # end def segment_iter
+
     def to_bytes (self) :
         s = b''.join (p.to_bytes () for p in self.segments)
         return s
@@ -497,11 +524,15 @@ class Engdat_Message (Edifact_Message) :
     >>> d ['docdt']            = dt
     >>> d ['dt']               = dt
     >>> em = Engdat_Message (** d)
+    >>> em.append_efc ()
     >>> em.to_bytes () == msg4
     True
     >>> em.unh.message_id.sub_function_id = ''
     >>> em.to_bytes () == msg4
     True
+    >>> for s in em.segment_iter ('EFC') :
+    ...     brepr (s.to_bytes ())
+    b"EFC+002:002.zip+NAT:PKZIP-Archive+OTH:Other+trackersync+INF+null'"
     """
 
     def __init__ \
@@ -522,6 +553,7 @@ class Engdat_Message (Edifact_Message) :
         , *args, **kw
         ) :
         self.__super.__init__ (*args, **kw)
+        self.seqno = 1
         now = dt
         if now is None :
             now = datetime.now ()
@@ -552,16 +584,6 @@ class Engdat_Message (Edifact_Message) :
         rde.routing.routing = receiver_routing
         rde.contact_details_receiver.email = receiver_email
         self.append_segment (rde)
-        # We add one .zip file, if something different is needed this
-        # has to be change in the user of this class. Some of these
-        # values should probably be in the defaults.
-        efc = EFC ()
-        efc.file_info.seqno = '2'
-        efc.file_format.code = 'ZIP'
-        efc.data_code.code = '815' # FIXME
-        efc.generating_system.name = 'trackersync'
-        efc.file_status.file_status = 'New sync file'
-        self.append_segment (efc)
         tot = TOT ()
         tot.quantity.quantity = '2'
         self.append_segment (tot)
@@ -573,8 +595,33 @@ class Engdat_Message (Edifact_Message) :
         unz.interchange_count.interchange_count = '1'
         unz.control_ref.control_ref = ref
         self.append_segment (unz)
-        self.check ()
     # end def __init__
+
+    def append_efc (self) :
+        # We add one .zip file, if something different is needed this
+        # has to be change in the user of this class. Some of these
+        # values should probably be in the defaults.
+        efc = EFC ()
+        self.seqno += 1
+        sn = "%03d" % self.seqno
+        efc.file_info.seqno = sn
+        efc.file_info.filename = sn + '.zip'
+        efc.file_format.code = 'NAT'
+        efc.file_format.file_format = 'PKZIP-Archive'
+        efc.data_code.code = 'OTH'
+        efc.data_code.data_code = 'Other'
+        efc.generating_system.name = 'trackersync'
+        efc.file_status.code = 'INF'
+        efc.engineering_department.department = 'null'
+
+        for n, s in enumerate (reversed (self.segments)) :
+            if s.segment_name == 'TOT' :
+                break
+        self.segments.insert (-(n + 1), efc)
+        self.tot.quantity.quantity = str (self.seqno)
+        self.unt.number_of_segments.segments = str (len (self.segments))
+        self.check ()
+    # end def append_efc
 
 # end class Engdat_Message
 

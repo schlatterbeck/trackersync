@@ -1417,7 +1417,8 @@ class Trackersync_Syncer (Log) :
             ids in the sync database)
         """
         for d in os.listdir (self.opt.syncdir) :
-            yield (d)
+            if not d.startswith ('__') :
+                yield (d)
     # end def oldsync_iter
 
     def get_oldvalues (self, remote_id) :

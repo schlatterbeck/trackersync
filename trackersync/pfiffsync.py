@@ -27,6 +27,7 @@ from __future__ import absolute_import
 import os
 import sys
 import zipfile
+import shutil
 from argparse           import ArgumentParser
 from datetime           import datetime
 from xml.etree          import ElementTree
@@ -37,6 +38,8 @@ from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
 from rsclib.pycompat    import string_types
 from bs4                import BeautifulSoup
+from .ssh               import SSH_Client
+from .engdatv2          import Engdat_Message, Edifact_Message
 
 try :
     from io import BytesIO
@@ -55,9 +58,11 @@ class Config (Config_File) :
     def __init__ (self, path = path, config = config) :
         self.__super.__init__ \
             ( path, config
-            , LOCAL_TRACKER = 'jira'
-            , COMPANY       = 'TestPrj Zulieferer'
-            , COMPANY_SHORT = 'TPZ'
+            , LOCAL_TRACKER    = 'jira'
+            , COMPANY          = 'TestPrj Zulieferer'
+            , COMPANY_SHORT    = 'TPZ'
+            , OFTP_TMP         = '/tmp'
+            , ENGDAT_FORMAT    = 'PKZIP-Archive'
             )
     # end def __init__
 
@@ -735,14 +740,86 @@ def main () :
     if url :
         syncer = local_trackers [opt.local_tracker] \
             ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt)
-        pfiff = Pfiff (opt, cfg, syncer)
-    if opt.schema_only :
-        syncer.dump_schema ()
-        sys.exit (0)
-    if syncer and pfiff :
-        pfiff.sync (syncer)
-        # Zip files need to be closed
-        pfiff.close ()
+
+    if cfg.get ('OFTP_INCOMING', None) :
+        # Get date of last sync:
+        try :
+            with open (os.path.join (opt.syncdir, '__lastsync')) as f :
+                dt = f.read ()
+        except IOError :
+            dt = '2018-01-01T00:00:00'
+        lastsync = datetime.strptime (dt.strip (), '%Y-%m-%dT%H:%M:%S')
+        fnmin    = lastsync.strftime ('ENG%y%m%d%H%M%SZZZZZ9')
+        if ':' in cfg.OFTP_INCOMING :
+            # If we have IPv6 addresses they may contain ':', so use rsplit
+            host, dir = cfg.OFTP_INCOMING.rsplit (':', 1)
+            ssh = SSH_Client \
+                ( host, cfg.SSH_KEY
+                , password   = cfg.SSH_PASSPHRASE
+                , user       = cfg.SSH_USER
+                , local_dir  = cfg.OFTP_TMP
+                , remote_dir = dir
+                )
+            flist = []
+            for f in ssh.list_files () :
+                if not f.startswith ('ENG') :
+                    continue
+                # Get only files with timestamp > last sync
+                if f <= fnmin :
+                    continue
+                flist.append (f)
+            ssh.get_files (*flist)
+            ssh.close ()
+        else :
+            for f in os.listdir (cfg.OFTP_INCOMING) :
+                if not f.startswith ('ENG') :
+                    continue
+                # Get only files with timestamp > last sync
+                if f <= fnmin :
+                    continue
+                fn = os.path.join (cfg.OFTP_INCOMING, f)
+                shutil.copy (fn, cfg.OFTP_TMP)
+        # Now loop over tempfiles in OFTP_TMP, we only use files with
+        # sequence number 001 (engdat descriptions) and process these
+        for fn in sorted (os.listdir (cfg.OFTP_TMP)) :
+            if fn [23:26] != '001' :
+                continue
+            path = os.path.join (cfg.OFTP_TMP, fn)
+            print (fn)
+            with open (path) as f :
+                m = Edifact_Message (bytes = f.read ())
+                m.check ()
+            if m.sde.routing.routing != cfg.ENGDAT_PEER_ROUTING :
+                syncer.log.error \
+                    ( "Invalid sender routing: %s expected %s"
+                    % (m.sde.routing.routing, cfg.ENGDAT_PEER_ROUTING)
+                    )
+            if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING :
+                syncer.log.error \
+                    ( "Invalid receiver routing: %s expected %s"
+                    % (m.rde.routing.routing, cfg.ENGDAT_OWN_ROUTING)
+                    )
+            for efc in m.segment_iter ('EFC') :
+                efcfn = fn [:23] + "%03d" % int (efc.file_info.seqno) + fn [26:]
+                fmt = cfg.get ('ENGDAT_FORMAT', None)
+                if fmt != efc.file_format.file_format :
+                    syncer.log.error \
+                        ( "Invalid file format: %s expected %s"
+                        % (efc.file_format.file_format, fmt)
+                        )
+                    continue
+                syncer.log.info ("would process: %s" % efcfn)
+    else :
+        # This is used if we do sync of a single .zip file or no file at all
+        if url :
+            pfiff = Pfiff (opt, cfg, syncer)
+        if opt.schema_only :
+            syncer.dump_schema ()
+            sys.exit (0)
+        if syncer and pfiff :
+            pfiff.sync (syncer)
+            # Zip files need to be closed
+            pfiff.close ()
 # end def main
 
 if __name__ == '__main__' :
