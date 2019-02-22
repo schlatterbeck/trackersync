@@ -49,11 +49,17 @@ class File_Attachment (autosuper) :
         get file attachments in a .zip file) and might therefore not be
         useable for a local/remote file name. The type is the MIME
         content-type.
+        Note that some backends may create dummy files that are attached
+        to the remote issue but are not transmitted for each sync. These
+        are expected to already exist at the local issue. We issue a
+        warning if such a file is missing from the local issue but do
+        not try to attach it.
     """
 
     def __init__ (self, issue, **kw) :
         self.issue   = issue
         self.id      = kw.get ('id', None)
+        self.dummy   = False
         # Some attributes may be @property and unsettable
         for k in 'name', 'type', 'content' :
             try :
@@ -71,7 +77,7 @@ class File_Attachment (autosuper) :
 
 # end class File_Attachment
 
-class Backend_Common (autosuper) :
+class Backend_Common (Log) :
     """ Common methods of Syncer and Remote_Issue
     """
 
@@ -83,9 +89,24 @@ class Backend_Common (autosuper) :
     def __init__ (self, *args, **kw) :
         self.attachments = None
         self.__super.__init__ (*args, **kw)
+        # Use syncer.log if available
+        if getattr (self, 'syncer', None) :
+            self.log = self.syncer.log
     # end def __init__
 
     def _attach_file (self, cls, other_file, name) :
+        """ Attach file to this issue from other_file
+            Note that caller of this method must deal with it returning
+            None which happens whenever the file is not available for
+            sync (e.g. when we're dealing with an imported .zip file
+            that contains only the most recent file attachments).
+        """
+        if other_file.dummy :
+            self.log.error \
+                ( "Re-attach dummy file %s: deleted in local tracker?"
+                % other_file.name
+                )
+            return None
         f = cls \
             ( self
             , name    = other_file.name
@@ -203,8 +224,8 @@ class Remote_Issue (Backend_Common) :
         """ Only return non-empty values in json dump.
             Optionally update the dumped data with some settings in kw.
         """
-        d = dict ((k, v) for k, v in self.record.iteritems () if v)
-        d.update ((k, v) for k, v in self.newvalues.iteritems ())
+        d = dict ((k, v) for k, v in self.record.items () if v)
+        d.update (self.newvalues)
         d.update (kw)
         return json.dumps (d, sort_keys = True, indent = 4)
     # end def as_json
@@ -276,7 +297,6 @@ class Remote_Issue (Backend_Common) :
             Note that type is one of 'string', 'date', 'number', 'bool'
             We call conversion methods accordingly if existing.
         """
-        self.dirty = True
         conv = None
         if type :
             conv = getattr (self, 'convert_%s' % type, None)
@@ -289,10 +309,15 @@ class Remote_Issue (Backend_Common) :
             item [names [0]] = self [names [0]]
             for n in names [:-1] :
                 if n not in item :
+                    self.dirty = True
                     item [n] = {}
                 item = item [n]
+            if item.get (names [-1], None) != value :
+                self.dirty = True
             item [names [-1]] = value
         else :
+            if self.newvalues.get (name, None) != value :
+                self.dirty = True
             self.newvalues [name] = value
     # end def set
     __setitem__ = set
@@ -801,6 +826,9 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
             rval = self.imap.get (rval, self.r_default)
         elif rval is None and self.r_default :
             rval = self.r_default
+        # Can't sync None values to local
+        if rval is None :
+            return
         lv = syncer.get (id, self.name)
         if isinstance (lv, list) :
             lv = list (sorted (lv))
@@ -956,10 +984,10 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 
 class Local_Issue (Backend_Common, autosuper) :
 
-    def __init__ (self, syncer, id, oldvals) :
+    def __init__ (self, syncer, id) :
         self.syncer        = syncer
         self.newvalues     = {}
-        self.oldvalues     = oldvals
+        self.oldvalues     = {}
         self.id            = id
         self.dirty         = False
         self.default_class = syncer.default_class
@@ -1316,22 +1344,22 @@ class Trackersync_Syncer (Log) :
             been synced.
         """
         do_sync = False
-        id, oldval = self.sync_status (remote_id, remote_issue)
+        id = self.get_oldvalues (remote_id)
 
         if id :
-            if self.old_as_json :
-                if self.old_as_json != remote_issue.as_json () :
-                    do_sync = True
-                self.oldremote = json.loads (self.old_as_json)
-            else :
-                do_sync = True
+            # This used to test for equalness of old.as_json and the
+            # json representation of the remote_issue and only then
+            # set do_sync -- this is wrong as we might have local
+            # changes that need to be synced to the remote side
+            # So now we're using oldremote directly.
+            do_sync = True
             assert id not in self.localissues
-            self.localissues [id] = self.Local_Issue_Class (self, id, oldval)
+            self.localissues [id] = self.Local_Issue_Class (self, id)
         else :
             self.newcount += 1
             id = -self.newcount
             assert id not in self.localissues
-            self.localissues [id] = self.Local_Issue_Class (self, id, oldval)
+            self.localissues [id] = self.Local_Issue_Class (self, id)
             # create new issue only if the remote issue has all required
             # attributes and doesn't restrict them to a subset:
             do_sync = not remote_issue.attributes
@@ -1374,9 +1402,9 @@ class Trackersync_Syncer (Log) :
                 del self.localissues [id]
                 self.update_aux_classes \
                     (iid, remote_id, remote_issue, classdict)
-        elif self.localissues [id].dirty :
+        elif self.localissues [id].dirty or remote_issue.dirty :
             self.update_issue (id, remote_id, remote_issue)
-        if remote_issue.newvalues :
+        if remote_issue.dirty :
             if not self.dry_run and not self.remote_dry_run :
                 self.log_verbose ("Update remote:", remote_issue.newvalues)
                 remote_issue.update (self)
@@ -1384,12 +1412,20 @@ class Trackersync_Syncer (Log) :
                 self.log_verbose ("DRYRUN upd remote:", remote_issue.newvalues)
     # end def sync
 
-    def sync_status (self, remote_id, remote_issue) :
+    def oldsync_iter (self) :
+        """ Iterate over all remote ids from previous syncs (all remote
+            ids in the sync database)
+        """
+        for d in os.listdir (self.opt.syncdir) :
+            yield (d)
+    # end def oldsync_iter
+
+    def get_oldvalues (self, remote_id) :
         """ Get the sync status (e.g., old properties of last sync of
-            remote issue)
+            remote issue). Side-effect: Set self.oldremote, this
+            contains the dictionary of property values from last sync.
             This method must return the id of the local issue if found.
         """
-        id = None
         self.oldremote = {}
         fn = self.get_sync_filename (remote_id)
         j  = None
@@ -1398,20 +1434,18 @@ class Trackersync_Syncer (Log) :
                 j = f.read ()
         except EnvironmentError :
             pass
-        if j :
-            self.old_as_json = j
-            d  = json.loads (self.old_as_json)
-            id = d ['__local_id__']
-            # Check that local issue really exists
-            # The id may be bogus if sync didn't work or a dry_run was
-            # performed
-            try :
-                self.get_transitive_item (self.default_class, 'id', id)
-            except RuntimeError as err :
-                if err.message.startswith ('Error 404') :
-                    id = None
-        return id, {}
-    # end def sync_status
+        if not j :
+            return None
+        d  = self.oldremote = json.loads (j)
+        id = d ['__local_id__']
+        try :
+            self.get_transitive_item (self.default_class, 'id', id)
+        except RuntimeError as err :
+            if err.message.startswith ('Error 404') :
+                id = None
+                self.oldremote = {}
+        return id
+    # end def get_oldvalues
 
     def sync_new_local_issue (self, iid) :
         """ Sync this new local issue (must never have been synced to
@@ -1420,7 +1454,7 @@ class Trackersync_Syncer (Log) :
             the default method doing nothing.
         """
         remote_issue = self.new_remote_issue ({})
-        self.localissues [iid] = self.Local_Issue_Class (self, iid, {})
+        self.localissues [iid] = self.Local_Issue_Class (self, iid)
         do_sync = True
         for a in self.attributes :
             if a.only_update :
@@ -1471,8 +1505,9 @@ class Trackersync_Syncer (Log) :
         classdict = self.localissues [id].split_newvalues ()
         attr = self.fix_attributes \
             (self.default_class, classdict [self.default_class])
-        if attr :
-            self.setitem (self.default_class, id, ** attr)
+        if self.localissues [id].dirty :
+            if attr :
+                self.setitem (self.default_class, id, ** attr)
         del classdict [self.default_class]
         self.update_aux_classes (id, remote_id, remote_issue, classdict)
         self.log_verbose ("Synced: %s/%s" % (id, remote_id))

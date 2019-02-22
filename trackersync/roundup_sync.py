@@ -43,6 +43,8 @@ Sync_Attribute_To_Local_Default  = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote         = tracker_sync.Sync_Attribute_To_Remote
 Sync_Attribute_To_Remote_Default = tracker_sync.Sync_Attribute_To_Remote_Default
 Sync_Attribute_Two_Way           = tracker_sync.Sync_Attribute_Two_Way
+Sync_Attribute_To_Remote_If_Dirty = \
+    tracker_sync.Sync_Attribute_To_Remote_If_Dirty
 Sync_Attribute_To_Local_Concatenate = \
     tracker_sync.Sync_Attribute_To_Local_Concatenate
 Sync_Attribute_To_Local_Multilink = \
@@ -285,6 +287,8 @@ class Roundup_Local_Issue (tracker_sync.Local_Issue) :
             fids = self.get (name)
             cls  = Roundup_File_Attachment
             f    = self.__super._attach_file (cls, other_file, name)
+            if f is None :
+                return
             f.create ()
             fids.append (f.id)
             self.set (name, fids)
@@ -475,9 +479,27 @@ class Syncer (tracker_sync.Syncer) :
             )
     # end def _setitem
 
-    def sync_status (self, remote_id, remote_issue) :
+    def oldsync_iter (self) :
+        """ Iterate over all remote ids from previous syncs (all remote
+            ids in the sync database)
+            Note: This is only working for the new schema with
+            ext_tracker_state class.
+        """
+        ext_state = self.srv.filter \
+            ( 'ext_tracker_state'
+            , None
+            , dict (ext_tracker = self.tracker)
+            )
+        for i in ext_state :
+            di = self.srv.display ('ext_tracker_state%s' % i, 'ext_id')
+            yield di ['ext_id']
+    # end def oldsync_iter
+
+    def get_oldvalues (self, remote_id) :
         """ Get the sync status (e.g., old properties of last sync of 
             remote issue)
+            Must return the (local) id if found and set self.oldremote
+            (dictionary of old property values from last sync)
         """ 
         assert \
             (  'ext_tracker_state' in self.schema
@@ -520,15 +542,13 @@ class Syncer (tracker_sync.Syncer) :
                     if 'ext_tracker_state' in self.schema :
                         self.update_state = True
                     break
-        self.old_as_json = None
-        oldv = {}
-        if id :
+        if id is not None :
             if di ['ext_attributes'] :
                 m = self.getitem ('msg', di ['ext_attributes'])
-                self.old_as_json = m ['content']
-            oldv = di
-        return id, oldv
-    # end def sync_status
+                j = m ['content']
+                self.oldremote = json.loads (j)
+        return id
+    # end def get_oldvalues
 
     def sync_new_local_issues (self, new_remote_issue) :
         """ Determine *local* issues which are not yet synced to the

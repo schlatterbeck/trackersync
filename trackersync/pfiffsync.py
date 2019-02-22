@@ -31,6 +31,7 @@ from argparse           import ArgumentParser
 from datetime           import datetime
 from xml.etree          import ElementTree
 from traceback          import print_exc
+from copy               import copy
 from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
@@ -65,17 +66,23 @@ class Config (Config_File) :
 class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
 
     def __init__ (self, issue, path, type = 'application/octet-stream', **kw) :
-        self.path = path
+        self.path     = path
+        self.dummy    = False
         self._content = None
-        self.dirty = False
+        self.dirty    = False
         if 'content' in kw :
             self._content = kw ['content']
             del kw ['content']
+        if 'dummy' in kw :
+            self.dummy = bool (kw ['dummy'])
+            del kw ['dummy']
         self.__super.__init__ (issue, type = type, **kw)
     # end def __init__
 
     @property
     def content (self) :
+        if self.dummy :
+            return None
         if self._content is None :
             self._content = self.issue.pfiff.zf.read (self.path)
         return self._content
@@ -117,7 +124,8 @@ class Problem (tracker_sync.Remote_Issue) :
     # end def file_attachments
 
     def update (self, syncer) :
-        """ Update remote issue tracker with self.newvalues.
+        """ Update remote issue tracker with self.newvalues and
+            self.record. Should only be called if self.dirty.
         """
         now = datetime.now ().strftime (self.pfiff.date_fmt)
         id  = self.get ('supplier_company_id')
@@ -139,15 +147,12 @@ class Problem (tracker_sync.Remote_Issue) :
         sn  = ElementTree.SubElement (cd, 'SHORT-NAME')
         sn.text = self.pfiff.cfg.COMPANY_SHORT
 
-        sname  = self.get ('assignee_key', 'DUMMY')
+        sname  = self.get ('assignee_key', 'unknown')
         ts  = ElementTree.SubElement (cd, 'TEAM-MEMBERS')
         tm  = ElementTree.SubElement (ts, 'TEAM-MEMBER')
         tm.set ('ID', sname)
         ln  = ElementTree.SubElement (tm, 'LONG-NAME')
-        name = sname
-        if 'assignee_name' in self.newvalues :
-            name = self.get ('assignee_name')
-        ln.text = name
+        ln.text = self.get ('assignee_name', sname)
         sn  = ElementTree.SubElement (tm, 'SHORT-NAME')
         sn.text = sname
         ElementTree.SubElement (tm, 'DEPARTMENT')
@@ -161,11 +166,7 @@ class Problem (tracker_sync.Remote_Issue) :
         tr  = ElementTree.SubElement (dr, 'TEAM-MEMBER-REF')
         tr.set ('ID-REF', sname)
         dt  = ElementTree.SubElement (dr, 'DATE')
-        if 'updated' in self.newvalues :
-            date = self.get ('updated')
-        else :
-            date = now
-        dt.text = date
+        dt.text = self.get ('updated', now)
 
         issues = ElementTree.SubElement (xml, 'ISSUES')
         issue  = ElementTree.SubElement (issues, 'ISSUE')
@@ -227,7 +228,23 @@ class Problem (tracker_sync.Remote_Issue) :
                 self.pfiff.output.writestr (fn, f.content)
 
         env = ElementTree.SubElement (issue, 'ISSUE-ENVIRONMENT')
-        obj = ElementTree.SubElement (env,   'ENGINEERING-OBJECTS')
+        eng = ElementTree.SubElement (env,   'ENGINEERING-OBJECTS')
+
+        for k in self.pfiff.rev_engineering :
+            v = self.get (k)
+            if not v :
+                continue
+            xmlkey = self.pfiff.rev_engineering [k]
+            o = ElementTree.SubElement (eng, 'ENGINEERING-OBJECT')
+            cat = ElementTree.SubElement (o, 'CATEGORY')
+            cat.text = xmlkey
+            sl  = ElementTree.SubElement (o, 'SHORT-LABEL')
+            if xmlkey in ('HARDWARE', 'SOFTWARE', 'PARTNUMBER') :
+                sl.text = 'ECU'
+                rev = ElementTree.SubElement (o, 'REVISION-LABEL')
+                rev.text = v
+            else :
+                sl.text = v
 
         ri  = ElementTree.SubElement (issue, 'RELATED-ISSUES')
 
@@ -243,7 +260,7 @@ class Problem (tracker_sync.Remote_Issue) :
         fn = './' + id + '.xml'
         self.pfiff.output.writestr \
             ( fn
-            , '<?xml version="1.0" encoding="utf-8"?>\n'
+            , b'<?xml version="1.0" encoding="utf-8"?>\n'
             + ElementTree.tostring (xml, encoding = 'utf-8')
             )
     # end def update
@@ -301,6 +318,9 @@ class Pfiff (Log, Lock_Mixin) :
         , ESTIMATED = 'resolve_until_release'
         , DELIVERED = 'resolved_in_release'
         )
+    # TEST_BENCH is an alias for VEHICLE, EE435 states that import
+    # recognizes bot, VEHICLE and TEST_BENCH while export only yields
+    # VEHICLE.
     engineering = dict \
         ( COMPONENT       = 'component_name'
         , DTC             = 'DTC'
@@ -311,7 +331,7 @@ class Pfiff (Log, Lock_Mixin) :
         , SOFTWARE        = 'component_sw_version'
         , SUB_GROUP       = 'function_component'
         , VEHICLE         = 'vehicle'
-        , TEST_BENCH      = 'vehicle' # Seems this is an alias name
+        , TEST_BENCH      = 'vehicle'
         , COMMITTEE       = 'ccb_relevant'
         , VARIANTS        = 'var_product_name'
         , PROJECT         = 'vehicle_project'
@@ -327,6 +347,8 @@ class Pfiff (Log, Lock_Mixin) :
     engineering ['ECU-PROJECT']     = 'project_name'
     engineering ['DTC-DESCRIPTION'] = 'DTC_synopsis'
     engineering ['DTC-FREQUENCY']   = 'frequency'
+    rev_engineering = dict ((v, k) for k, v in engineering.items ())
+    rev_engineering ['vehicle'] = 'VEHICLE'
     pudis_map = dict \
         ( HARDWARE   = 'pudis_hw_version_'
         , SOFTWARE   = 'pudis_sw_version_'
@@ -334,34 +356,58 @@ class Pfiff (Log, Lock_Mixin) :
         )
     multiline = set (('problem_description',))
 
-    def __init__ (self, opt, cfg) :
+    def __init__ (self, opt, cfg, syncer) :
         self.opt           = opt
         self.cfg           = cfg
         self.debug         = opt.debug
         self.company       = opt.company
-        self.company_short = None
+        self.company_short = opt.company_short
         self.date          = None
         self.issues        = []
         self.path          = []
         self.pudis_no      = 0
         self.pudis         = {}
+        self.zf            = None
         if opt.lock_name :
             self.lockfile = opt.lock_name
 
         if opt.output is None :
-            zf, ext = os.path.splitext (opt.zipfile)
-            opt.output = zf + '-out' + ext
+            if opt.zipfile :
+                zf, ext = os.path.splitext (opt.zipfile)
+                opt.output = zf + '-out' + ext
+            else :
+                opt.output = '_out-.zip'
         compression        = zipfile.ZIP_DEFLATED
         self.output        = zipfile.ZipFile (opt.output, "w", compression)
-        self.zf            = zipfile.ZipFile (opt.zipfile, 'r')
-        for n in self.zf.namelist () :
-            fn = n
-            if fn.startswith ('./') :
-                fn = fn [2:]
-            if '/' in fn :
-                continue
-            if fn.endswith ('.xml') or fn.endswith ('.XML') :
-                self.parse (self.zf.read (n))
+        # First read sync db, only issues where remote is not closed are
+        # put in a list
+        # List of not-yet-synced remote ids
+        self.unsynced = {}
+        for rid in syncer.oldsync_iter () :
+            id = syncer.get_oldvalues (rid)
+            if id is not None :
+                self.unsynced [rid] = copy (syncer.oldremote)
+        if opt.zipfile :
+            self.zf = zipfile.ZipFile (opt.zipfile, 'r')
+            for n in self.zf.namelist () :
+                fn = n
+                if fn.startswith ('./') :
+                    fn = fn [2:]
+                if '/' in fn :
+                    continue
+                if fn.endswith ('.xml') or fn.endswith ('.XML') :
+                    self.parse (self.zf.read (n))
+        # We also need to sync the issues that didn't come in the .zip
+        # file: We could have local changes to these issues.
+        for rid in self.unsynced :
+            v = self.unsynced [rid]
+            p = Problem (self, v)
+            p.attachments = []
+            for f in v.get ('files', []) :
+                pa = Pfiff_File_Attachment \
+                    (p, id = f, name = f, path = f, dummy = True)
+                p.attachments.append (pa)
+            self.issues.append (p)
     # end def __init__
 
     def as_rendered_html (self, node) :
@@ -373,7 +419,8 @@ class Pfiff (Log, Lock_Mixin) :
     # end def as_rendered_html
 
     def close (self) :
-        self.zf.close ()
+        if self.zf is not None :
+            self.zf.close ()
         self.output.close ()
     # end def close
 
@@ -409,13 +456,26 @@ class Pfiff (Log, Lock_Mixin) :
             if 'attachments' in self.issue :
                 att = self.issue ['attachments']
                 del self.issue ['attachments']
+                self.issue ['files'] = {}
+            number = self.issue ['problem_number']
             p = Problem (self, self.issue)
             p.attachments = []
+            attold = self.unsynced [number].get ('files', {})
             for a in att :
                 path, name = a
+                if name in attold :
+                    del attold [name]
                 pa = Pfiff_File_Attachment \
                     (p, id = path, name = name, path = path)
                 p.attachments.append (pa)
+                p.record ['files'][name] = True
+            for a in attold :
+                pa = Pfiff_File_Attachment \
+                    (p, id = a, name = a, path = a, dummy = True)
+                p.attachments.append (pa)
+                p.record ['files'][a] = True
+            if number in self.unsynced :
+                del self.unsynced [number]
             self.issues.append (p)
     # end def parse
 
@@ -568,6 +628,11 @@ def main () :
         , default = 'Porsche AG'
         )
     cmd.add_argument \
+        ( "--company-short"
+        , help    = "Partner company short name, default=%(default)s"
+        , default = 'PAG'
+        )
+    cmd.add_argument \
         ( "-D", "--debug"
         , help    = "Debugging"
         , action  = 'store_true'
@@ -666,11 +731,11 @@ def main () :
     opt.url            = url
     opt.local_tracker  = ltracker
     syncer = None
-    if opt.zipfile :
-        pfiff = Pfiff (opt, cfg)
+    pfiff  = None
     if url :
         syncer = local_trackers [opt.local_tracker] \
             ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt)
+        pfiff = Pfiff (opt, cfg, syncer)
     if opt.schema_only :
         syncer.dump_schema ()
         sys.exit (0)

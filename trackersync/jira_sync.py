@@ -41,10 +41,11 @@ Sync_Attribute_Files              = tracker_sync.Sync_Attribute_Files
 Sync_Attribute_To_Local           = tracker_sync.Sync_Attribute_To_Local
 Sync_Attribute_To_Local_Default   = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote          = tracker_sync.Sync_Attribute_To_Remote
-Sync_Attribute_To_Remote_If_Dirty = tracker_sync.Sync_Attribute_To_Remote
 Sync_Attribute_Two_Way            = tracker_sync.Sync_Attribute_Two_Way
 Sync_Attribute_To_Remote_Default  = \
     tracker_sync.Sync_Attribute_To_Remote_Default
+Sync_Attribute_To_Remote_If_Dirty = \
+    tracker_sync.Sync_Attribute_To_Remote_If_Dirty
 Sync_Attribute_To_Local_Concatenate = \
     tracker_sync.Sync_Attribute_To_Local_Concatenate
 Sync_Attribute_To_Local_Multilink = \
@@ -158,6 +159,8 @@ class Jira_Backend (autosuper) :
     def attach_file (self, other_file, name = None) :
         cls = Jira_File_Attachment
         f   = self._attach_file (cls, other_file, name)
+        if f is None :
+            return
         f.dirty = True
         if self.attachments is None :
             self.attachments = []
@@ -186,7 +189,7 @@ class Jira_Local_Issue (Jira_Backend, tracker_sync.Local_Issue) :
     pass
 # end class Jira_Local_Issue
 
-class Syncer (tracker_sync.Syncer) :
+class Jira_Syncer (tracker_sync.Syncer) :
     """ Synchronisation Framework
         We get the mapping of remote attributes to jira attributes.
         The type of attribute indicates the action to perform.
@@ -360,7 +363,6 @@ class Syncer (tracker_sync.Syncer) :
             u = self.url + '/' + cls + '?key=' + id
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300 :
-            import pdb; pdb.set_trace ()
             self.raise_error (r)
         j = r.json ()
         if 'fields' in j :
@@ -428,12 +430,14 @@ class Syncer (tracker_sync.Syncer) :
     # end def sync_new_local_issues
 
     def update_aux_classes (self, id, r_id, r_issue, classdict) :
+        self.__super.update_aux_classes (id, r_id, r_issue, classdict)
         # May be None
         if self.localissues [id].attachments :
             for f in self.localissues [id].attachments :
                 if f.dirty :
                     f.create ()
-        self.__super.update_aux_classes (id, r_id, r_issue, classdict)
     # end def update_aux_classes
 
-# end class Syncer
+# end class Jira_Syncer
+
+Syncer = Jira_Syncer
