@@ -1075,16 +1075,24 @@ class Trackersync_Syncer (Log) :
         self.opt             = opt
         self.localissues     = {} # By id
         self.newcount        = 0
-        self.remote_change   = opt.remote_change
-        self.verbose         = opt.verbose
-        self.debug           = opt.debug
-        self.dry_run         = opt.dry_run
-        self.remote_dry_run  = opt.remote_dry_run
         self.oldremote       = {}
         self.update_state    = False # for migration of old roundup schema
         self.__super.__init__ ()
         self.compute_schema   ()
+        self.reinit           ()
     # end def __init__
+
+    def reinit (self) :
+        self.localissues     = {}
+        self.newcount        = 0
+        self.oldremote       = {}
+        self.attachments     = None
+        self.remote_change   = self.opt.remote_change
+        self.verbose         = self.opt.verbose
+        self.debug           = self.opt.debug
+        self.dry_run         = self.opt.dry_run
+        self.remote_dry_run  = self.opt.remote_dry_run
+    # end def reinit
 
     # Don't override in derived class, see Local_Issue
     def attach_file (self, id, file, name) :

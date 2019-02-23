@@ -33,6 +33,7 @@ from datetime           import datetime
 from xml.etree          import ElementTree
 from traceback          import print_exc
 from copy               import copy
+from glob               import glob
 from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
@@ -61,8 +62,30 @@ class Config (Config_File) :
             , LOCAL_TRACKER    = 'jira'
             , COMPANY          = 'TestPrj Zulieferer'
             , COMPANY_SHORT    = 'TPZ'
-            , OFTP_TMP         = '/tmp'
+            , LOCAL_TMP        = '/tmp'
+            , LOCAL_OUT_TMP    = '/tmp'
             , ENGDAT_FORMAT    = 'PKZIP-Archive'
+            , ENGDAT_FILENAME  = None
+            , ENGDAT_PEER_ID      = 'OXXXXXXXXXXXXXXXXX'
+            , ENGDAT_PEER_ROUTING = 'peer-routing'
+            , ENGDAT_PEER_NAME    = ''
+            , ENGDAT_PEER_ADR1    = ''
+            , ENGDAT_PEER_ADR2    = ''
+            , ENGDAT_PEER_ADR3    = ''
+            , ENGDAT_PEER_ADR4    = ''
+            , ENGDAT_PEER_COUNTRY = 'DE'
+            , ENGDAT_PEER_DEPT    = ''
+            , ENGDAT_PEER_EMAIL   = ''
+            , ENGDAT_OWN_ID       = 'OYYYYYYYYYYYYYY'
+            , ENGDAT_OWN_ROUTING  = 'own-routing'
+            , ENGDAT_OWN_NAME     = ''
+            , ENGDAT_OWN_ADR1     = ''
+            , ENGDAT_OWN_ADR2     = ''
+            , ENGDAT_OWN_ADR3     = ''
+            , ENGDAT_OWN_ADR4     = ''
+            , ENGDAT_OWN_COUNTRY  = 'DE'
+            , ENGDAT_OWN_DEPT     = ''
+            , ENGDAT_OWN_EMAIL    = ''
             )
     # end def __init__
 
@@ -231,6 +254,7 @@ class Problem (tracker_sync.Remote_Issue) :
                 fn = './' + id + '/' + f.name
                 u.text = fn
                 self.pfiff.output.writestr (fn, f.content)
+                self.pfiff.out_dirty = True
 
         env = ElementTree.SubElement (issue, 'ISSUE-ENVIRONMENT')
         eng = ElementTree.SubElement (env,   'ENGINEERING-OBJECTS')
@@ -268,6 +292,7 @@ class Problem (tracker_sync.Remote_Issue) :
             , b'<?xml version="1.0" encoding="utf-8"?>\n'
             + ElementTree.tostring (xml, encoding = 'utf-8')
             )
+        self.pfiff.out_dirty = True
     # end def update
 
 # end def Problem
@@ -373,6 +398,7 @@ class Pfiff (Log, Lock_Mixin) :
         self.pudis_no      = 0
         self.pudis         = {}
         self.zf            = None
+        self.out_dirty     = False
         if opt.lock_name :
             self.lockfile = opt.lock_name
 
@@ -427,6 +453,8 @@ class Pfiff (Log, Lock_Mixin) :
         if self.zf is not None :
             self.zf.close ()
         self.output.close ()
+        if not self.out_dirty :
+            os.unlink (self.opt.output)
     # end def close
 
     def parse (self, xml) :
@@ -465,7 +493,9 @@ class Pfiff (Log, Lock_Mixin) :
             number = self.issue ['problem_number']
             p = Problem (self, self.issue)
             p.attachments = []
-            attold = self.unsynced [number].get ('files', {})
+            attold = {}
+            if number in self.unsynced :
+                attold = self.unsynced [number].get ('files', {})
             for a in att :
                 path, name = a
                 if name in attold :
@@ -507,7 +537,11 @@ class Pfiff (Log, Lock_Mixin) :
         elif node.tag == 'TEAM-MEMBER-REF' :
             if self.path [-2] == 'COMPANY-ISSUE-INFO' :
                 id = node.get ('ID-REF')
-                self.issue ['owner_fp'] = self.team_members [id]
+                # Guard for Buggy implementation
+                if id in self.team_members :
+                    self.issue ['owner_fp'] = self.team_members [id]
+                else :
+                    self.issue ['owner_fp'] = id
         elif p in self.from_xml :
             name = self.from_xml [p]
             if name in self.multiline :
@@ -619,8 +653,52 @@ class Pfiff (Log, Lock_Mixin) :
 # end class Pfiff
 
 local_trackers = dict (jira = jira_sync.Syncer, roundup = roundup_sync.Syncer)
+lastsync_fmt   = '%Y-%m-%dT%H:%M:%S'
+
+def rm_engdat (fn) :
+    """ Remove all files belonging to an ENGDAT description file
+        We get all files with a wildcard in position 23-26 of the given
+        filename (sequence number) since this is the end of the ENGDAT
+        file name we will replace the rest of the name with a wildcard.
+        (OFTP will add some timestamp information to the ENGDAT file name
+        which is not guaranteed to be unique for all ENGDAT files
+        belonging to an ENDAT Packet).
+    """
+    path, rest = os.path.split (fn)
+    pattern = rest [:23] + '*'
+    for f in glob (os.path.join (path, pattern)) :
+        print ("Would unlink: %s" % f)
+# end def rm_engdat
+
+def write_lastsync (opt, fn) :
+    """ Determine date from engdat filename and write __lastsync file
+    """
+    assert fn.startswith ('ENG')
+    now = datetime.now ()
+    dt  = datetime.strptime (fn [3:15], '%y%m%d%H%M%S')
+    # Two-digit years will wrap back at some point in the future
+    if dt.year < now.year - 50 :
+        dt = datetime \
+            (dt.year + 100, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+    with open (os.path.join (opt.syncdir, '__lastsync'), 'w') as f :
+        f.write (dt.strftime (lastsync_fmt) + '\n')
+# end def write_lastsync
+
+def engdat_name (cfg, date) :
+    """ ENGDAT filename without 'ENG' prefix, also used inside engdat
+        message.
+    """
+    en = cfg.get ('ENGDAT_FILENAME')
+    if en is None :
+        en = cfg.ENGDAT_PEER_ROUTING
+    if not en or len (en) < 5 :
+        raise ValueError ("Short/Missing ENGDAT_FILENAME: %s" % en)
+    en = en [:5].upper ()
+    return date.strftime ('%y%m%d%H%M%S') + en
+# end def engdat_name
 
 def main () :
+    now = datetime.now ()
     cmd = ArgumentParser ()
     cmd.add_argument \
         ( "-c", "--config"
@@ -740,6 +818,9 @@ def main () :
     if url :
         syncer = local_trackers [opt.local_tracker] \
             ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt)
+    if opt.schema_only :
+        syncer.dump_schema ()
+        sys.exit (0)
 
     if cfg.get ('OFTP_INCOMING', None) :
         # Get date of last sync:
@@ -748,7 +829,7 @@ def main () :
                 dt = f.read ()
         except IOError :
             dt = '2018-01-01T00:00:00'
-        lastsync = datetime.strptime (dt.strip (), '%Y-%m-%dT%H:%M:%S')
+        lastsync = datetime.strptime (dt.strip (), lastsync_fmt)
         fnmin    = lastsync.strftime ('ENG%y%m%d%H%M%SZZZZZ9')
         if ':' in cfg.OFTP_INCOMING :
             # If we have IPv6 addresses they may contain ':', so use rsplit
@@ -757,7 +838,7 @@ def main () :
                 ( host, cfg.SSH_KEY
                 , password   = cfg.SSH_PASSPHRASE
                 , user       = cfg.SSH_USER
-                , local_dir  = cfg.OFTP_TMP
+                , local_dir  = cfg.LOCAL_TMP
                 , remote_dir = dir
                 )
             flist = []
@@ -771,21 +852,28 @@ def main () :
             ssh.get_files (*flist)
             ssh.close ()
         else :
+            flist = []
             for f in os.listdir (cfg.OFTP_INCOMING) :
                 if not f.startswith ('ENG') :
                     continue
                 # Get only files with timestamp > last sync
                 if f <= fnmin :
                     continue
+                flist.append (f)
                 fn = os.path.join (cfg.OFTP_INCOMING, f)
-                shutil.copy (fn, cfg.OFTP_TMP)
-        # Now loop over tempfiles in OFTP_TMP, we only use files with
+                shutil.copy (fn, cfg.LOCAL_TMP)
+        # Now loop over tempfiles in LOCAL_TMP, we only use files with
         # sequence number 001 (engdat descriptions) and process these
-        for fn in sorted (os.listdir (cfg.OFTP_TMP)) :
+        npkg    = 2 # our first guess at the number of engdat package members
+        outname = os.path.join \
+            (cfg.LOCAL_OUT_TMP, 'ENG' + engdat_name (cfg, now))
+        pkg     = 2 # first pkg
+        for fn in sorted (flist) :
+            if not fn.startswith ('ENG') or len (fn) < 26 :
+                continue
             if fn [23:26] != '001' :
                 continue
-            path = os.path.join (cfg.OFTP_TMP, fn)
-            print (fn)
+            path = os.path.join (cfg.LOCAL_TMP, fn)
             with open (path) as f :
                 m = Edifact_Message (bytes = f.read ())
                 m.check ()
@@ -794,28 +882,84 @@ def main () :
                     ( "Invalid sender routing: %s expected %s"
                     % (m.sde.routing.routing, cfg.ENGDAT_PEER_ROUTING)
                     )
+                rm_engdat (path)
+                write_lastsync (opt, fn)
+                continue
             if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING :
                 syncer.log.error \
                     ( "Invalid receiver routing: %s expected %s"
                     % (m.rde.routing.routing, cfg.ENGDAT_OWN_ROUTING)
                     )
+                rm_engdat (path)
+                write_lastsync (opt, fn)
+                continue
             for efc in m.segment_iter ('EFC') :
-                efcfn = fn [:23] + "%03d" % int (efc.file_info.seqno) + fn [26:]
+                gpat  = fn [:23] + "%03d" % int (efc.file_info.seqno) + '*'
+                gpat  = os.path.join (cfg.LOCAL_TMP, gpat)
+                efcfn = glob (gpat)
+                if len (efcfn) != 1 :
+                    raise ValueError ("Sync-file not found, pattern=%s" % gpat)
+                efcfn = efcfn [0]
                 fmt = cfg.get ('ENGDAT_FORMAT', None)
-                if fmt != efc.file_format.file_format :
+                if fmt and fmt != efc.file_format.file_format :
                     syncer.log.error \
                         ( "Invalid file format: %s expected %s"
                         % (efc.file_format.file_format, fmt)
                         )
+                    os.unlink (efcfn)
                     continue
-                syncer.log.info ("would process: %s" % efcfn)
+                syncer.log.debug ("Processing: %s" % efcfn)
+                syncer.reinit ()
+                opt.output  = outname + '%03d%03d' % (npkg, pkg)
+                opt.zipfile = efcfn
+                pfiff = Pfiff (opt, cfg, syncer)
+                pfiff.sync (syncer)
+                if pfiff.out_dirty :
+                    npkg += 1
+                    pkg  += 1
+                pfiff.close ()
+                os.unlink (efcfn)
+            os.unlink (path)
+            write_lastsync (opt, fn)
+        # Did we send something? npkg is 1 greater than the number of
+        # files in the resulting engdat pkg. If it's 2 we didn't produce
+        # any output files and do not send anything.
+        if npkg != 2 :
+            # Need to rename the files
+            pat = outname + '*'
+            for fn in glob (pat) :
+                d, f = os.path.split (fn)
+                fnew = os.path.join (d, f [:20] + "%03d" % (npkg - 1) + f [23:])
+                os.rename (fn, fnew)
+            em = Engdat_Message \
+                ( sender_id        = cfg.ENGDAT_OWN_ID
+                , sender_name      = cfg.ENGDAT_OWN_NAME
+                , sender_routing   = cfg.ENGDAT_OWN_ROUTING
+                , sender_email     = cfg.ENGDAT_OWN_EMAIL
+                , sender_addr1     = cfg.ENGDAT_OWN_ADR1
+                , sender_addr2     = cfg.ENGDAT_OWN_ADR2
+                , sender_addr3     = cfg.ENGDAT_OWN_ADR3
+                , sender_addr4     = cfg.ENGDAT_OWN_ADR4
+                , receiver_id      = cfg.ENGDAT_PEER_ID
+                , receiver_name    = cfg.ENGDAT_PEER_NAME
+                , receiver_routing = cfg.ENGDAT_PEER_ROUTING
+                , receiver_email   = cfg.ENGDAT_PEER_EMAIL
+                , receiver_addr1   = cfg.ENGDAT_PEER_ADR1
+                , receiver_addr2   = cfg.ENGDAT_PEER_ADR2
+                , receiver_addr3   = cfg.ENGDAT_PEER_ADR3
+                , receiver_addr4   = cfg.ENGDAT_PEER_ADR4
+                , docdt            = now
+                , dt               = now
+                , docno            = engdat_name (cfg, now)
+                )
+            for k in range (2, npkg) :
+                em.append_efc ()
+            with open (outname + '%03d%03d' % (npkg - 1, 1), "w") as f :
+                f.write (em.to_bytes ())
     else :
         # This is used if we do sync of a single .zip file or no file at all
         if url :
             pfiff = Pfiff (opt, cfg, syncer)
-        if opt.schema_only :
-            syncer.dump_schema ()
-            sys.exit (0)
         if syncer and pfiff :
             pfiff.sync (syncer)
             # Zip files need to be closed
