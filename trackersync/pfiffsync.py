@@ -940,6 +940,7 @@ def main () :
                 , sender_addr2     = cfg.ENGDAT_OWN_ADR2
                 , sender_addr3     = cfg.ENGDAT_OWN_ADR3
                 , sender_addr4     = cfg.ENGDAT_OWN_ADR4
+                , sender_country   = cfg.ENGDAT_OWN_COUNTRY
                 , receiver_id      = cfg.ENGDAT_PEER_ID
                 , receiver_name    = cfg.ENGDAT_PEER_NAME
                 , receiver_routing = cfg.ENGDAT_PEER_ROUTING
@@ -948,9 +949,12 @@ def main () :
                 , receiver_addr2   = cfg.ENGDAT_PEER_ADR2
                 , receiver_addr3   = cfg.ENGDAT_PEER_ADR3
                 , receiver_addr4   = cfg.ENGDAT_PEER_ADR4
+                , receiver_country = cfg.ENGDAT_PEER_COUNTRY
                 , docdt            = now
                 , dt               = now
-                , docno            = engdat_name (cfg, now)
+                , docno            = engdat_name (cfg, now) [:17]
+                , ref              = engdat_name (cfg, now) [:14]
+                , msgref           = engdat_name (cfg, now) [:14]
                 )
             for k in range (2, npkg) :
                 em.append_efc ()
