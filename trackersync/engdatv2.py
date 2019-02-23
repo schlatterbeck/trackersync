@@ -256,8 +256,10 @@ msg4 = \
     ( b"UNB+UNOC:1+O0013006000F2:OD+O0013005466F3:OD+180213:1611+ref'"
       b"UNH+ref+ENGDAT:001::OD'"
       b"MID+180213161111XYZZY+180213:1611'"
-      b"SDE+:Z. ulieferer++sender-routingcode+:::::::sender@example.com'"
-      b"RDE+:O. EM++receiver-routingcode+:::::::receiver@example.com'"
+      b"SDE+O0013006000F2:Z. ulieferer+DE+sender-routingcode+:::::::"
+      b"sender@example.com+Z. ulieferer+DE'"
+      b"RDE+O0013005466F3:O. EM+DE+receiver-routingcode+:::::::"
+      b"receiver@example.com+O. EM+DE'"
       b"EFC+002:002.zip+NAT:PKZIP-Archive+OTH:Other+trackersync+INF+null'"
       b"TOT+2'"
       b"UNT+9+ref'"
@@ -547,6 +549,18 @@ class Engdat_Message (Edifact_Message) :
         , receiver_email
         , docno
         , docdt
+        , sender_addr1 = None
+        , sender_addr2 = None
+        , sender_addr3 = None
+        , sender_addr4 = None
+        , sender_country = 'DE'
+        , sender_dept = None
+        , receiver_addr1 = None
+        , receiver_addr2 = None
+        , receiver_addr3 = None
+        , receiver_addr4 = None
+        , receiver_country = 'DE'
+        , receiver_dept = None
         , ref = 'ref'
         , msgref = 'ref'
         , dt = None
@@ -575,14 +589,54 @@ class Engdat_Message (Edifact_Message) :
         mid.date_and_time.time = docdt.strftime ('%H%M')
         self.append_segment (mid)
         sde = SDE ()
-        sde.sender.party_name = sender_name
+        sde.sender.sender           = sender_id [:20]
+        sde.sender.party_name       = sender_name
+        sde.tech_contact.party_name = sender_name
+        if sender_addr1 :
+            sde.sender.addr1       = sender_addr1
+            sde.tech_contact.addr1 = sender_addr1
+        if sender_addr2 :
+            sde.sender.addr2       = sender_addr2
+            sde.tech_contact.addr2 = sender_addr2
+        if sender_addr3 :
+            sde.sender.addr3       = sender_addr3
+            sde.tech_contact.addr3 = sender_addr3
+        if sender_addr4 :
+            sde.sender.addr4       = sender_addr4
+            sde.tech_contact.addr4 = sender_addr4
         sde.routing.routing = sender_routing
         sde.contact_details_sender.email = sender_email
+        if sender_country :
+            sde.country_contact.country = sender_country
+            sde.country_tech.country    = sender_country
+        if sender_dept :
+            sde.contact_details_sender.department1 = sender_dept
+            sde.contact_details_tech.department1   = sender_dept
         self.append_segment (sde)
         rde = RDE ()
-        rde.receiver.party_name = receiver_name
+        rde.receiver.receiver       = receiver_id [:20]
+        rde.receiver.party_name     = receiver_name
+        rde.tech_contact.party_name = receiver_name
+        if receiver_addr1 :
+            rde.receiver.addr1     = receiver_addr1
+            rde.tech_contact.addr1 = receiver_addr1
+        if receiver_addr2 :
+            rde.receiver.addr2     = receiver_addr2
+            rde.tech_contact.addr2 = receiver_addr2
+        if receiver_addr3 :
+            rde.receiver.addr3     = receiver_addr3
+            rde.tech_contact.addr3 = receiver_addr3
+        if receiver_addr4 :
+            rde.receiver.addr4     = receiver_addr4
+            rde.tech_contact.addr4 = receiver_addr4
         rde.routing.routing = receiver_routing
         rde.contact_details_receiver.email = receiver_email
+        if receiver_country :
+            rde.country_contact.country = receiver_country
+            rde.country_tech.country    = receiver_country
+        if receiver_dept :
+            rde.contact_details_receiver.department1 = receiver_dept
+            rde.contact_details_tech.department1     = receiver_dept
         self.append_segment (rde)
         tot = TOT ()
         tot.quantity.quantity = '2'
