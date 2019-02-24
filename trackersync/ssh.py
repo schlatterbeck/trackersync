@@ -69,9 +69,19 @@ class SSH_Client (autosuper) :
                 yield (f.filename)
     # end def list_files
 
+    def put_files (self, *fn) :
+        for f in fn :
+            dest = os.path.join (self.remote_dir, os.path.basename (f))
+            self.sftp.put (f, dest)
+    # end def put_files
+
     def close (self) :
         self.ssh.save_host_keys (self.known_hosts)
         self.ssh.close ()
     # end def close
+
+    def __getattr__ (self, name) :
+        return getattr (self.sftp, name)
+    # end def __getattr__
 
 # end class SSH_Client

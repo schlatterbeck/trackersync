@@ -960,6 +960,47 @@ def main () :
                 em.append_efc ()
             with open (outname + '%03d%03d' % (npkg - 1, 1), "w") as f :
                 f.write (em.to_bytes ())
+            # Now copy the resulting files to the remote OFTP tmp.
+            flist = glob (pat)
+            if ':' in cfg.OFTP_OUTGOING :
+                host1, tmp = cfg.OFTP_TMP_OUT.rsplit (':', 1)
+                host, dir = cfg.OFTP_OUTGOING.rsplit (':', 1)
+                assert host1 == host
+                # Copy files to OFTP_TMP_OUT
+                ssh = SSH_Client \
+                    ( host, cfg.SSH_KEY
+                    , password   = cfg.SSH_PASSPHRASE
+                    , user       = cfg.SSH_USER
+                    , local_dir  = cfg.LOCAL_OUT_TMP
+                    , remote_dir = tmp
+                    )
+                ssh.put_files (* flist)
+                dirperm = ssh.stat (dir)
+                uid     = None
+                for f in flist :
+                    bn = os.path.basename (f)
+                    np = os.path.join (dir, bn)
+                    ssh.rename (bn, np)
+                    # files need to be group-writeable for oftp server
+                    # to process them
+                    ssh.chmod (np, 0664)
+                    # Get my own uid from created file once
+                    if not uid :
+                        perm = ssh.stat (np)
+                        uid  = perm.st_uid
+                    # We also set the group explicitly to the group of
+                    # the directory, seems that sftp doesn't honor the
+                    # s-bit of the group.
+                    ssh.chown (np, uid, dirperm.st_gid)
+                ssh.close ()
+                for f in flist :
+                    os.unlink (f)
+            else :
+                # Directly move the files to the *local* OFTP_OUTGOING
+                for f in flist :
+                    fnew = os.path.join \
+                        (cfg.OFTP_OUTGOING, os.path.basename (f))
+                    os.rename (f, fnew)
     else :
         # This is used if we do sync of a single .zip file or no file at all
         if url :
