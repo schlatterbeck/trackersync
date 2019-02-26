@@ -48,7 +48,7 @@ msg1 = \
 
       'UNH'
       '+210'
-      '+ENGDAT:001::OD'
+      '+ENGDAT:002::OD'
       "'"
 
       'MID'
@@ -178,7 +178,7 @@ msg2 = \
 
       'UNH'
       '+215'
-      '+ENGDAT:001::OD'
+      '+ENGDAT:002::OD'
       "'"
 
       'MID'
@@ -253,8 +253,9 @@ msg3 = \
     ).encode ('latin-1')
 
 msg4 = \
-    ( b"UNB+UNOC:1+O0013006000F2:OD+O0013005466F3:OD+180213:1611+ref'"
-      b"UNH+ref+ENGDAT:001::OD'"
+    ( b"UNB+UNOC:1+O0013006000F2:OD:sender-routing+"
+      b"O0013005466F3:OD:receiver-routi+180213:1611+ref'"
+      b"UNH+ref+ENGDAT:002::OD'"
       b"MID+180213161111XYZZY+180213:1611'"
       b"SDE+O0013006000F2:Z. ulieferer+DE+sender-routingcode+:::::::"
       b"sender@example.com+Z. ulieferer+DE'"
@@ -573,7 +574,9 @@ class Engdat_Message (Edifact_Message) :
             now = datetime.now ()
         unb = UNB ()
         unb.interchange_sender.id = sender_id
+        unb.interchange_sender.internal_id = sender_routing [:14]
         unb.interchange_recipient.id = receiver_id
+        unb.interchange_recipient.internal_id = receiver_routing [:14]
         unb.date_and_time.date = now.strftime ('%y%m%d')
         unb.date_and_time.time = now.strftime ('%H%M')
         unb.control_ref.control_ref = ref
@@ -1003,15 +1006,13 @@ class UNB (Named_Edifact_Segment) :
         , ( ('interchange_sender', 'm', 1)
           , ( ('id',              'm', 'an', 0, 35)
             , ('code_qualifier',  'c', 'an', 0, 4, 'OD')
-            , ('internal_id',     'c', 'an', 0, 35)
-            , ('internal_sub_id', 'c', 'an', 0, 35)
+            , ('internal_id',     'c', 'an', 0, 14)
             )
           )
         , ( ('interchange_recipient', 'm', 1)
           , ( ('id',              'm', 'an', 0, 35)
             , ('code_qualifier',  'c', 'an', 0, 4, 'OD')
-            , ('internal_id',     'c', 'an', 0, 35)
-            , ('internal_sub_id', 'c', 'an', 0, 35)
+            , ('internal_id',     'c', 'an', 0, 14)
             )
           )
         , ( ('date_and_time', 'm', 1)
@@ -1066,7 +1067,7 @@ class UNH (Named_Edifact_Segment) :
           )
         , ( ('message_id', 'm', 1)
           , ( ('type',            'm', 'an', 0, 6, 'ENGDAT')
-            , ('version',         'm', 'an', 0, 3, '001')
+            , ('version',         'm', 'an', 0, 3, '002')
             , ('release',         'c', 'an', 0, 3)
             , ('agency',          'c', 'an', 0, 3, 'OD') # 79?
             , ('assoc_code',      'c', 'an', 0, 6)
@@ -1350,7 +1351,7 @@ class TOT (Named_Edifact_Segment) :
 if __name__ == '__main__' :
     if len (sys.argv) > 1 :
         with open (sys.argv [1]) as f :
-            m = Edifact_Message (bytes = f.read ())
+            m = Edifact_Message (bytes = f.read ().rstrip ())
     else :
         m = Edifact_Message (bytes = sys.stdin.read ())
     m.check ()

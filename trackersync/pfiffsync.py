@@ -941,6 +941,7 @@ def main () :
                 , sender_addr3     = cfg.ENGDAT_OWN_ADR3
                 , sender_addr4     = cfg.ENGDAT_OWN_ADR4
                 , sender_country   = cfg.ENGDAT_OWN_COUNTRY
+                , sender_dept      = cfg.ENGDAT_OWN_DEPT
                 , receiver_id      = cfg.ENGDAT_PEER_ID
                 , receiver_name    = cfg.ENGDAT_PEER_NAME
                 , receiver_routing = cfg.ENGDAT_PEER_ROUTING
@@ -950,6 +951,7 @@ def main () :
                 , receiver_addr3   = cfg.ENGDAT_PEER_ADR3
                 , receiver_addr4   = cfg.ENGDAT_PEER_ADR4
                 , receiver_country = cfg.ENGDAT_PEER_COUNTRY
+                , receiver_dept    = cfg.ENGDAT_PEER_DEPT
                 , docdt            = now
                 , dt               = now
                 , docno            = engdat_name (cfg, now) [:17]
