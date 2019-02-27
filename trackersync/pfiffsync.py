@@ -122,10 +122,11 @@ class Problem (tracker_sync.Remote_Issue) :
 
     File_Attachment_Class = Pfiff_File_Attachment
 
-    def __init__ (self, pfiff, record) :
+    def __init__ (self, pfiff, record, now = datetime.now ()) :
         self.pfiff   = pfiff
         self.debug   = self.pfiff.debug
         self.docinfo = {}
+        self.now     = now
         rec = {}
         for k, v in record.iteritems () :
             if v is not None and v != str ('') :
@@ -391,7 +392,7 @@ class Pfiff (Log, Lock_Mixin) :
         )
     multiline = set (('problem_description',))
 
-    def __init__ (self, opt, cfg, syncer) :
+    def __init__ (self, opt, cfg, syncer, now = datetime.now ()) :
         self.opt           = opt
         self.cfg           = cfg
         self.debug         = opt.debug
@@ -404,6 +405,7 @@ class Pfiff (Log, Lock_Mixin) :
         self.pudis         = {}
         self.zf            = None
         self.out_dirty     = False
+        self.now           = now
         if opt.lock_name :
             self.lockfile = opt.lock_name
 
@@ -496,7 +498,7 @@ class Pfiff (Log, Lock_Mixin) :
                 del self.issue ['attachments']
                 self.issue ['files'] = {}
             number = self.issue ['problem_number']
-            p = Problem (self, self.issue)
+            p = Problem (self, self.issue, now = self.now)
             p.attachments = []
             attold = {}
             if number in self.unsynced :
@@ -660,50 +662,285 @@ class Pfiff (Log, Lock_Mixin) :
 local_trackers = dict (jira = jira_sync.Syncer, roundup = roundup_sync.Syncer)
 lastsync_fmt   = '%Y-%m-%dT%H:%M:%S'
 
-def rm_engdat (fn) :
-    """ Remove all files belonging to an ENGDAT description file
-        We get all files with a wildcard in position 23-26 of the given
-        filename (sequence number) since this is the end of the ENGDAT
-        file name we will replace the rest of the name with a wildcard.
-        (OFTP will add some timestamp information to the ENGDAT file name
-        which is not guaranteed to be unique for all ENGDAT files
-        belonging to an ENDAT Packet).
-    """
-    path, rest = os.path.split (fn)
-    pattern = rest [:23] + '*'
-    for f in glob (os.path.join (path, pattern)) :
-        print ("Would unlink: %s" % f)
-# end def rm_engdat
+class Engdat_Sync (autosuper) :
 
-def write_lastsync (opt, fn) :
-    """ Determine date from engdat filename and write __lastsync file
-    """
-    assert fn.startswith ('ENG')
-    now = datetime.now ()
-    dt  = datetime.strptime (fn [3:15], '%y%m%d%H%M%S')
-    # Two-digit years will wrap back at some point in the future
-    if dt.year < now.year - 50 :
-        dt = datetime \
-            (dt.year + 100, dt.month, dt.day, dt.hour, dt.minute, dt.second)
-    with open (os.path.join (opt.syncdir, '__lastsync'), 'w') as f :
-        f.write (dt.strftime (lastsync_fmt) + '\n')
-# end def write_lastsync
+    def __init__ (self, cfg, opt, syncer) :
+        self.cfg    = cfg
+        self.opt    = opt
+        self.syncer = syncer
+        self.log    = self.syncer.log
+        self.now    = datetime.now ()
+        self.outnum = 0
+    # end def __init__
 
-def engdat_name (cfg, date) :
-    """ ENGDAT filename without 'ENG' prefix, also used inside engdat
-        message.
-    """
-    en = cfg.get ('ENGDAT_FILENAME')
-    if en is None :
-        en = cfg.ENGDAT_PEER_ROUTING
-    if not en or len (en) < 5 :
-        raise ValueError ("Short/Missing ENGDAT_FILENAME: %s" % en)
-    en = en [:5].upper ()
-    return date.strftime ('%y%m%d%H%M%S') + en
-# end def engdat_name
+    def engdat_name (self, outnum = None) :
+        """ ENGDAT filename without 'ENG' prefix, also used inside engdat
+            message.
+        """
+        if outnum is None :
+            outnum = self.outnum
+        l  = 3 # if changed, change %02d below, sum needs to be 5
+        assert outnum <= 99
+        en = self.cfg.get ('ENGDAT_FILENAME')
+        if en is None :
+            en = self.cfg.ENGDAT_PEER_ROUTING
+        if not en or len (en) < l :
+            raise ValueError ("Short/Missing ENGDAT_FILENAME: %s" % en)
+        en = en [:l].upper ()
+        return self.now.strftime ('%y%m%d%H%M%S') + "%02d" % outnum + en
+    # end def engdat_name
+
+    def rm_engdat (self, fn) :
+        """ Remove all files belonging to an ENGDAT description file
+            We get all files with a wildcard in position 23-26 of the given
+            filename (sequence number) since this is the end of the ENGDAT
+            file name we will replace the rest of the name with a wildcard.
+            (OFTP will add some timestamp information to the ENGDAT file name
+            which is not guaranteed to be unique for all ENGDAT files
+            belonging to an ENDAT Packet).
+        """
+        path, rest = os.path.split (fn)
+        pattern = rest [:23] + '*'
+        for f in glob (os.path.join (path, pattern)) :
+            self.log.debug ("Unlink: %s" % f)
+            os.unlink (f)
+    # end def rm_engdat
+
+    def sync (self) :
+        opt = self.opt
+        cfg = self.cfg
+        # Get date of last sync:
+        try :
+            with open (os.path.join (opt.syncdir, '__lastsync')) as f :
+                dt = f.read ()
+        except IOError :
+            dt = '2018-01-01T00:00:00'
+        lastsync = datetime.strptime (dt.strip (), lastsync_fmt)
+        fnmin    = lastsync.strftime ('ENG%y%m%d%H%M%SZZZZZ9')
+        if ':' in cfg.OFTP_INCOMING :
+            # If we have IPv6 addresses they may contain ':', so use rsplit
+            host, dir = cfg.OFTP_INCOMING.rsplit (':', 1)
+            ssh = SSH_Client \
+                ( host, cfg.SSH_KEY
+                , password   = cfg.SSH_PASSPHRASE
+                , user       = cfg.SSH_USER
+                , local_dir  = cfg.LOCAL_TMP
+                , remote_dir = dir
+                )
+            flist = []
+            for f in ssh.list_files () :
+                if not f.startswith ('ENG') :
+                    continue
+                # Get only files with timestamp > last sync
+                if f <= fnmin :
+                    continue
+                flist.append (f)
+            ssh.get_files (*flist)
+            ssh.close ()
+        else :
+            flist = []
+            for f in os.listdir (cfg.OFTP_INCOMING) :
+                if not f.startswith ('ENG') :
+                    continue
+                # Get only files with timestamp > last sync
+                if f <= fnmin :
+                    continue
+                flist.append (f)
+                fn = os.path.join (cfg.OFTP_INCOMING, f)
+                shutil.copy (fn, cfg.LOCAL_TMP)
+        # Now loop over tempfiles in LOCAL_TMP, we only use files with
+        # sequence number 001 (engdat descriptions) and process these
+        self.outnum = 0
+        for fn in sorted (flist) :
+            if not fn.startswith ('ENG') or len (fn) < 26 :
+                continue
+            if fn [23:26] != '001' :
+                continue
+            self.sync_to_remote (fn)
+            self.outnum += 1
+        # No incoming files to sync, just export our local changes
+        if not flist :
+            opt.zipfile = None
+            opt.output  = os.path.join \
+                (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name () + '002002')
+            self.log.debug ("Syncing: (no input) out: %s" % (opt.output))
+            pfiff = Pfiff (opt, cfg, self.syncer, now = self.now)
+            pfiff.sync (self.syncer)
+            if pfiff.out_dirty :
+                self.write_output (3)
+            pfiff.close ()
+    # end def sync
+
+    def sync_to_remote (self, fn = None) :
+        cfg     = self.cfg
+        opt     = self.opt
+        npkg    = 2 # our first guess at the number of engdat members
+        pkg     = 2 # first pkg
+        self.outname = os.path.join \
+            (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name ())
+        path = os.path.join (cfg.LOCAL_TMP, fn)
+        with open (path) as f :
+            m = Edifact_Message (bytes = f.read ())
+            m.check ()
+        if m.sde.routing.routing != cfg.ENGDAT_PEER_ROUTING :
+            self.log.error \
+                ( "Invalid sender routing: %s expected %s"
+                % (m.sde.routing.routing, cfg.ENGDAT_PEER_ROUTING)
+                )
+            rm_engdat (self, path)
+            self.write_lastsync (fn)
+            return
+        if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING :
+            self.log.error \
+                ( "Invalid receiver routing: %s expected %s"
+                % (m.rde.routing.routing, cfg.ENGDAT_OWN_ROUTING)
+                )
+            rm_engdat (self, path)
+            self.write_lastsync (fn)
+            return
+        for efc in m.segment_iter ('EFC') :
+            gpat  = fn [:23] + "%03d" % int (efc.file_info.seqno) + '*'
+            gpat  = os.path.join (cfg.LOCAL_TMP, gpat)
+            efcfn = glob (gpat)
+            if len (efcfn) != 1 :
+                raise ValueError ("Sync-file not found, pattern=%s" % gpat)
+            efcfn = efcfn [0]
+            fmt = cfg.get ('ENGDAT_FORMAT', None)
+            if fmt and fmt != efc.file_format.file_format :
+                self.log.error \
+                    ( "Invalid file format: %s expected %s"
+                    % (efc.file_format.file_format, fmt)
+                    )
+                os.unlink (efcfn)
+                return
+            self.log.debug ("Processing: %s" % efcfn)
+            self.syncer.reinit ()
+            opt.output  = self.outname + '%03d%03d' % (npkg, pkg)
+            opt.zipfile = efcfn
+            self.log.debug \
+                ("Syncing: in: %s out: %s" % (opt.zipfile, opt.output))
+            pfiff = Pfiff (opt, cfg, self.syncer, now = self.now)
+            pfiff.sync (self.syncer)
+            if pfiff.out_dirty :
+                npkg += 1
+                pkg  += 1
+            pfiff.close ()
+            os.unlink (efcfn)
+        os.unlink (path)
+        self.write_lastsync (fn)
+        self.write_output (npkg)
+    # end def sync_to_remote
+
+    def write_output (self, npkg) :
+        cfg = self.cfg
+        opt = self.opt
+        # Did we send something? npkg is 1 greater than the number of
+        # files in the resulting engdat pkg. If it's 2 we didn't produce
+        # any output files and do not send anything.
+        if npkg != 2 :
+            # Need to rename the files
+            pat = self.outname + '*'
+            for fn in glob (pat) :
+                d, f = os.path.split (fn)
+                fnew = os.path.join \
+                    (d, f [:20] + "%03d" % (npkg - 1) + f [23:])
+                os.rename (fn, fnew)
+            em = Engdat_Message \
+                ( sender_id        = cfg.ENGDAT_OWN_ID
+                , sender_name      = cfg.ENGDAT_OWN_NAME
+                , sender_routing   = cfg.ENGDAT_OWN_ROUTING
+                , sender_email     = cfg.ENGDAT_OWN_EMAIL
+                , sender_addr1     = cfg.ENGDAT_OWN_ADR1
+                , sender_addr2     = cfg.ENGDAT_OWN_ADR2
+                , sender_addr3     = cfg.ENGDAT_OWN_ADR3
+                , sender_addr4     = cfg.ENGDAT_OWN_ADR4
+                , sender_country   = cfg.ENGDAT_OWN_COUNTRY
+                , sender_dept      = cfg.ENGDAT_OWN_DEPT
+                , receiver_id      = cfg.ENGDAT_PEER_ID
+                , receiver_name    = cfg.ENGDAT_PEER_NAME
+                , receiver_routing = cfg.ENGDAT_PEER_ROUTING
+                , receiver_email   = cfg.ENGDAT_PEER_EMAIL
+                , receiver_addr1   = cfg.ENGDAT_PEER_ADR1
+                , receiver_addr2   = cfg.ENGDAT_PEER_ADR2
+                , receiver_addr3   = cfg.ENGDAT_PEER_ADR3
+                , receiver_addr4   = cfg.ENGDAT_PEER_ADR4
+                , receiver_country = cfg.ENGDAT_PEER_COUNTRY
+                , receiver_dept    = cfg.ENGDAT_PEER_DEPT
+                , docdt            = self.now
+                , dt               = self.now
+                , docno            = self.engdat_name () [:17]
+                , ref              = self.engdat_name () [:14]
+                , msgref           = self.engdat_name () [:14]
+                )
+            for k in range (2, npkg) :
+                em.append_efc ()
+            with open (self.outname + '%03d%03d' % (npkg - 1, 1), "w") as f :
+                f.write (em.to_bytes ())
+            # Now copy the resulting files to the remote OFTP tmp.
+            flist = glob (pat)
+            if ':' in cfg.OFTP_OUTGOING :
+                host1, tmp = cfg.OFTP_TMP_OUT.rsplit (':', 1)
+                host, dir = cfg.OFTP_OUTGOING.rsplit (':', 1)
+                assert host1 == host
+                # Copy files to OFTP_TMP_OUT
+                ssh = SSH_Client \
+                    ( host, cfg.SSH_KEY
+                    , password   = cfg.SSH_PASSPHRASE
+                    , user       = cfg.SSH_USER
+                    , local_dir  = cfg.LOCAL_OUT_TMP
+                    , remote_dir = tmp
+                    )
+                ssh.put_files (* flist)
+                dirperm = ssh.stat (dir)
+                uid     = None
+                for f in flist :
+                    bn = os.path.basename (f)
+                    np = os.path.join (dir, bn)
+                    ssh.rename (bn, np)
+                    # files need to be group-writeable for oftp server
+                    # to process them
+                    ssh.chmod (np, 0664)
+                    # Get my own uid from created file once
+                    if not uid :
+                        perm = ssh.stat (np)
+                        uid  = perm.st_uid
+                    # We also set the group explicitly to the group of
+                    # the directory, seems that sftp doesn't honor the
+                    # s-bit of the group.
+                    ssh.chown (np, uid, dirperm.st_gid)
+                ssh.close ()
+                if not opt.keep_files :
+                    for f in flist :
+                        os.unlink (f)
+            else :
+                # Directly move the files to the *local* OFTP_OUTGOING
+                dirperm = os.stat (cfg.OFTP_OUTGOING)
+                for f in flist :
+                    fnew = os.path.join \
+                        (cfg.OFTP_OUTGOING, os.path.basename (f))
+                    if opt.keep_files :
+                        shutil.copy (f, fnew)
+                    else :
+                        os.rename (f, fnew)
+                    os.chown  (fnew, -1, dirperm.st_gid)
+    # end def write_output
+
+    def write_lastsync (self, fn) :
+        """ Determine date from engdat filename and write __lastsync file
+        """
+        assert fn.startswith ('ENG')
+        dt  = datetime.strptime (fn [3:15], '%y%m%d%H%M%S')
+        # Two-digit years will wrap back at some point in the future
+        if dt.year < self.now.year - 50 :
+            dt = datetime \
+                (dt.year + 100, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+        with open (os.path.join (self.opt.syncdir, '__lastsync'), 'w') as f :
+            f.write (dt.strftime (lastsync_fmt) + '\n')
+    # end def write_lastsync
+
+# end class Engdat_Sync
 
 def main () :
-    now = datetime.now ()
     cmd = ArgumentParser ()
     cmd.add_argument \
         ( "-c", "--config"
@@ -736,6 +973,16 @@ def main () :
                   % ', '.join (local_trackers.keys ())
         )
     cmd.add_argument \
+        ( "-k", "--keep-files"
+        , help    = "Keep outgoing engdat/zip files"
+        , action  = "store_true"
+        , default = False
+        )
+    cmd.add_argument \
+        ( "-p", "--local-password"
+        , help    = "Password for local tracker"
+        )
+    cmd.add_argument \
         ( "-n", "--no-action"
         , help    = "Dry-run: Don't update any side of sync"
         , action  = 'store_true'
@@ -752,10 +999,6 @@ def main () :
     cmd.add_argument \
         ( "-o", "--output"
         , help    = "Output file (zip) (default standard output)"
-        )
-    cmd.add_argument \
-        ( "-p", "--local-password"
-        , help    = "Password for local tracker"
         )
     cmd.add_argument \
         ( "-R", "--remote-change"
@@ -828,186 +1071,8 @@ def main () :
         sys.exit (0)
 
     if cfg.get ('OFTP_INCOMING', None) and not opt.zipfile :
-        # Get date of last sync:
-        try :
-            with open (os.path.join (opt.syncdir, '__lastsync')) as f :
-                dt = f.read ()
-        except IOError :
-            dt = '2018-01-01T00:00:00'
-        lastsync = datetime.strptime (dt.strip (), lastsync_fmt)
-        fnmin    = lastsync.strftime ('ENG%y%m%d%H%M%SZZZZZ9')
-        if ':' in cfg.OFTP_INCOMING :
-            # If we have IPv6 addresses they may contain ':', so use rsplit
-            host, dir = cfg.OFTP_INCOMING.rsplit (':', 1)
-            ssh = SSH_Client \
-                ( host, cfg.SSH_KEY
-                , password   = cfg.SSH_PASSPHRASE
-                , user       = cfg.SSH_USER
-                , local_dir  = cfg.LOCAL_TMP
-                , remote_dir = dir
-                )
-            flist = []
-            for f in ssh.list_files () :
-                if not f.startswith ('ENG') :
-                    continue
-                # Get only files with timestamp > last sync
-                if f <= fnmin :
-                    continue
-                flist.append (f)
-            ssh.get_files (*flist)
-            ssh.close ()
-        else :
-            flist = []
-            for f in os.listdir (cfg.OFTP_INCOMING) :
-                if not f.startswith ('ENG') :
-                    continue
-                # Get only files with timestamp > last sync
-                if f <= fnmin :
-                    continue
-                flist.append (f)
-                fn = os.path.join (cfg.OFTP_INCOMING, f)
-                shutil.copy (fn, cfg.LOCAL_TMP)
-        # Now loop over tempfiles in LOCAL_TMP, we only use files with
-        # sequence number 001 (engdat descriptions) and process these
-        npkg    = 2 # our first guess at the number of engdat package members
-        outname = os.path.join \
-            (cfg.LOCAL_OUT_TMP, 'ENG' + engdat_name (cfg, now))
-        pkg     = 2 # first pkg
-        for fn in sorted (flist) :
-            if not fn.startswith ('ENG') or len (fn) < 26 :
-                continue
-            if fn [23:26] != '001' :
-                continue
-            path = os.path.join (cfg.LOCAL_TMP, fn)
-            with open (path) as f :
-                m = Edifact_Message (bytes = f.read ())
-                m.check ()
-            if m.sde.routing.routing != cfg.ENGDAT_PEER_ROUTING :
-                syncer.log.error \
-                    ( "Invalid sender routing: %s expected %s"
-                    % (m.sde.routing.routing, cfg.ENGDAT_PEER_ROUTING)
-                    )
-                rm_engdat (path)
-                write_lastsync (opt, fn)
-                continue
-            if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING :
-                syncer.log.error \
-                    ( "Invalid receiver routing: %s expected %s"
-                    % (m.rde.routing.routing, cfg.ENGDAT_OWN_ROUTING)
-                    )
-                rm_engdat (path)
-                write_lastsync (opt, fn)
-                continue
-            for efc in m.segment_iter ('EFC') :
-                gpat  = fn [:23] + "%03d" % int (efc.file_info.seqno) + '*'
-                gpat  = os.path.join (cfg.LOCAL_TMP, gpat)
-                efcfn = glob (gpat)
-                if len (efcfn) != 1 :
-                    raise ValueError ("Sync-file not found, pattern=%s" % gpat)
-                efcfn = efcfn [0]
-                fmt = cfg.get ('ENGDAT_FORMAT', None)
-                if fmt and fmt != efc.file_format.file_format :
-                    syncer.log.error \
-                        ( "Invalid file format: %s expected %s"
-                        % (efc.file_format.file_format, fmt)
-                        )
-                    os.unlink (efcfn)
-                    continue
-                syncer.log.debug ("Processing: %s" % efcfn)
-                syncer.reinit ()
-                opt.output  = outname + '%03d%03d' % (npkg, pkg)
-                opt.zipfile = efcfn
-                pfiff = Pfiff (opt, cfg, syncer)
-                pfiff.sync (syncer)
-                if pfiff.out_dirty :
-                    npkg += 1
-                    pkg  += 1
-                pfiff.close ()
-                os.unlink (efcfn)
-            os.unlink (path)
-            write_lastsync (opt, fn)
-        # Did we send something? npkg is 1 greater than the number of
-        # files in the resulting engdat pkg. If it's 2 we didn't produce
-        # any output files and do not send anything.
-        if npkg != 2 :
-            # Need to rename the files
-            pat = outname + '*'
-            for fn in glob (pat) :
-                d, f = os.path.split (fn)
-                fnew = os.path.join (d, f [:20] + "%03d" % (npkg - 1) + f [23:])
-                os.rename (fn, fnew)
-            em = Engdat_Message \
-                ( sender_id        = cfg.ENGDAT_OWN_ID
-                , sender_name      = cfg.ENGDAT_OWN_NAME
-                , sender_routing   = cfg.ENGDAT_OWN_ROUTING
-                , sender_email     = cfg.ENGDAT_OWN_EMAIL
-                , sender_addr1     = cfg.ENGDAT_OWN_ADR1
-                , sender_addr2     = cfg.ENGDAT_OWN_ADR2
-                , sender_addr3     = cfg.ENGDAT_OWN_ADR3
-                , sender_addr4     = cfg.ENGDAT_OWN_ADR4
-                , sender_country   = cfg.ENGDAT_OWN_COUNTRY
-                , sender_dept      = cfg.ENGDAT_OWN_DEPT
-                , receiver_id      = cfg.ENGDAT_PEER_ID
-                , receiver_name    = cfg.ENGDAT_PEER_NAME
-                , receiver_routing = cfg.ENGDAT_PEER_ROUTING
-                , receiver_email   = cfg.ENGDAT_PEER_EMAIL
-                , receiver_addr1   = cfg.ENGDAT_PEER_ADR1
-                , receiver_addr2   = cfg.ENGDAT_PEER_ADR2
-                , receiver_addr3   = cfg.ENGDAT_PEER_ADR3
-                , receiver_addr4   = cfg.ENGDAT_PEER_ADR4
-                , receiver_country = cfg.ENGDAT_PEER_COUNTRY
-                , receiver_dept    = cfg.ENGDAT_PEER_DEPT
-                , docdt            = now
-                , dt               = now
-                , docno            = engdat_name (cfg, now) [:17]
-                , ref              = engdat_name (cfg, now) [:14]
-                , msgref           = engdat_name (cfg, now) [:14]
-                )
-            for k in range (2, npkg) :
-                em.append_efc ()
-            with open (outname + '%03d%03d' % (npkg - 1, 1), "w") as f :
-                f.write (em.to_bytes ())
-            # Now copy the resulting files to the remote OFTP tmp.
-            flist = glob (pat)
-            if ':' in cfg.OFTP_OUTGOING :
-                host1, tmp = cfg.OFTP_TMP_OUT.rsplit (':', 1)
-                host, dir = cfg.OFTP_OUTGOING.rsplit (':', 1)
-                assert host1 == host
-                # Copy files to OFTP_TMP_OUT
-                ssh = SSH_Client \
-                    ( host, cfg.SSH_KEY
-                    , password   = cfg.SSH_PASSPHRASE
-                    , user       = cfg.SSH_USER
-                    , local_dir  = cfg.LOCAL_OUT_TMP
-                    , remote_dir = tmp
-                    )
-                ssh.put_files (* flist)
-                dirperm = ssh.stat (dir)
-                uid     = None
-                for f in flist :
-                    bn = os.path.basename (f)
-                    np = os.path.join (dir, bn)
-                    ssh.rename (bn, np)
-                    # files need to be group-writeable for oftp server
-                    # to process them
-                    ssh.chmod (np, 0664)
-                    # Get my own uid from created file once
-                    if not uid :
-                        perm = ssh.stat (np)
-                        uid  = perm.st_uid
-                    # We also set the group explicitly to the group of
-                    # the directory, seems that sftp doesn't honor the
-                    # s-bit of the group.
-                    ssh.chown (np, uid, dirperm.st_gid)
-                ssh.close ()
-                for f in flist :
-                    os.unlink (f)
-            else :
-                # Directly move the files to the *local* OFTP_OUTGOING
-                for f in flist :
-                    fnew = os.path.join \
-                        (cfg.OFTP_OUTGOING, os.path.basename (f))
-                    os.rename (f, fnew)
+        es = Engdat_Sync (cfg, opt, syncer)
+        es.sync ()
     else :
         # This is used if we do sync of a single .zip file or no file at all
         if url :
