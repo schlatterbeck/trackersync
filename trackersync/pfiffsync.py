@@ -216,6 +216,11 @@ class Problem (tracker_sync.Remote_Issue) :
         sn.text = self.pfiff.cfg.COMPANY_SHORT
         id_e    = ElementTree.SubElement (info, 'ISSUE-ID')
         id_e.text = id
+        info    = ElementTree.SubElement (infos, 'COMPANY-ISSUE-INFO')
+        sn      = ElementTree.SubElement (info, 'COMPANY-DATA-REF')
+        sn.text = self.pfiff.company_short
+        id_e    = ElementTree.SubElement (info, 'ISSUE-ID')
+        id_e.text = self.get ('problem_number')
 
         props = ElementTree.SubElement (issue, 'ISSUE-PROPERTIES')
         state = ElementTree.SubElement (props, 'ISSUE-CURRENT-STATE')
@@ -309,8 +314,8 @@ class Pfiff (Log, Lock_Mixin) :
     # partner. The to_xml is used when we compute our answer.
     # We use the xml tags delimited by '/'.
     # Note that things under COMPANY-ISSUE-INFO are only called for the
-    # peer (opt.company) in from_xml and only for the supplier
-    # (us) in to_xml. We don't parse the info the peer has about us.
+    # peer (opt.company) in from_xml and for both, the supplier (us) and
+    # the peer in to_xml. We don't parse the info the peer has about us.
     # Also note that the DELIVERY-MILESTONES (several of them) are
     # mapped to the states in delivery_status below depending on the
     # contents under the CATEGORY tag.
@@ -822,7 +827,7 @@ def main () :
         syncer.dump_schema ()
         sys.exit (0)
 
-    if cfg.get ('OFTP_INCOMING', None) :
+    if cfg.get ('OFTP_INCOMING', None) and not opt.zipfile :
         # Get date of last sync:
         try :
             with open (os.path.join (opt.syncdir, '__lastsync')) as f :

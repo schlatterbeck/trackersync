@@ -35,6 +35,38 @@ LOCAL_TRACKER  = 'jira'
 COMPANY        = 'TestPrj Zulieferer'
 COMPANY_SHORT  = 'TPZ'
 
+oftp_pfx       = 'oftp-server.example.com:/home/oftp/oftp2_1.1b39/messages/'
+OFTP_INCOMING  = oftp_pfx + 'Supplier/inbox/RemotePartnerO00XXXXXXXXXXXXXXX'
+OFTP_TMP_OUT   = oftp_pfx + 'tmp'
+OFTP_OUTGOING  = oftp_pfx + 'RemotePartnerO00XXXXXXXXXXXXXXX/outbox'
+LOCAL_TMP      = '.../trackersync/tmp'
+LOCAL_OUT_TMP  = '.../trackersync/out'
+
+SSH_KEY        = '/home/syncuser/.ssh/oftp'
+SSH_PASSPHRASE = 'GEHEIM'
+SSH_USER       = 'syncuser'
+
+ENGDAT_PEER_ID      = 'O00XXXXXXXXXXXXXXX'
+ENGDAT_PEER_ROUTING = 'ROUTING-Code-PEER'
+ENGDAT_PEER_NAME    = 'OEM Name'
+ENGDAT_PEER_ADR1    = 'OEM ADDR1'
+ENGDAT_PEER_ADR2    = 'OEM ADDR1'
+ENGDAT_PEER_ADR3    = 'GERMANY (Federal Republic of)'
+ENGDAT_PEER_COUNTRY = 'DE'
+ENGDAT_PEER_DEPT    = 'OEM Department'
+ENGDAT_PEER_EMAIL   = 'oem@example.com'
+
+ENGDAT_OWN_ID       = 'O0YYYYYYYYYYYYY'
+ENGDAT_OWN_ROUTING  = 'ROUTING-Code-Supplier'
+ENGDAT_OWN_NAME     = 'Supplier Name'
+ENGDAT_OWN_ADR1     = 'Supplier ADDR1'
+ENGDAT_OWN_ADR2     = 'Supplier ADDR2'
+ENGDAT_OWN_ADR3     = 'Supplier ADDR3'
+ENGDAT_OWN_ADR4     = 'GERMANY (Federal Republic of)'
+ENGDAT_OWN_COUNTRY  = 'DE'
+ENGDAT_OWN_DEPT     = 'Supplier Department'
+ENGDAT_OWN_EMAIL    = 'supplier@example.com'
+
 PFIFF_ATTRIBUTES = \
     ( jira_sync.Sync_Attribute_Check
         ( local_name   = 'status.name'
@@ -115,6 +147,12 @@ PFIFF_ATTRIBUTES = \
         , field_prefix  = '*'
         , field_postfix = ':*\n'
         )
+    , jira_sync.Sync_Attribute_To_Local_Multistring
+        ( local_name    = 'labels'
+        , remote_name   = 'release_wanted'
+        , prefix        = 'PFIFF-Release-Wanted-'
+        , l_only_update = True
+        )
     # "Release Note" field in Jira
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name    = 'customfield_12009'
@@ -130,7 +168,7 @@ PFIFF_ATTRIBUTES = \
     # priority can currently only be set during creation
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'priority.name'
-        , remote_name  = 'Bewertung'
+        , remote_name  = 'priority'
         , r_default    = 'Minor'
         , l_default    = 'MEDIUM'
         , only_update  = True
@@ -141,6 +179,12 @@ PFIFF_ATTRIBUTES = \
             , LOW     = 'Minor'
             )
         )
+    , jira_sync.Sync_Attribute_To_Local_Multistring
+        ( local_name    = 'labels'
+        , remote_name   = 'priority'
+        , prefix        = 'PFIFF-Priority-'
+        , l_only_update = True
+        )
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'status.name'
         , remote_name  = 'supplier_status'
@@ -148,7 +192,7 @@ PFIFF_ATTRIBUTES = \
             { 'Analyzing'                  : 'RECEIVED'
             , 'Deciding'                   : 'RECEIVED'
             , 'Suspended'                  : 'REJECTED'
-            , 'Open'                       : 'ESTIMATED'
+            , 'Open'                       : 'RECEIVED'
             , 'To Do'                      : 'RECEIVED'
             , 'Implementation Approval'    : 'ESTIMATED'
             , 'Implementation Pending'     : 'ESTIMATED'
