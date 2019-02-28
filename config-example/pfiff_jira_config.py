@@ -24,7 +24,7 @@
 from __future__ import unicode_literals
 from __future__ import absolute_import
 
-""" Example configuration for KPM Sync with Jira """
+""" Example configuration for Pfiff Sync with Jira """
 
 from trackersync import jira_sync
 
@@ -221,7 +221,7 @@ PFIFF_ATTRIBUTES = \
         )
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name     = 'fixVersions.name'
-        , remote_name    = 'resolved_until_release'
+        , remote_name    = 'resolve_until_release'
         , join_multilink = True
         )
     , jira_sync.Sync_Attribute_Files ()
