@@ -217,6 +217,8 @@ class Problem (tracker_sync.Remote_Issue) :
         sn.text = self.pfiff.cfg.COMPANY_SHORT
         id_e    = ElementTree.SubElement (info, 'ISSUE-ID')
         id_e.text = id
+        id_t    = ElementTree.SubElement (info, 'TRANSACTION-ID')
+        id_t.text = self.pfiff.tid + '-' + id
         info    = ElementTree.SubElement (infos, 'COMPANY-ISSUE-INFO')
         sn      = ElementTree.SubElement (info, 'COMPANY-DATA-REF')
         sn.text = self.pfiff.company_short
@@ -225,8 +227,8 @@ class Problem (tracker_sync.Remote_Issue) :
 
         props = ElementTree.SubElement (issue, 'ISSUE-PROPERTIES')
         state = ElementTree.SubElement (props, 'ISSUE-CURRENT-STATE')
-        date  = ElementTree.SubElement (state, 'DATE')
-        date.text = date
+        dt    = ElementTree.SubElement (state, 'DATE')
+        dt.text = self.get ('updated', now)
         mb    = ElementTree.SubElement (state, 'TEAM-MEMBER-REF')
         mb.set ('ID-REF', sname)
         state = ElementTree.SubElement (state, 'ISSUE-STATE')
@@ -244,8 +246,8 @@ class Problem (tracker_sync.Remote_Issue) :
             ms    = ElementTree.SubElement (mss,   'DELIVERY-MILESTONE')
             sl    = ElementTree.SubElement (ms,    'SHORT-LABEL')
             sl.text = self.get (lbl)
-            cat   = ElementTree.SubElement (ms,    'CATEGORY')
-            cat.text = cat
+            ct    = ElementTree.SubElement (ms,    'CATEGORY')
+            ct.text = cat
             sn    = ElementTree.SubElement (ms,    'COMPANY-DATA-REF')
             sn.text = self.pfiff.cfg.COMPANY_SHORT
 
@@ -285,12 +287,23 @@ class Problem (tracker_sync.Remote_Issue) :
 
         so  = ElementTree.SubElement (issue, 'ISSUE-SOLUTION')
         cat = ElementTree.SubElement (so,    'CATEGORY')
-        cat.text = 'PROPOSAL'
+        cat.text = 'ANALYSIS'
         dsc = ElementTree.SubElement (so,    'ISSUE-SOLUTION-DESC')
         p   = ElementTree.SubElement (dsc,   'P')
         p.text = self.get ('supplier_comments')
 
-        an  = ElementTree.SubElement (issue, 'ANNOTATIONS')
+        # Annotations should contain Jira comments
+        ans = ElementTree.SubElement (issue, 'ANNOTATIONS')
+        #an  = ElementTree.SubElement (ans, 'ANNOTATION')
+        #lbl = ElementTree.SubElement (an, 'LABEL')
+        #lbl.text = self.pfiff.company_short
+        #bm  = ElementTree.SubElement (an, 'TEAM-MEMBER-REF')
+        #mb.set ('ID-REF', sname)
+        #dt  = ElementTree.SubElement (an, 'DATE')
+        #dt.text = self.get ('updated', now)
+        #at  = ElementTree.SubElement (an, 'ANNOTATION-TEXT')
+        #p   = ElementTree.SubElement (at, 'P')
+        #p.text = self.get ('supplier_comments')
 
         fn = './' + id + '.xml'
         self.pfiff.output.writestr \
@@ -392,7 +405,7 @@ class Pfiff (Log, Lock_Mixin) :
         )
     multiline = set (('problem_description',))
 
-    def __init__ (self, opt, cfg, syncer, now = datetime.now ()) :
+    def __init__ (self, opt, cfg, syncer, now = datetime.now (), tid = '') :
         self.opt           = opt
         self.cfg           = cfg
         self.debug         = opt.debug
@@ -406,6 +419,7 @@ class Pfiff (Log, Lock_Mixin) :
         self.zf            = None
         self.out_dirty     = False
         self.now           = now
+        self.tid           = tid or now.strftime ('%Y-%m-%dT%h:%m:%s')
         if opt.lock_name :
             self.lockfile = opt.lock_name
 
@@ -439,7 +453,7 @@ class Pfiff (Log, Lock_Mixin) :
         # file: We could have local changes to these issues.
         for rid in self.unsynced :
             v = self.unsynced [rid]
-            p = Problem (self, v)
+            p = Problem (self, v, now = self.now)
             p.attachments = []
             for f in v.get ('files', []) :
                 pa = Pfiff_File_Attachment \
@@ -764,11 +778,14 @@ class Engdat_Sync (autosuper) :
             opt.output  = os.path.join \
                 (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name () + '002002')
             self.log.debug ("Syncing: (no input) out: %s" % (opt.output))
-            pfiff = Pfiff (opt, cfg, self.syncer, now = self.now)
+            n     = self.engdat_name ()
+            pfiff = Pfiff (opt, cfg, self.syncer, now = self.now, tid = n)
             pfiff.sync (self.syncer)
+            pfiff.close () # closes .zip file!
             if pfiff.out_dirty :
+                self.outname = os.path.join \
+                    (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name ())
                 self.write_output (3)
-            pfiff.close ()
     # end def sync
 
     def sync_to_remote (self, fn = None) :
@@ -819,7 +836,8 @@ class Engdat_Sync (autosuper) :
             opt.zipfile = efcfn
             self.log.debug \
                 ("Syncing: in: %s out: %s" % (opt.zipfile, opt.output))
-            pfiff = Pfiff (opt, cfg, self.syncer, now = self.now)
+            n     = self.engdat_name ()
+            pfiff = Pfiff (opt, cfg, self.syncer, now = self.now, tid = n)
             pfiff.sync (self.syncer)
             if pfiff.out_dirty :
                 npkg += 1
@@ -922,6 +940,7 @@ class Engdat_Sync (autosuper) :
                         shutil.copy (f, fnew)
                     else :
                         os.rename (f, fnew)
+                    os.chmod  (fnew, 0664)
                     os.chown  (fnew, -1, dirperm.st_gid)
     # end def write_output
 
