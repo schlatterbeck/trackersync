@@ -51,6 +51,53 @@ from trackersync        import tracker_sync
 from trackersync        import roundup_sync
 from trackersync        import jira_sync
 
+class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
+    """ Sync local messages to Pfiff. We get the messages from Pfiff and
+        only append those that either don't exist of have an updated
+        timestamp. The sync DB of pfiff keeps the messages and their IDs
+        so we only have to look up the IDs.
+        Note that we only sync messages that start with the given
+        prefix.
+    """
+
+    def __init__ (self, prefix, ** kw) :
+        self.__super.__init__ (local_name = None, ** kw)
+        self.prefix = prefix
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        lmsg = syncer.get_messages (id)
+        rmsg = remote_issue.get_messages ()
+        lids = dict ((x.id, x) for x in lmsg.values ())
+        rids = dict ((x.id, x) for x in rmsg.values ())
+
+        # Remote messages at remote that are no longer existing locally
+        pfx = self.prefix
+        for rid in rids :
+            if rid not in lids or not lids [rid].content.startswith (pfx) :
+                remote_issue.delete_message (rid)
+        # Loop over ids in local and create/update at remote
+        for lid in lids :
+            if not lids [lid].content.startswith (pfx) :
+                continue
+            if lid not in rids :
+                rec = self._mangle_rec (lids [lid])
+                remote_issue.append_message (rec)
+            elif lids [lid].date != rids [lid].date :
+                remote_issue.delete_message (lid)
+                rec = self._mangle_rec (lids [lid])
+                remote_issue.append_message (rec)
+    # end def sync
+
+    def _mangle_rec (self, oldrec) :
+        rec = oldrec.copy ()
+        if rec.content.startswith (self.prefix) :
+            rec.content = rec.content [len (self.prefix):].lstrip ()
+        return rec
+    # end def _mangle_rec
+
+# end class Sync_Attribute
+
 class Config (Config_File) :
 
     config = 'kpm_config'
@@ -152,11 +199,38 @@ class Problem (tracker_sync.Remote_Issue) :
         return self.attachments
     # end def file_attachments
 
+    def get_messages (self) :
+        assert self.issue_comments is not None
+        return self.issue_comments
+    # end def get_messages
+
+    def append_message (self, m) :
+        self.issue_comments [m.id] = m
+        self.dirty = True
+        if 'messages' not in self.newvalues :
+            self.newvalues ['messages'] = copy (self.record ['messages'])
+        self.newvalues ['messages'][m.id] = dict \
+            ( id          = m.id
+            , author_id   = m.author_id
+            , author_name = m.author_name
+            , date        = m.date.strftime (self.pfiff.date_fmt)
+            , content     = m.content
+            )
+    # end def append_message
+
+    def delete_message (self, id) :
+        del self.issue_comments [id]
+        if 'messages' not in self.newvalues :
+            self.newvalues ['messages'] = copy (self.record ['messages'])
+            del self.newvalues ['messages'][id]
+        self.dirty = True
+    # end def delete_message
+
     def update (self, syncer) :
         """ Update remote issue tracker with self.newvalues and
             self.record. Should only be called if self.dirty.
         """
-        now = datetime.now ().strftime (self.pfiff.date_fmt)
+        now = self.now.strftime (self.pfiff.date_fmt)
         id  = self.get ('supplier_company_id')
         xml = ElementTree.Element ('MSR-ISSUE')
         xml.set ('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance')
@@ -188,6 +262,24 @@ class Problem (tracker_sync.Remote_Issue) :
         ElementTree.SubElement (tm, 'PHONE')
         ElementTree.SubElement (tm, 'FAX')
         ElementTree.SubElement (tm, 'EMAIL')
+
+        messages = self.get_messages ()
+        authors  = {}
+        for mid in messages :
+            m = messages [mid]
+            authors [m.author_id] = m.author_name
+        for aid in authors :
+            author_name = authors [aid]
+            tm  = ElementTree.SubElement (ts, 'TEAM-MEMBER')
+            tm.set ('ID', aid)
+            ln  = ElementTree.SubElement (tm, 'LONG-NAME')
+            ln.text = author_name
+            sn  = ElementTree.SubElement (tm, 'SHORT-NAME')
+            sn.text = aid
+            ElementTree.SubElement (tm, 'DEPARTMENT')
+            ElementTree.SubElement (tm, 'PHONE')
+            ElementTree.SubElement (tm, 'FAX')
+            ElementTree.SubElement (tm, 'EMAIL')
 
         ad  = ElementTree.SubElement (xml, 'ADMIN-DATA')
         ds  = ElementTree.SubElement (ad, 'DOC-REVISIONS')
@@ -294,16 +386,18 @@ class Problem (tracker_sync.Remote_Issue) :
 
         # Annotations should contain Jira comments
         ans = ElementTree.SubElement (issue, 'ANNOTATIONS')
-        #an  = ElementTree.SubElement (ans, 'ANNOTATION')
-        #lbl = ElementTree.SubElement (an, 'LABEL')
-        #lbl.text = self.pfiff.company_short
-        #bm  = ElementTree.SubElement (an, 'TEAM-MEMBER-REF')
-        #mb.set ('ID-REF', sname)
-        #dt  = ElementTree.SubElement (an, 'DATE')
-        #dt.text = self.get ('updated', now)
-        #at  = ElementTree.SubElement (an, 'ANNOTATION-TEXT')
-        #p   = ElementTree.SubElement (at, 'P')
-        #p.text = self.get ('supplier_comments')
+        for mid in messages :
+            m   = messages [mid]
+            an  = ElementTree.SubElement (ans, 'ANNOTATION')
+            lbl = ElementTree.SubElement (an, 'LABEL')
+            lbl.text = self.pfiff.cfg.COMPANY_SHORT
+            bm  = ElementTree.SubElement (an, 'TEAM-MEMBER-REF')
+            bm.set ('ID-REF', m.author_id)
+            dt  = ElementTree.SubElement (an, 'DATE')
+            dt.text = m.date.strftime (self.pfiff.date_fmt)
+            at  = ElementTree.SubElement (an, 'ANNOTATION-TEXT')
+            p   = ElementTree.SubElement (at, 'P')
+            p.text = m.content
 
         fn = './' + id + '.xml'
         self.pfiff.output.writestr \
@@ -453,12 +547,22 @@ class Pfiff (Log, Lock_Mixin) :
         # file: We could have local changes to these issues.
         for rid in self.unsynced :
             v = self.unsynced [rid]
+            if 'messages' not in v :
+                v ['messages'] = {}
             p = Problem (self, v, now = self.now)
             p.attachments = []
             for f in v.get ('files', []) :
                 pa = Pfiff_File_Attachment \
                     (p, id = f, name = f, path = f, dummy = True)
                 p.attachments.append (pa)
+            p.issue_comments = {}
+            comments = v.get ('messages', {})
+            for c in comments :
+                rec = copy (comments [c])
+                dt  = datetime.strptime (rec ['date'], self.date_fmt)
+                del rec ['date']
+                m = Problem.Message_Class (p, date = dt, ** rec)
+                p.issue_comments [m.id] = m
             self.issues.append (p)
     # end def __init__
 
@@ -512,11 +616,21 @@ class Pfiff (Log, Lock_Mixin) :
                 del self.issue ['attachments']
                 self.issue ['files'] = {}
             number = self.issue ['problem_number']
+            if 'messages' not in self.issue :
+                self.issue ['messages'] = {}
             p = Problem (self, self.issue, now = self.now)
             p.attachments = []
             attold = {}
             if number in self.unsynced :
-                attold = self.unsynced [number].get ('files', {})
+                attold   = self.unsynced [number].get ('files', {})
+                comments = self.unsynced [number].get ('messages', {})
+            p.issue_comments = {}
+            for c in comments :
+                rec = copy (comments [c])
+                dt  = datetime.strptime (rec ['date'], self.date_fmt)
+                del rec ['date']
+                m = Problem.Message_Class (p, date = dt, ** rec)
+                p.issue_comments [m.id] = m
             for a in att :
                 path, name = a
                 if name in attold :

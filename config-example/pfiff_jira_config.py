@@ -27,6 +27,7 @@ from __future__ import absolute_import
 """ Example configuration for Pfiff Sync with Jira """
 
 from trackersync import jira_sync
+from trackersync import pfiffsync
 
 LOCAL_URL      = 'https://jira.example.com/rest/api/2'
 LOCAL_USERNAME = 'localuser'
@@ -225,6 +226,7 @@ PFIFF_ATTRIBUTES = \
         , join_multilink = True
         )
     , jira_sync.Sync_Attribute_Files ()
+    , pfiffsync.Sync_Attribute_Pfiff_Messages (prefix = '[TO OEM]')
     , jira_sync.Sync_Attribute_To_Remote_If_Dirty
         ( local_name     = 'updated'
         , remote_name    = 'updated'

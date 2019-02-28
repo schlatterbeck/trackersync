@@ -114,12 +114,9 @@ class Sync_Attribute_Messages (Sync_Attribute) :
             rup_msgs.append (msg)
             nosync [m] = msg
         appended = False
-        for m in remote_issue.messages () :
+        for m in remote_issue.get_messages () :
             emk = None
-            mid = None
-            if 'id' in m :
-                mid = m ['id']
-                del m ['id']
+            mid = getattr (m, id, None)
             matchmsg = False
             if mid :
                 try :
@@ -133,15 +130,15 @@ class Sync_Attribute_Messages (Sync_Attribute) :
                         ct = nosync [mk]['content'].strip ()
                         # Only if content matches, some remote trackers
                         # allow message modification
-                        if ct == m ['content'].strip () :
+                        if ct == m.content.strip () :
                             del nosync [mk]
                             matchmsg = True
             else :
                 for mrup in rup_msgs :
                     # compare content last
-                    for k in sorted (m, key = lambda x: x == 'content') :
+                    for k in ('date', 'content') :
                         rupm = mrup [k]
-                        mm = m [k]
+                        mm = getattr (m, k)
                         if k == 'date' :
                             rupm = rup_date (rupm)
                             if  (   mm [-5] == '+' or mm [-5] == '-'
@@ -155,7 +152,8 @@ class Sync_Attribute_Messages (Sync_Attribute) :
                         matchmsg = True
                         break
             if not matchmsg :
-                msgs.append (syncer.create ('msg', **m))
+                msgs.append \
+                    (syncer.create ('msg', date = m.date, content = m.content))
                 if mid :
                     if emk :
                         syncer.setitem ('ext_msg', emk, msg = msgs [-1])

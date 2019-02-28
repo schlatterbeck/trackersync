@@ -77,6 +77,45 @@ class File_Attachment (autosuper) :
 
 # end class File_Attachment
 
+class Message (autosuper) :
+    """ Model a local or remote message or comment.
+        This has to be subclassed in both, the local and the remote
+        backend. The constructor isn't called by the framework code but
+        there is a method that gets all messages as a list which
+        is called by the framework for both, the local and the remote
+        backends, so the backend is free to change the signature of the
+        constructor. Note that evaluation (especially for the content
+        property) may be lazy, therefore some attributes are not
+        required in the constructor.
+        The issue is the remote or local issue to which this file
+        belongs. The id is the id in the local/remote system.
+        In addition to the 'content' attribute, the attributes
+        'author_id', 'author_name', 'date' are supported. The 'date'
+        should be the date of last change. It should be a datetime
+        instance.
+    """
+
+    properties = ('id', 'author_id', 'author_name', 'date', 'content')
+
+    def __init__ (self, issue, **kw) :
+        self.issue   = issue
+        self.id      = kw.get ('id', None)
+        # Some attributes may be @property and unsettable
+        for k in self.properties :
+            if k in kw :
+                try :
+                    setattr (self, k, kw.get (k, None))
+                except AttributeError :
+                    pass
+    # end def __init__
+
+    def copy (self) :
+        props = dict ((p, getattr (self, p)) for p in self.properties)
+        return self.__class__ (self.issue, ** props)
+    # end def copy
+
+# end class Message
+
 class Backend_Common (Log) :
     """ Common methods of Syncer and Remote_Issue
     """
@@ -85,9 +124,11 @@ class Backend_Common (Log) :
     # File_Attachment constructor changes, the attach_file method below
     # must be reimplemented in child.
     File_Attachment_Class = File_Attachment
+    Message_Class         = Message
 
     def __init__ (self, *args, **kw) :
-        self.attachments = None
+        self.attachments    = None
+        self.issue_comments = None
         self.__super.__init__ (*args, **kw)
         # Use syncer.log if available
         if getattr (self, 'syncer', None) :
@@ -141,6 +182,28 @@ class Backend_Common (Log) :
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def file_attachments
+
+    def get_messages (self) :
+        """ Returns the dictionary of messages/comments for this issue
+            Messages are in a dict by message ID. This allows easier
+            deletion of messages.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def
+
+    def append_message (self, m) :
+        """ Append given message m to local messages.
+            Note that the message m is a remote message and will
+            probably have no local ID.
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def append_message
+
+    def delete_message (self, id) :
+        """ Delete the message with the given ID
+        """
+        raise NotImplementedError ("Needs to be implemented in child class")
+    # end def delete_message
 
 # end def Backend_Common
 
@@ -276,21 +339,6 @@ class Remote_Issue (Backend_Common) :
         except KeyError :
             return default
     # end def get
-
-    def messages (self) :
-        """ Iterator over messages of this remote issue.
-            The iterator must return a dictionary, the keys are the
-            message properties in the local tracker (so the iterator has
-            to convert from the attributes of the remote issue). Only
-            the 'content' property is mandatory. Note that the given
-            properties are used for comparison. So if, e.g., a 'date'
-            property is given, this is compared *first*. If no message
-            matches the given date, the message is created in the local
-            tracker. The content property is generally compared *last*
-            as it is most effort.
-        """
-        raise NotImplementedError ("Needs to be implemented in child class")
-    # end def messages
 
     def set (self, name, value, type) :
         """ Set the given attribute to value
@@ -1141,6 +1189,13 @@ class Trackersync_Syncer (Log) :
             return []
         return self.localissues [id].file_attachments (name)
     # end def file_attachments
+
+    # Don't override in derived class, see Local_Issue
+    def get_messages (self, id) :
+        if self.get_existing_id (id) is None :
+            return []
+        return self.localissues [id].get_messages ()
+    # end def get_messages
 
     def filter (self, classname, searchdict) :
         """ Search for all properties in searchdict and return ids of

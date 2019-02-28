@@ -80,20 +80,6 @@ class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue) :
         return j ['id']
     # end def add_message
 
-    def messages (self) :
-        u = self.jira.url + '/issue/' + self.id + '/comment'
-        r = self.session.get (u)
-        j = r.json ()
-        if not j ['comments'] :
-            assert j ['startAt'] == j ['total'] == 0
-        for c in j ['comments'] :
-            yield dict \
-                ( content = c ['body']
-                , date    = jira_sync.jira_utctime (c ['updated'])
-                , id      = c ['id']
-                )
-    # end def messages
-
     def update (self, syncer) :
         if syncer.verbose :
             print ("Remote-Update: %s %s" % (self.key, self.newvalues))

@@ -83,7 +83,7 @@ def jira_utctime (jiratime) :
         fmt = fmtnos
     d  = datetime.strptime (d, fmt)
     d  = d + timedelta (hours = -h, minutes = -m)
-    return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
+    return d
 # end def jira_utctime
 
 class Jira_File_Attachment (tracker_sync.File_Attachment) :
@@ -141,6 +141,18 @@ class Jira_Backend (autosuper) :
             yield a
     # end def _attachment_iter
 
+    def _message_iter (self) :
+        u = self.url + '/issue/' + self.id + '/comment'
+        r = self.session.get (u)
+        if not r.ok :
+            self.raise_error (r)
+        j = r.json ()
+        if not j ['comments'] :
+            assert j ['startAt'] == 0 and j ['total'] == 0
+        for a in j ['comments'] :
+            yield a
+    # end def _message_iter
+
     def file_attachments (self, name = None) :
         if self.attachments is None :
             self.attachments = []
@@ -167,6 +179,22 @@ class Jira_Backend (autosuper) :
         self.attachments.append (f)
         self.dirty = True
     # end def attach_file
+
+    def get_messages (self) :
+        if self.issue_comments is None :
+            self.issue_comments = {}
+            for m in self._message_iter () :
+                msg = self.Message_Class \
+                    ( self
+                    , id          = m ['id']
+                    , author_id   = m ['updateAuthor']['key']
+                    , author_name = m ['updateAuthor']['displayName']
+                    , date        = jira_utctime (m ['updated'])
+                    , content     = m ['body']
+                    )
+                self.issue_comments [msg.id] = msg
+        return self.issue_comments
+    # end def get_messages
 
     @classmethod
     def raise_error (cls, r) :
@@ -340,7 +368,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
     # end def fix_attributes
 
     def from_date (self, date) :
-        return jira_utctime (date)
+        d = jira_utctime (date)
+        return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
     # end def from_date
 
     def get_name_translation (self, classname, name) :
