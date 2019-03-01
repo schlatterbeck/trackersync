@@ -4,7 +4,7 @@
 ifeq (,${RELEASETOOLS})
     RELEASETOOLS=../releasetools
 endif
-LASTRELEASE:=$(shell $(RELEASETOOLS)/lastrelease -n)
+LASTRELEASE:=$(shell $(RELEASETOOLS)/lastrelease -n --tag-re='[0-9.]+')
 TRACKERSYNC=__init__.py kpmsync.py roundup_sync.py
 
 VERSIONPY=trackersync/Version.py

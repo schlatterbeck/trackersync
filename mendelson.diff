@@ -1,0 +1,50 @@
+diff --unified -r mendelson_opensource_oftp2_1.0b39_src/de/mendelson/comm/oftp2/OFTP2ServerVersion.java mendelson_opensource_oftp2_1.0b39_src-hacked/de/mendelson/comm/oftp2/OFTP2ServerVersion.java
+--- mendelson_opensource_oftp2_1.0b39_src/de/mendelson/comm/oftp2/OFTP2ServerVersion.java	2019-01-07 15:07:42.000000000 +0100
++++ mendelson_opensource_oftp2_1.0b39_src-hacked/de/mendelson/comm/oftp2/OFTP2ServerVersion.java	2019-02-26 13:43:00.765991064 +0100
+@@ -37,7 +37,7 @@
+ 
+     /**Returns the date the package was last modified*/
+     public static String getLastModificationDate() {
+-        String fullDate = "$Date: 4.01.19 12:10 $";
++        String fullDate = "$Date: 26.02.19 12:10 $";
+         return (fullDate.substring(fullDate.indexOf(":") + 2, fullDate.lastIndexOf("$")));
+     }
+ 
+@@ -59,12 +59,12 @@
+ 
+     /**Gets the company address*/
+     public static String getCompany() {
+-        return ("mendelson-e-commerce GmbH");
++        return ("mendelson-e-commerce GmbH (modified Ralf Schlatterbeck)");
+     }
+ 
+     /**Gets the company address*/
+     public static String getStreet() {
+-        return ("Kurfürstendamm 30");
++        return ("KurfÃ¼rstendamm 30");
+     }
+ 
+     /**Gets the company zip*/
+diff --unified -r mendelson_opensource_oftp2_1.0b39_src/de/mendelson/comm/oftp2/server/poll/DirPollThread.java mendelson_opensource_oftp2_1.0b39_src-hacked/de/mendelson/comm/oftp2/server/poll/DirPollThread.java
+--- mendelson_opensource_oftp2_1.0b39_src/de/mendelson/comm/oftp2/server/poll/DirPollThread.java	2019-01-07 15:07:50.000000000 +0100
++++ mendelson_opensource_oftp2_1.0b39_src-hacked/de/mendelson/comm/oftp2/server/poll/DirPollThread.java	2019-02-26 13:34:40.638909450 +0100
+@@ -296,6 +296,10 @@
+      * Processes a single, found file
+      */
+     private void processFile(String originalFileName, Path processFile) {
++        String virtfile = originalFileName.trim ();
++        if (originalFileName == null) {
++            virtfile = this.row.getVirtualfilename ();
++        }
+         Partner sessionSender = this.partnerAccessDB.getLocalStation();
+         Partner transmissionReceiver = this.row.getTransmissionReceiver();
+         Partner sessionReceiver = Partner.getSessionReceiverByTransmissionReceiver(this.configConnection,
+@@ -305,7 +309,7 @@
+                 Transmission.TRANSMISSIONTYPE_DATA, processFile,
+                 originalFileName,
+                 sessionSender, sessionReceiver, Transmission.PROCESS_STATE_WAITING_FOR_PICK_UP,
+-                this.row.getVirtualfilename(), this.row.getFileDescription(),
++                virtfile, this.row.getFileDescription(),
+                 transmissionSender, transmissionReceiver);
+         transmission.setRecordFormat(this.row.getRecordFormat());
+         transmission.setRecordFormatLength(this.row.getRecordFormatLength());
