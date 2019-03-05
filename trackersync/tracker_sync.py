@@ -107,6 +107,11 @@ class Message (autosuper) :
                     setattr (self, k, kw.get (k, None))
                 except AttributeError :
                     pass
+        if getattr (self, 'date', None) :
+            # Don't store dates with microseconds for comparison
+            # This is not supported by most backend formats
+            if self.date.microsecond :
+                self.date = self.date.replace (microsecond = 0)
     # end def __init__
 
     def copy (self) :

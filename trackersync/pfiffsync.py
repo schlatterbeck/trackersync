@@ -96,7 +96,7 @@ class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
         return rec
     # end def _mangle_rec
 
-# end class Sync_Attribute
+# end class Sync_Attribute_Pfiff_Messages
 
 class Config (Config_File) :
 
@@ -625,8 +625,10 @@ class Pfiff (Log, Lock_Mixin) :
                 attold   = self.unsynced [number].get ('files', {})
                 comments = self.unsynced [number].get ('messages', {})
             p.issue_comments = {}
-            for c in comments :
-                rec = copy (comments [c])
+            for cid in comments :
+                if cid not in p.record ['messages'] :
+                    p.record ['messages'][cid] = comments [cid]
+                rec = copy (comments [cid])
                 dt  = datetime.strptime (rec ['date'], self.date_fmt)
                 del rec ['date']
                 m = Problem.Message_Class (p, date = dt, ** rec)
