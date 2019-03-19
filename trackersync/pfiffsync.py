@@ -921,7 +921,7 @@ class Engdat_Sync (autosuper) :
                 ( "Invalid sender routing: %s expected %s"
                 % (m.sde.routing.routing, cfg.ENGDAT_PEER_ROUTING)
                 )
-            rm_engdat (self, path)
+            self.rm_engdat (path)
             self.write_lastsync (fn)
             return
         if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING :
@@ -929,7 +929,7 @@ class Engdat_Sync (autosuper) :
                 ( "Invalid receiver routing: %s expected %s"
                 % (m.rde.routing.routing, cfg.ENGDAT_OWN_ROUTING)
                 )
-            rm_engdat (self, path)
+            self.rm_engdat (path)
             self.write_lastsync (fn)
             return
         for efc in m.segment_iter ('EFC') :
