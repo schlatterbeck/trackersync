@@ -53,7 +53,7 @@ from trackersync        import jira_sync
 
 class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
     """ Sync local messages to Pfiff. We get the messages from Pfiff and
-        only append those that either don't exist of have an updated
+        only append those that either don't exist or have an updated
         timestamp. The sync DB of pfiff keeps the messages and their IDs
         so we only have to look up the IDs.
         Note that we only sync messages that start with the given

@@ -1198,7 +1198,7 @@ class Trackersync_Syncer (Log) :
     # Don't override in derived class, see Local_Issue
     def get_messages (self, id) :
         if self.get_existing_id (id) is None :
-            return []
+            return {}
         return self.localissues [id].get_messages ()
     # end def get_messages
 
