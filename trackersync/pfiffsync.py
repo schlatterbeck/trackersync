@@ -620,7 +620,8 @@ class Pfiff (Log, Lock_Mixin) :
                 self.issue ['messages'] = {}
             p = Problem (self, self.issue, now = self.now)
             p.attachments = []
-            attold = {}
+            attold   = {}
+            comments = {}
             if number in self.unsynced :
                 attold   = self.unsynced [number].get ('files', {})
                 comments = self.unsynced [number].get ('messages', {})
