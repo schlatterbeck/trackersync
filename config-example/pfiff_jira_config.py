@@ -186,30 +186,31 @@ PFIFF_ATTRIBUTES = \
         , prefix        = 'PFIFF-Priority-'
         , l_only_update = True
         )
-    , jira_sync.Sync_Attribute_To_Remote
-        ( local_name   = 'status.name'
+    , jira_sync.Sync_Attribute_Multi_To_Remote
+        ( local_names  = ('status.name', 'resolution.name')
         , remote_name  = 'supplier_status'
         , map =
-            { 'Analyzing'                  : 'RECEIVED'
-            , 'Deciding'                   : 'RECEIVED'
-            , 'Suspended'                  : 'REJECTED'
-            , 'Open'                       : 'RECEIVED'
-            , 'To Do'                      : 'RECEIVED'
-            , 'Implementation Approval'    : 'ESTIMATED'
-            , 'Implementation Pending'     : 'ESTIMATED'
-            , 'Implementation in Progress' : 'ESTIMATED'
-            , 'In Progress'                : 'ESTIMATED'
-            , 'Calibration due'            : 'ESTIMATED'
-            , 'Calibration in progress'    : 'ESTIMATED'
-            , 'Active'                     : 'ESTIMATED'
-            , 'Verification Pending'       : 'DELIVERED'
-            , 'Verification in Progress'   : 'DELIVERED'
-            , 'Suspension Approval'        : 'REJECTED'
-            , 'Closed'                     : 'CLOSED'
-            , 'Obsolete'                   : 'REJECTED'
-            , 'Calibrated'                 : 'DELIVERED'
-            , 'Exempt from Calibration'    : 'DELIVERED'
-            }
+            ( (('Analyzing',                  None),   'RECEIVED')
+            , (('Suspended',                  None),   'RECEIVED')
+            , (('Open',                       None),   'RECEIVED')
+            , (('Implementation Pending',     None),   'ESTIMATED')
+            , (('Implementation in Progress', None),   'ESTIMATED')
+            , (('Verification Pending',       None),   'DELIVERED')
+            , (('Verification in Progress',   None),   'DELIVERED')
+            , (('Closed',                     'Done'), 'CLOSED')
+            , (('Closed',                     None),   'REJECTED')
+            , (('Deciding',                   None),   'RECEIVED')
+            , (('To Do',                      None),   'RECEIVED')
+            , (('Implementation Approval',    None),   'ESTIMATED')
+            , (('In Progress',                None),   'ESTIMATED')
+            , (('Calibration due',            None),   'ESTIMATED')
+            , (('Calibration in progress',    None),   'ESTIMATED')
+            , (('Active',                     None),   'ESTIMATED')
+            , (('Suspension Approval',        None),   'RECEIVED')
+            , (('Obsolete',                   None),   'REJECTED')
+            , (('Calibrated',                 None),   'DELIVERED')
+            , (('Exempt from Calibration',    None),   'DELIVERED')
+            )
         )
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'key'

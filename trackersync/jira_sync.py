@@ -41,6 +41,7 @@ Sync_Attribute_Files              = tracker_sync.Sync_Attribute_Files
 Sync_Attribute_To_Local           = tracker_sync.Sync_Attribute_To_Local
 Sync_Attribute_To_Local_Default   = tracker_sync.Sync_Attribute_To_Local_Default
 Sync_Attribute_To_Remote          = tracker_sync.Sync_Attribute_To_Remote
+Sync_Attribute_Multi_To_Remote    = tracker_sync.Sync_Attribute_Multi_To_Remote
 Sync_Attribute_Two_Way            = tracker_sync.Sync_Attribute_Two_Way
 Sync_Attribute_To_Remote_Default  = \
     tracker_sync.Sync_Attribute_To_Remote_Default
@@ -234,6 +235,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         , 'securitylevel'
         , 'version'
         , 'user'
+        , 'resolution'
         )
 
     def __init__ (self, remote_name, attributes, opt) :

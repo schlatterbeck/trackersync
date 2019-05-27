@@ -943,6 +943,69 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
 
 # end class Sync_Attribute_To_Remote
 
+class Sync_Attribute_Multi_To_Remote (Sync_Attribute) :
+    """ Unconditionally synchronize a set of local attribute to the
+        remote tracker. Similar to Sync_Attribute_To_Remote but with
+        multiple local attributes. A map *has* to be specified, it is
+        not a dictionary but a (order matters! see below) table. It
+        takes a tuple for the local attributes and a single value for
+        the remote attribute.  The value None can be used as a wildcard.
+        The *first* match wins.
+        Note that if l_default is given it must be an already-mapped
+        value from the value-space of remote values!
+    """
+
+    def __init__ (self, local_names, map, **kw) :
+        self.local_names = local_names
+        self.__super.__init__ (local_names [0], **kw)
+        # 'map' is initialized to None by super call
+        self.map         = map
+    # end def __init__
+
+    def _check_pattern (self, lv, lvpattern) :
+        """ Match local value (tuple) against pattern, pattern may
+            contain the value None for wildcard. Return True if
+            matching, False otherwise
+        """
+        assert len (lv) == len (lvpattern)
+        for v, p in zip (lv, lvpattern) :
+            if p is not None and v != p :
+                return False
+        return True
+    # end def _check_pattern
+
+    def _sync (self, syncer, id, remote_issue) :
+        # Never sync something to remote if local issue not yet created.
+        # Default values of local issue are assigned during creation, so
+        # we can't sync these to the remote site during this sync (they
+        # would get empty values).
+        if syncer.get_existing_id (id) is None :
+            return None, None, True
+        rv = remote_issue.get (self.remote_name, None)
+        x  = syncer.get (id, 'resolution.name')
+        lv = tuple (syncer.get (id, n) for n in self.local_names)
+        for lvpattern, rr in self.map :
+            if self._check_pattern (lv, lvpattern) :
+                lv = rr
+                break
+        else :
+            raise ValueError ("Not found: %s" % lv)
+        # Note that l_default must be an already-mapped value here, i.e.
+        # from the value-space of the remote values.
+        if lv is None and rv is None and self.l_default is not None :
+            lv = self.l_default
+        nosync = (lv == rv)
+        return lv, rv, nosync
+    # end def _sync
+
+    def sync (self, syncer, id, remote_issue) :
+        lv, rv, nosync = self._sync (syncer, id, remote_issue)
+        if not nosync :
+            remote_issue.set (self.remote_name, lv, self.type (syncer))
+    # end def sync
+
+# end class Sync_Attribute_Multi_To_Remote
+
 class Sync_Attribute_To_Remote_If_Dirty (Sync_Attribute_To_Remote) :
     """ Like Sync_Attribute_To_Remote but only if the remote issue has
         already changes. Used for timestamps or current owner attributes
