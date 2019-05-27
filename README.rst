@@ -121,6 +121,14 @@ The following attribute definitions are possible:
 - ``Sync_Attribute_To_Remote`` defines a one-way sync to the remote
   tracker. A use-case is to set the local tracker issue number in the
   remote tracker (if the remote tracker supports a fields for this).
+- ``Sync_Attribute_Multi_To_Remote`` is similar to
+  ``Sync_Attribute_To_Remote`` but with a mapping of multiple local
+  attributes to a single remote attribute. A map *must* be specified and
+  must contain a table of tuples of local attribute values to a single
+  remote value. Wildcards are possible and are defined as None. The
+  first entry wins, so entries with more specific matches must precede
+  more general ones (with more wildcards). An example is given in
+  ``config-example/pfiff_jira_config.py``.
 - ``Sync_Attribute_Two_Way`` defines a two-way sync to the remote
   tracker. The sync first determines if the attribute in the remote
   tracker has changed (by comparing the ext_attributes from the last
