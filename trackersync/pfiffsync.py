@@ -377,7 +377,8 @@ class Problem (tracker_sync.Remote_Issue) :
 
         ri  = ElementTree.SubElement (issue, 'RELATED-ISSUES')
 
-        so  = ElementTree.SubElement (issue, 'ISSUE-SOLUTION')
+        sos = ElementTree.SubElement (issue, 'ISSUE-SOLUTIONS')
+        so  = ElementTree.SubElement (sos,   'ISSUE-SOLUTION')
         cat = ElementTree.SubElement (so,    'CATEGORY')
         cat.text = 'ANALYSIS'
         dsc = ElementTree.SubElement (so,    'ISSUE-SOLUTION-DESC')
