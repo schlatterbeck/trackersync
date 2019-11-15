@@ -790,8 +790,8 @@ class Edifact_Element (_Part_Iter) :
                 if k < cl and self.components [k] :
                     empty = False
             if empty and mandatory :
-                raise ValueError \
-                    ( "Element %s: empty mandatory element"
+                print \
+                    ( "WARN: Element %s: empty mandatory element"
                     % self.element_name
                     )
     # end def check
