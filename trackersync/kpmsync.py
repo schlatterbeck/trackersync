@@ -695,6 +695,7 @@ class Export (autosuper) :
 
     def sync (self, syncer) :
         for p_id, p in self.problems.iteritems () :
+            syncer.log.info ('Syncing %s' % p_id)
             try :
                 syncer.sync (p_id, p)
             except (StandardError, xmlrpclib.Fault) :
