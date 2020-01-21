@@ -120,8 +120,8 @@ class Jira_File_Attachment (tracker_sync.File_Attachment) :
         if not r.ok :
             self.issue.raise_error (r)
         j = r.json ()
-	if len (j) != 1 :
-	    raise ValueError ("Invalid json on file creation: %s" % self.name)
+        if len (j) != 1 :
+            raise ValueError ("Invalid json on file creation: %s" % self.name)
         self.id = j [0]['id']
     # end def create
 
@@ -198,9 +198,10 @@ class Jira_Backend (autosuper) :
     # end def get_messages
 
     @classmethod
-    def raise_error (cls, r) :
+    def raise_error (cls, r, *args) :
         """ Used for errors whenever r (the result of a http method) has
-            an error.
+            an error. With args we can specifiy additional things to be
+            logged.
         """
         msg = []
         for k in 'X-Seraph-LoginReason', 'X-Authentication-Denied-Reason' :
@@ -209,7 +210,10 @@ class Jira_Backend (autosuper) :
         msg = ' '.join (msg)
         if msg :
             msg = ': ' + msg
-        raise RuntimeError ("Error %s%s" % (r.status_code, msg))
+        a = ''
+        if args :
+            a = ' '.join (args)
+        raise RuntimeError ("Error %s%s%s" % (r.status_code, msg, a))
     # end def raise_error
 
 # end class Jira_Backend
@@ -449,7 +453,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
         if not r.ok or not 200 <= r.status_code < 300 :
-            self.raise_error (r)
+            self.raise_error (r, 'setitem', 'id=%s' % id, kw)
     # end def _setitem
 
     def sync_new_local_issues (self, new_remote_issue) :
