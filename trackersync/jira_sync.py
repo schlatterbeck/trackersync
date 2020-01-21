@@ -205,14 +205,14 @@ class Jira_Backend (autosuper) :
         """
         msg = []
         for k in 'X-Seraph-LoginReason', 'X-Authentication-Denied-Reason' :
-            if k in r.headers :
+            if k in r.headers and r.headers [k] != 'OK' :
                 msg.append (r.headers [k])
         msg = ' '.join (msg)
         if msg :
             msg = ': ' + msg
         a = ''
         if args :
-            a = ' '.join (str (x) for x in args)
+            a = ' ' + ' '.join (str (x) for x in args)
         raise RuntimeError ("Error %s%s%s" % (r.status_code, msg, a))
     # end def raise_error
 
