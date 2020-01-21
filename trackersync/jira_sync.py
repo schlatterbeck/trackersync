@@ -212,7 +212,7 @@ class Jira_Backend (autosuper) :
             msg = ': ' + msg
         a = ''
         if args :
-            a = ' '.join (args)
+            a = ' '.join (str (x) for x in args)
         raise RuntimeError ("Error %s%s%s" % (r.status_code, msg, a))
     # end def raise_error
 

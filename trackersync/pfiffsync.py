@@ -517,6 +517,8 @@ class Pfiff (Log, Lock_Mixin) :
         self.tid           = tid or now.strftime ('%Y-%m-%dT%h:%m:%s')
         if opt.lock_name :
             self.lockfile = opt.lock_name
+        self.__super.__init__ ()
+        self.log.info ('Started')
 
         if opt.output is None :
             if opt.zipfile :
@@ -803,6 +805,8 @@ class Engdat_Sync (autosuper) :
         self.log    = self.syncer.log
         self.now    = datetime.now ()
         self.outnum = 0
+        self.__super.__init__ ()
+        self.log.info ("Engdat sync started")
     # end def __init__
 
     def engdat_name (self, outnum = None) :
