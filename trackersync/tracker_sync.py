@@ -435,6 +435,11 @@ class Sync_Attribute (autosuper) :
 
         Note that local_prefix is used only in To_Local variants not in
         Two_Way (due to resulting roundtrip problems).
+
+        The allowed_chars are the characters allowed in the local
+        variant. The sync automagically replaces the non-allowed
+        characters with '_'. Note that currently this transformation is
+        only done for the To_Local variants of Sync_Attributes.
     """
 
     def __init__ \
@@ -452,6 +457,7 @@ class Sync_Attribute (autosuper) :
         , separator      = ', '
         , local_prefix   = None
         , l_only_update  = False
+        , allowed_chars  = None
         ) :
         self.name           = local_name
         self.remote_name    = remote_name
@@ -466,6 +472,7 @@ class Sync_Attribute (autosuper) :
         self.separator      = separator
         self.local_prefix   = local_prefix
         self.l_only_update  = l_only_update
+        self.allowed_chars  = allowed_chars
         if not self.imap and self.map :
             self.imap = dict ((v, k) for k, v in  map.iteritems ())
         if not self.map and self.imap :
@@ -659,8 +666,17 @@ class Sync_Attribute_To_Local (Sync_Attribute) :
         if self.l_only_update and syncer.get_existing_id (id) is None :
             return
         rv = remote_issue.get (self.remote_name, None)
-        if isinstance (rv, string_types) and self.local_prefix :
-            rv = self.local_prefix + rv
+        if isinstance (rv, string_types) :
+            if self.allowed_chars :
+                new_rv = []
+                for c in rv :
+                    if c in self.allowed_chars :
+                        new_rv.append (c)
+                    else :
+                        new_rv.append ('_')
+                rv = ''.join (new_rv)
+            if self.local_prefix :
+                rv = self.local_prefix + rv
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv, remote_issue) :
             return
@@ -853,6 +869,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
         , imap          = None
         , prefix        = None
         , l_only_update = False
+        , allowed_chars = None
         ) :
         self.__super.__init__ \
             ( local_name
@@ -865,6 +882,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
             , imap
             , strip_prefix  = None
             , l_only_update = l_only_update
+            , allowed_chars = allowed_chars
             )
         self.prefix = prefix
         if not prefix :
@@ -882,6 +900,14 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
         # Can't sync None values to local
         if rval is None :
             return
+        if isinstance (rval, string_types) and self.allowed_chars :
+                new_rv = []
+                for c in rval :
+                    if c in self.allowed_chars :
+                        new_rv.append (c)
+                    else :
+                        new_rv.append ('_')
+                rval = ''.join (new_rv)
         lv = syncer.get (id, self.name)
         if isinstance (lv, list) :
             lv = list (sorted (lv))
