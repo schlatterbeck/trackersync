@@ -161,12 +161,17 @@ class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
             return None
         if self._content is None :
             # ZIP will return a key error if file not found in archive
-            # We simply log the exception
+            # We check if the filename in the ZIP is double encoded in
+            # the russion 'cp866' character set.
             try :
                 self._content = self.issue.pfiff.zf.read (self.path)
             except KeyError :
-                self.issue.pfiff.log_exception ()
-                self._content = None
+                try :
+                    p = self.path.encode ('utf-8').decode ('cp866')
+                    self._content = self.issue.pfiff.zf.read (p)
+                except Exception :
+                    self.log.error ("File not found in ZIP: %s" % self.path)
+                    self._content = None
             except AttributeError :
                 # The zf is the zip file, it's None when we're syncing
                 # in the opposite direction.
