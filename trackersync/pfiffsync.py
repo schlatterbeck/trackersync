@@ -709,8 +709,17 @@ class Pfiff (Log, Lock_Mixin) :
     # end def parse_annotation
 
     def parse_attachment (self, node) :
-        url = node.find ('URL').text.strip ()
-        fn  = node.find ('LONG-NAME-1').text.strip ()
+        url = node.find ('URL').text
+        fn  = node.find ('LONG-NAME-1').text
+        if url is None :
+            return
+        # Don't know if this can happen, both url = None and fn = None
+        # were observed in the wild. So if only the fn is None we
+        # reconstruct the filename from the URL.
+        if fn is None :
+            fn = url.rsplit ('/', 1) [-1]
+        url = url.strip ()
+        fn  = fn.strip ()
         if 'attachments' not in self.issue :
             self.issue ['attachments'] = []
         self.issue ['attachments'].append ((url, fn))
@@ -725,11 +734,19 @@ class Pfiff (Log, Lock_Mixin) :
     # end def parse_company_info
 
     def parse_engineering_object (self, node) :
-        cat = node.find ('CATEGORY').text.strip ()
-        lbl = node.find ('SHORT-LABEL').text.strip ()
+        cat = node.find ('CATEGORY').text
+        lbl = node.find ('SHORT-LABEL').text
+        # Looks like these tags can somtimes be empty
+        if not cat or not lbl :
+            return
+        cat = cat.strip ()
+        lbl = lbl.strip ()
         rev = node.find ('REVISION-LABEL')
         if cat in ('HARDWARE', 'SOFTWARE', 'PARTNUMBER') :
-            rev = rev.text.strip ()
+            if rev.text is None :
+                rev = ''
+            else :
+                rev = rev.text.strip ()
             if lbl == 'ECU' :
                 lbl = rev
             else :
