@@ -117,6 +117,11 @@ class Jira_File_Attachment (tracker_sync.File_Attachment) :
         h = {'X-Atlassian-Token': 'nocheck'}
         f = dict (file = (self.name, self.content, self.type))
         r = self.issue.session.post (u, files = f, headers = h)
+        isempty = ''
+        if self.content is None :
+            isempty = ' empty content'
+        self.issue.log.debug \
+            ("Create attachment: %s %s%s" % (self.name, self.type, isempty))
         if not r.ok :
             self.issue.raise_error (r)
         j = r.json ()
@@ -466,6 +471,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
 
     def update_aux_classes (self, id, r_id, r_issue, classdict) :
         self.__super.update_aux_classes (id, r_id, r_issue, classdict)
+        if self.dry_run :
+            return
         # May be None
         if self.localissues [id].attachments :
             for f in self.localissues [id].attachments :
