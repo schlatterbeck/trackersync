@@ -971,7 +971,7 @@ class Engdat_Sync (autosuper) :
             fmt = cfg.get ('ENGDAT_FORMAT', None)
             if fmt and fmt != efc.file_format.file_format :
                 self.log.warning \
-                    ( "Invalid file format: %s expected %s, trying anyway"
+                    ( 'Invalid file format: "%s" expected "%s", trying anyway'
                     % (efc.file_format.file_format, fmt)
                     )
             self.log.debug ("Processing: %s" % efcfn)
