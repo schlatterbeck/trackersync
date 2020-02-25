@@ -583,6 +583,8 @@ class Pfiff (Log, Lock_Mixin) :
         self.output.close ()
         if not self.out_dirty :
             os.unlink (self.opt.output)
+        # At this point we free the lock
+        self.unlock ()
         self.log.info ("Pfiff: Close")
     # end def close
 
