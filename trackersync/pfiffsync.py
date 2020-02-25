@@ -583,6 +583,7 @@ class Pfiff (Log, Lock_Mixin) :
         self.output.close ()
         if not self.out_dirty :
             os.unlink (self.opt.output)
+        self.log.info ("Pfiff: Close")
     # end def close
 
     def parse (self, xml) :
@@ -925,6 +926,7 @@ class Engdat_Sync (autosuper) :
                 self.outname = os.path.join \
                     (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name ())
                 self.write_output (3)
+        self.log.info ('Finished Sync')
     # end def sync
 
     def sync_to_remote (self, fn = None) :
