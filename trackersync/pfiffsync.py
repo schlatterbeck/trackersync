@@ -783,7 +783,10 @@ class Pfiff (Log, Lock_Mixin) :
             cat = cat.text.strip ()
         else :
             cat = 'REQUESTED'
-        label = node.find ('SHORT-LABEL').text.strip ()
+        label = node.find ('SHORT-LABEL').text
+        if label is None :
+            return
+        label = label.strip ()
         # Only import requested release label
         if cat != 'REQUESTED' :
             return
