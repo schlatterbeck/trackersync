@@ -117,13 +117,10 @@ class Jira_File_Attachment (tracker_sync.File_Attachment) :
         h = {'X-Atlassian-Token': 'nocheck'}
         f = dict (file = (self.name, self.content, self.type))
         r = self.issue.session.post (u, files = f, headers = h)
-        isempty = ''
-        if self.content is None :
-            isempty = ' empty content'
         self.issue.log.debug \
-            ("Create attachment: %s %s%s" % (self.name, self.type, isempty))
+            ("Create attachment: %s %s" % (self.name, self.type))
         if not r.ok :
-            self.issue.raise_error (r)
+            self.issue.raise_error (r, 'Create attachment')
         j = r.json ()
         if len (j) != 1 :
             raise ValueError ("Invalid json on file creation: %s" % self.name)
@@ -218,7 +215,7 @@ class Jira_Backend (autosuper) :
         a = ''
         if args :
             a = ' ' + ' '.join (str (x) for x in args)
-        raise RuntimeError ("Error %s%s%s" % (r.status_code, msg, a))
+        raise RuntimeError ("HTTP Error %s%s%s" % (r.status_code, msg, a))
     # end def raise_error
 
 # end class Jira_Backend

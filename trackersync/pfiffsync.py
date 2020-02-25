@@ -152,6 +152,7 @@ class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
             self.dummy = bool (kw ['dummy'])
             del kw ['dummy']
         self.__super.__init__ (issue, type = type, **kw)
+        self.log = self.issue.log
     # end def __init__
 
     @property
@@ -159,7 +160,18 @@ class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
         if self.dummy :
             return None
         if self._content is None :
-            self._content = self.issue.pfiff.zf.read (self.path)
+            # ZIP will return a key error if file not found in archive
+            # We simply log the exception
+            try :
+                self._content = self.issue.pfiff.zf.read (self.path)
+            except KeyError :
+                self.issue.pfiff.log_exception ()
+                self._content = None
+            except AttributeError :
+                # The zf is the zip file, it's None when we're syncing
+                # in the opposite direction.
+                if self.issue.pfiff.zf is not None :
+                    raise
         return self._content
     # end def content
 
@@ -171,6 +183,7 @@ class Problem (tracker_sync.Remote_Issue) :
 
     def __init__ (self, pfiff, record, now = datetime.now ()) :
         self.pfiff   = pfiff
+        self.log     = pfiff.log
         self.debug   = self.pfiff.debug
         self.docinfo = {}
         self.now     = now
