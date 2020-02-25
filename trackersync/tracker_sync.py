@@ -1413,7 +1413,15 @@ class Trackersync_Syncer (Log) :
                     if id and isinstance (id [0], list) :
                         id = [item for sublist in id for item in sublist]
                 else :
-                    id = self.getitem (classname, id, p) [p]
+                    item = self.getitem (classname, id, p)
+                    if p in item :
+                        id = item [p]
+                    else :
+                        id = None
+                        self.log.warning \
+                            ( "get_transitive_prop: getitem %s %s %s: empty"
+                            % (classname, id, p)
+                            )
             classname = self.get_classname (classname, p)
         p = path [-1]
         return classname, p, id
