@@ -28,6 +28,7 @@ from __future__ import absolute_import
 import requests
 import json
 import numbers
+from   copy                 import copy
 from   time                 import sleep
 from   datetime             import datetime, timedelta
 from   rsclib.autosuper     import autosuper
@@ -134,6 +135,13 @@ class Jira_Backend (autosuper) :
         local tracker as well as when Jira is the remote tracker
     """
 
+    def __init__ (self, **kw) :
+        self.mangle_filenames = True
+        self.__super.__init__ (**kw)
+        if self.opt.no_mangle_filenames :
+            self.mangle_filenames = False
+    # end def __init__
+
     def _attachment_iter (self) :
         u = self.url + '/issue/' + self.id + '?fields=attachment'
         r = self.session.get (u)
@@ -158,7 +166,8 @@ class Jira_Backend (autosuper) :
 
     def file_attachments (self, name = None) :
         if self.attachments is None :
-            self.attachments = []
+            self.attachments  = []
+            self.file_by_name = {}
             for a in self._attachment_iter () :
                 f = Jira_File_Attachment \
                     ( self
@@ -168,11 +177,36 @@ class Jira_Backend (autosuper) :
                     , name = a ['filename']
                     )
                 self.attachments.append (f)
+                self.file_by_name [f.name] = f
         return self.attachments
     # end def file_attachments
 
+    def file_exists (self, other_name) :
+        """ Take name mangling into account, some Jira instances are set
+            up in a way that does not permit non-ascii filenames. So we
+            try to find other_name unmangled first, then we try the
+            mangled name.
+        """
+        if other_name in self.file_by_name :
+            return True
+        if self.mangle_file_name (other_name) in self.file_by_name :
+            return True
+    # end def file_exists
+
+    def mangle_file_name (self, fn) :
+        """ Mangle remote file name to something permissible locally.
+            Some Jira instances are configured to only allow ascii
+            filenames.
+        """
+        fnb = fn.encode ('ascii', errors = 'replace')
+        return fnb.decode ('ascii')
+    # end def mangle_file_name
+
     def attach_file (self, other_file, name = None) :
         cls = Jira_File_Attachment
+        fcp = copy (other_file)
+        if self.mangle_filenames :
+            fcp.name = self.mangle_file_name (fcp.name)
         f   = self._attach_file (cls, other_file, name)
         if f is None :
             return

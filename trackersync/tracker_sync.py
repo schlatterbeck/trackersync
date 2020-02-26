@@ -146,6 +146,8 @@ class Backend_Common (Log) :
             None which happens whenever the file is not available for
             sync (e.g. when we're dealing with an imported .zip file
             that contains only the most recent file attachments).
+            The given name is the name of the local attribute in the
+            local database.
         """
         if other_file.dummy :
             self.log.error \
@@ -187,6 +189,22 @@ class Backend_Common (Log) :
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def file_attachments
+
+    def file_exists (self, other_name) :
+        """ Sometimes name mangling must happen. This allows the
+            derived class to check if the file with the given
+            other_name already exists. Called by Sync_Attribute_Files.
+            Default is no mangling.
+        """
+        if getattr (self, self.file_by_name, None) :
+            return other_name in self.file_by_name
+        elif not self.file_attachments :
+            return False
+        else :
+            self.file_by_name = dict \
+                ((x.name, x) for x in self.file_attachments)
+        return other_name in self.file_by_name
+    # end def file_exists
 
     def get_messages (self) :
         """ Returns the dictionary of messages/comments for this issue
@@ -643,12 +661,13 @@ class Sync_Attribute_Files (Sync_Attribute) :
         rnames = dict ((x.name, x) for x in rfiles)
 
         for n in rnames :
-            if n not in lnames :
+            if not syncer.file_exists (n) :
                 syncer.attach_file (id, rnames [n], self.name)
 
         if self.prefix is not None and not self.remote_dry_run :
+            exists = remote_issue.file_exists
             for n in lnames :
-                if n.startswith (self.prefix) and n not in rnames :
+                if n.startswith (self.prefix) and not exists (n) :
                     remote_issue.attach_file (lnames [n], self.remote_name)
     # end def sync
 
@@ -1126,14 +1145,15 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
 
 class Local_Issue (Backend_Common, autosuper) :
 
-    def __init__ (self, syncer, id) :
+    def __init__ (self, syncer, id, opt, **kw) :
         self.syncer        = syncer
         self.newvalues     = {}
         self.oldvalues     = {}
         self.id            = id
+        self.opt           = opt
         self.dirty         = False
         self.default_class = syncer.default_class
-        self.__super.__init__ ()
+        self.__super.__init__ (**kw)
     # end def __init__
 
     def __getattr__ (self, name) :
@@ -1519,12 +1539,14 @@ class Trackersync_Syncer (Log) :
             # So now we're using oldremote directly.
             do_sync = True
             assert id not in self.localissues
-            self.localissues [id] = self.Local_Issue_Class (self, id)
+            self.localissues [id] = self.Local_Issue_Class \
+                (self, id, opt = self.opt)
         else :
             self.newcount += 1
             id = -self.newcount
             assert id not in self.localissues
-            self.localissues [id] = self.Local_Issue_Class (self, id)
+            self.localissues [id] = self.Local_Issue_Class \
+                (self, id, opt = self.opt)
             # create new issue only if the remote issue has all required
             # attributes and doesn't restrict them to a subset:
             do_sync = not remote_issue.attributes
@@ -1620,7 +1642,8 @@ class Trackersync_Syncer (Log) :
             the default method doing nothing.
         """
         remote_issue = self.new_remote_issue ({})
-        self.localissues [iid] = self.Local_Issue_Class (self, iid)
+        self.localissues [iid] = self.Local_Issue_Class \
+            (self, iid, opt = self.opt)
         do_sync = True
         for a in self.attributes :
             if a.only_update :
