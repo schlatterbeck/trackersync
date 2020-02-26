@@ -721,7 +721,7 @@ class Pfiff (Log, Lock_Mixin) :
     def parse_annotation (self, node) :
         lbl = node.find ('LABEL')
         txt = self.as_rendered_html (node.find ('ANNOTATION-TEXT'))
-        if lbl and lbl.text.strip () != self.company_short :
+        if lbl is not None and lbl.text.strip () != self.company_short :
             return
         if 'in_analyse_comments' in self.issue :
             self.issue ['in_analyse_comments'] += '\n' + txt
