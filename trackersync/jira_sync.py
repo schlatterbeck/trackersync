@@ -113,7 +113,9 @@ class Jira_File_Attachment (tracker_sync.File_Attachment) :
     # end def content
 
     def create (self) :
-        assert self._content is not None
+        if self._content is None :
+            self.issue.log.error ("Create attachment: %s is empty" % self.name)
+            return
         u = self.issue.url + '/issue/' + self.issue.id + '/attachments'
         h = {'X-Atlassian-Token': 'nocheck'}
         f = dict (file = (self.name, self.content, self.type))
@@ -135,10 +137,10 @@ class Jira_Backend (autosuper) :
         local tracker as well as when Jira is the remote tracker
     """
 
-    def __init__ (self, **kw) :
+    def __init__ (self, syncer, id, **kw) :
         self.mangle_filenames = True
-        self.__super.__init__ (**kw)
-        if self.opt.no_mangle_filenames :
+        self.__super.__init__ (syncer, id, **kw)
+        if getattr (self.opt, 'no_mangle_filenames', None) :
             self.mangle_filenames = False
     # end def __init__
 
@@ -207,7 +209,7 @@ class Jira_Backend (autosuper) :
         fcp = copy (other_file)
         if self.mangle_filenames :
             fcp.name = self.mangle_file_name (fcp.name)
-        f   = self._attach_file (cls, other_file, name)
+        f   = self._attach_file (cls, fcp, name)
         if f is None :
             return
         f.dirty = True

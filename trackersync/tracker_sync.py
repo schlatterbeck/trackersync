@@ -661,7 +661,7 @@ class Sync_Attribute_Files (Sync_Attribute) :
         rnames = dict ((x.name, x) for x in rfiles)
 
         for n in rnames :
-            if not syncer.file_exists (n) :
+            if not syncer.file_exists (id, n) :
                 syncer.attach_file (id, rnames [n], self.name)
 
         if self.prefix is not None and not self.remote_dry_run :
@@ -1303,6 +1303,11 @@ class Trackersync_Syncer (Log) :
             return []
         return self.localissues [id].file_attachments (name)
     # end def file_attachments
+
+    # Don't override in derived class, see Local_Issue
+    def file_exists (self, id, name) :
+        return self.localissues [id].file_exists (name)
+    # end def file_exists
 
     # Don't override in derived class, see Local_Issue
     def get_messages (self, id) :
