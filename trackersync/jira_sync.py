@@ -189,6 +189,8 @@ class Jira_Backend (autosuper) :
             try to find other_name unmangled first, then we try the
             mangled name.
         """
+        if not getattr (self, 'file_by_name', None) :
+            self.file_attachments ()
         if other_name in self.file_by_name :
             return True
         if self.mangle_file_name (other_name) in self.file_by_name :
