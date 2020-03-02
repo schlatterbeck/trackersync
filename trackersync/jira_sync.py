@@ -145,7 +145,9 @@ class Jira_Backend (autosuper) :
     # end def __init__
 
     def _attachment_iter (self) :
-        u = self.url + '/issue/' + self.id + '?fields=attachment'
+        if isinstance (self.id, int) and self.id < 0 :
+            raise StopIteration ('negative id')
+        u = self.url + '/issue/' + str (self.id) + '?fields=attachment'
         r = self.session.get (u)
         if not r.ok :
             self.raise_error (r)
