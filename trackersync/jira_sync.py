@@ -28,7 +28,6 @@ from __future__ import absolute_import
 import requests
 import json
 import numbers
-from   copy                 import copy
 from   time                 import sleep
 from   datetime             import datetime, timedelta
 from   rsclib.autosuper     import autosuper
@@ -209,11 +208,19 @@ class Jira_Backend (autosuper) :
     # end def mangle_file_name
 
     def attach_file (self, other_file, name = None) :
-        cls = Jira_File_Attachment
-        fcp = copy (other_file)
+        cls   = Jira_File_Attachment
+        fname = other_file.name
         if self.mangle_filenames :
-            fcp.name = self.mangle_file_name (fcp.name)
-        f   = self._attach_file (cls, fcp, name)
+            fname = self.mangle_file_name (other_file.name)
+        fcp = tracker_sync.File_Attachment \
+            ( other_file.issue
+            , url     = getattr (other_file, 'url', None)
+            , id      = getattr (other_file, 'id',  None)
+            , name    = fname
+            , type    = other_file.type
+            , content = other_file.content
+            )
+        f = self._attach_file (cls, fcp, name)
         if f is None :
             return
         f.dirty = True
