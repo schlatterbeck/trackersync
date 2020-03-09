@@ -106,7 +106,7 @@ class Jira_File_Attachment (tracker_sync.File_Attachment) :
         if self._content is None :
             r = self.session.get (self.url)
             if not r.ok :
-                self.issue.raise_error (r)
+                self.issue.raise_error (r, "Content")
             self._content = r.content
         return self._content
     # end def content
@@ -149,7 +149,7 @@ class Jira_Backend (autosuper) :
         u = self.url + '/issue/' + str (self.id) + '?fields=attachment'
         r = self.session.get (u)
         if not r.ok :
-            self.raise_error (r)
+            self.raise_error (r, "Attachment of %s" % self.id)
         j = r.json ()
         for a in j ['fields']['attachment'] :
             yield a
@@ -159,7 +159,7 @@ class Jira_Backend (autosuper) :
         u = self.url + '/issue/' + self.id + '/comment'
         r = self.session.get (u)
         if not r.ok :
-            self.raise_error (r)
+            self.raise_error (r, "Message of %s" % self.id)
         j = r.json ()
         if not j ['comments'] :
             assert j ['startAt'] == 0 and j ['total'] == 0
@@ -303,7 +303,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         u = self.url + '/' + 'field'
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300 :
-            self.raise_error (r)
+            self.raise_error (r, "Compute Schema")
         j = r.json ()
         self.schema = {}
         self.schema ['issue'] = {}
@@ -370,7 +370,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         r = self.session.post \
             (u, data = json.dumps (d), headers = self.json_header)
         if not r.ok or not 200 <= r.status_code < 300 :
-            self.raise_error (r)
+            self.raise_error (r, "Create %s" % cls)
         j = r.json ()
         return j ['key']
     # end def _create
@@ -447,7 +447,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
             u = self.url + '/' + cls + '?key=' + id
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300 :
-            self.raise_error (r)
+            self.raise_error (r, "Getitem %s %s" % (cls, id))
         j = r.json ()
         if 'fields' in j :
             d = {}
