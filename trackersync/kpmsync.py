@@ -85,7 +85,7 @@ if sys.version.startswith ('2.') :
             for row in self.reader :
                 yield dict \
                     ((self.decode (k), self.decode (v))
-                     for k, v in row.iteritems ()
+                     for k, v in row.items ()
                     )
         # end def __iter__
 
@@ -234,7 +234,8 @@ class Problem (tracker_sync.Remote_Issue) :
         self.canceled    = canceled
         self.lang        = lang
         rec = {}
-        for k, v in record.iteritems () :
+        for k in record :
+            v = record [k]
             if v is not None and v != str ('') :
                 rec [k] = v
         # We can restrict the attributes to be synced to an explicit
@@ -694,7 +695,8 @@ class Export (autosuper) :
     # end def get
 
     def sync (self, syncer) :
-        for p_id, p in self.problems.iteritems () :
+        for p_id in self.problems :
+            p = self.problems [p_id]
             syncer.log.info ('Syncing %s' % p_id)
             try :
                 syncer.sync (p_id, p)
@@ -709,7 +711,8 @@ class Export (autosuper) :
 
     def __repr__ (self) :
         r = []
-        for p in self.problems.itervalues () :
+        for id in self.problems :
+            p = self.problems [i]
             r.append (str ("PROBLEM"))
             r.append (repr (p))
         return str ('\n').join (r)
@@ -799,7 +802,8 @@ class Job (autosuper) :
         if self.error :
             return
         fmt = '%Y-%m-%d %H:%M:%S.%f'
-        for a, s in self.dates.iteritems () :
+        for a in self.dates :
+            s = self.dates [a]
             x = ji.get (s)
             if x :
                 setattr (self, a, datetime.strptime (x, fmt))

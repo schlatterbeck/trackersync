@@ -170,7 +170,7 @@ class Sync_Attribute_Messages (Sync_Attribute) :
             syncer.set (id, self.name, msgs)
         if self.keyword is not None :
             k = syncer.lookup ('msg_keyword', self.keyword)
-            for mrup in nosync.itervalues () :
+            for mrup in nosync.values () :
                 if k in mrup ['keywords'] :
                     mid = remote_issue.add_message (mrup)
                     if syncer.verbose :

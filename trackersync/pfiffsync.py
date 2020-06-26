@@ -193,7 +193,8 @@ class Problem (tracker_sync.Remote_Issue) :
         self.docinfo = {}
         self.now     = now
         rec = {}
-        for k, v in record.iteritems () :
+        for k in record :
+            v = record [k]
             if v is not None and v != str ('') :
                 rec [k] = v
         # We can restrict the attributes to be synced to an explicit

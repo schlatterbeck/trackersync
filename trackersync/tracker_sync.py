@@ -284,7 +284,8 @@ class Remote_Issue (Backend_Common) :
 
     def __unicode__ (self) :
         r = []
-        for k, v in sorted (self.record.iteritems ()) :
+        for k in sorted (self.record) :
+            v = self.record [k]
             r.append ("%(k)s: >%(v)s<" % locals ())
         return '\n'.join (r)
     # end def __unicode__
@@ -310,7 +311,11 @@ class Remote_Issue (Backend_Common) :
         """ Only return non-empty values in json dump.
             Optionally update the dumped data with some settings in kw.
         """
-        d = dict ((k, v) for k, v in self.record.items () if v)
+        d = {}
+        for k in self.record :
+            v = self.record [k]
+            if v :
+                d [k] = v
         d.update (self.newvalues)
         d.update (kw)
         return json.dumps (d, sort_keys = True, indent = 4)
@@ -492,9 +497,9 @@ class Sync_Attribute (autosuper) :
         self.l_only_update  = l_only_update
         self.allowed_chars  = allowed_chars
         if not self.imap and self.map :
-            self.imap = dict ((v, k) for k, v in  map.iteritems ())
+            self.imap = dict ((v, k) for k, v in  map.items ())
         if not self.map and self.imap :
-            self.map  = dict ((v, k) for k, v in imap.iteritems ())
+            self.map  = dict ((v, k) for k, v in imap.items ())
     # end def __init__
 
     def no_sync_necessary (self, lv, rv, remote_issue) :
@@ -1395,7 +1400,7 @@ class Trackersync_Syncer (Log) :
     # end def get_schema_entry
 
     def get_sync_filename (self, remoteid) :
-        return os.path.join (self.opt.syncdir, remoteid)
+        return os.path.join (self.opt.syncdir, str (remoteid))
     # end def get_sync_filename
 
     def get_transitive_item (self, classname, path, id) :

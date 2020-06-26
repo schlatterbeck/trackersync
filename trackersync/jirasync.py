@@ -83,7 +83,8 @@ class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue) :
     def update (self, syncer) :
         if syncer.verbose :
             print ("Remote-Update: %s %s" % (self.key, self.newvalues))
-        for k, v in self.newvalues.iteritems () :
+        for k in self.newvalues :
+            v = self.newvalues [k]
             if isinstance (v, (dict, list)) :
                 raise ValueError ("Update on non-atomic value")
         u = self.jira.url + '/issue/' + self.id

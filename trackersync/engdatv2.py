@@ -1,6 +1,5 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-# Copyright (C) 2019 Dr. Ralf Schlatterbeck Open Source Consulting.
+#!/usr/bin/python3
+# Copyright (C) 2019-20 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
