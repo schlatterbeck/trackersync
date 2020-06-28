@@ -175,7 +175,7 @@ class Jira_Backend (autosuper) :
                 f = Jira_File_Attachment \
                     ( self
                     , id   = a ['id']
-                    , type = a ['mimeType']
+                    , type = a.get ('mimeType', 'application/octet-stream')
                     , url  = a ['content']
                     , name = a ['filename']
                     )
@@ -295,6 +295,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         self.url          = opt.url
         self.session      = requests.Session ()
         self.session.auth = (opt.local_username, opt.local_password)
+        self.item_cache   = {}
         # This initializes schema and already needs the session
         self.__super.__init__ (remote_name, attributes, opt)
     # end def __init__
@@ -442,6 +443,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
             to-be-updated attributes, this would bypass the cache.
             This returns a dict with a map from attr name to value.
         """
+        if (cls, id) in self.item_cache :
+            return self.item_cache [(cls, id)]
         u = self.url + '/' + cls + '/' + id
         if cls == 'user' :
             u = self.url + '/' + cls + '?key=' + id
@@ -473,7 +476,9 @@ class Jira_Syncer (tracker_sync.Syncer) :
                     d ['id'] = j ['id']
                 if 'key' in j :
                     d ['key'] = j ['key']
+            self.item_cache [(cls, id)] = d
             return d
+        self.item_cache [(cls, id)] = j
         return j
     # end def getitem
 
