@@ -87,10 +87,15 @@ logging.config.dictConfig (logging_cfg)
 class KPM_File_Attachment (tracker_sync.File_Attachment) :
 
     def __init__ (self, issue, **kw) :
+        self.description = self.permission = None
         self._content = self._name = self._type = None
         for k in 'content', 'name', 'type' :
             setattr (self, '_' + k, kw.get (k, None))
             if k in kw :
+                del kw [k]
+        for k in 'permission', 'description' :
+            if k in kw :
+                setattr (self, k, kw.get (k))
                 del kw [k]
         self.__super.__init__ (issue, **kw)
     # end def __init__
@@ -111,34 +116,22 @@ class KPM_File_Attachment (tracker_sync.File_Attachment) :
 
     @property
     def type (self) :
-        if self._type is None :
-            self._get_file ()
         return self._type
     # end def type
 
     def _get_file (self) :
-        FIXME
-        result = self.issue.kpm.get \
-            ( 'problem.base.dokument.download.do'
-            , actionCommand = 'downloadDokumentAsAttachment'
-            , dokTs         = self.id
-            )
-        h = result.headers
-        if 'content-type' in h :
-            self._type = h ['content-type'].decode ('latin1')
-        else :
-            self._type = 'application/octet-stream'
-        if 'content-disposition' in h :
-            parts = h ['content-disposition'].decode ('latin1').split (';')
-            for p in parts :
-                if p.startswith ('filename=') :
-                    fn = p.split ('=', 1) [-1].strip ('"')
-                    self._name = fn
-                    break
-        if self._name is None :
-            self._name = self.id
-        # Allow content to be None, we create an empty file in this case
-        self._content = result.content or ''
+        f = self.issue.kpm.get_file (self)
+        if f is not None :
+            self._content = f ['Data']
+            if not self._name :
+                if f ['Suffix'] :
+                    self._name = '.'.join ((f ['Name'], f ['Suffix']))
+                else :
+                    self._name = f ['Name']
+            if not self.permission :
+                self.permission = f ['AccessRight']
+            if not self.description :
+                self.description = f ['Description']
     # end def _get_file
 
 # end class KPM_File_Attachment
@@ -182,19 +175,21 @@ class Problem (tracker_sync.Remote_Issue) :
     # end def convert_date
 
     def file_attachments (self, name = None) :
-        # FIXME
         if self.attachments is None :
             self.attachments = []
-            docs = self.get ('Dokumente')
-            if docs :
-                self.kpm.log.info ("docs: %r" % docs)
-                for doc in docs.split () :
-                    parsed = parse_qs (doc)
-                    if 'dokTs' not in parsed :
-                        self.kpm.log.error ("Error parsing doc: %r" % parsed)
-                    else :
-                        f = KPM_File_Attachment (self, id = parsed ['dokTs'][0])
-                        self.attachments.append (f)
+            for d in self.kpm.document_list (self) :
+                if d ['Suffix'] :
+                    name = '.'.join ((d ['Name'], d ['Suffix']))
+                else :
+                    name = d ['Name']
+                f = KPM_File_Attachment \
+                    ( self
+                    , id          = d ['DocumentId']
+                    , name        = name
+                    , permission  = d ['AccessRight']
+                    , description = d ['Description']
+                    )
+                self.attachments.append (f)
         return self.attachments
     # end def file_attachments
 
@@ -322,21 +317,6 @@ class KPM_WS (Log, Lock_Mixin) :
         self.__super.__init__ (** kw)
     # end def __init__
 
-    def check_error (self, rq, msg) :
-        c = 'Communication: '
-        if 'ResponseMessage' not in msg :
-            self.log.error ("%s%s: No ResponseMessage found" % (c, rq))
-            return 1
-        if 'MessageText' not in msg ['ResponseMessage'] :
-            self.log.error ("%s%s: No MessageText found" % (c, rq))
-            return 1
-        txt = msg ['ResponseMessage']['MessageText']
-        if 'success' not in txt :
-            self.log.error ("%s%s: Error: %s" % (c, rq, txt))
-            return 1
-        return 0
-    # end def check_error
-
     def __iter__ (self) :
         """ Iterate over all relevant 'Problem' records
         """
@@ -364,8 +344,58 @@ class KPM_WS (Log, Lock_Mixin) :
                 continue
             rec = rec ['DevelopmentProblem']
             p = Problem (self, id, rec)
+            p.allowed_actions = rights ['Action']
             yield (p)
     # end def __iter__
+
+    def check_error (self, rq, msg) :
+        c = 'Communication: '
+        if 'ResponseMessage' not in msg :
+            self.log.error ("%s%s: No ResponseMessage found" % (c, rq))
+            return 1
+        if 'MessageText' not in msg ['ResponseMessage'] :
+            self.log.error ("%s%s: No MessageText found" % (c, rq))
+            return 1
+        txt = msg ['ResponseMessage']['MessageText']
+        if 'success' not in txt :
+            self.log.error ("%s%s: Error: %s" % (c, rq, txt))
+            return 1
+        return 0
+    # end def check_error
+
+    def document_list (self, problem) :
+        if 'GET_DOCUMENT_LIST' not in problem.allowed_actions :
+            self.log.error \
+                ('No permission to list documents for %s' % problem.id)
+            return []
+        pl = self.client.service.GetDocumentList \
+            (UserAuthentification = self.auth, ProblemNumber = problem.id)
+        if self.check_error ('GetDocumentList', pl) :
+            return []
+        return pl ['DocumentReference']
+    # end def document_list
+
+    def get_file (self, doc) :
+        issue = doc.issue
+        if getattr (doc, 'permission', None) != '0' :
+            self.log.error \
+                ( 'No permission on document %s of issue %s'
+                % (doc.id, issue.id)
+                )
+            return
+        if 'GET_DOCUMENT' not in issue.allowed_actions :
+            self.log.error \
+                ('No permission to retrieve document for %s' % issue.id)
+            return
+        doc = self.client.service.GetDocument \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = issue.id
+            , DocumentId           = doc.id
+            )
+        if self.check_error ('GetDocument', doc) :
+            return
+        return doc ['Document']
+    # end def get_file
 
     def update (self, problem) :
         d = dict \
@@ -377,7 +407,7 @@ class KPM_WS (Log, Lock_Mixin) :
         sr = self.fac.SupplierResponse (** d)
         d = dict \
             ( UserAuthentification = self.auth
-            , ProblemNumber        = int (problem.ProblemNumber)
+            , ProblemNumber        = problem.ProblemNumber
             , SupplierResponse     = sr
             )
         d ['ResponseText'] = problem.SupplierResponse

@@ -6,3 +6,5 @@ build
 config
 JOB-*
 *.csv
+syncdir
+testdir
