@@ -145,6 +145,10 @@ class KPM_File_Attachment (tracker_sync.File_Attachment) :
 
 class Problem (tracker_sync.Remote_Issue) :
 
+    # Allow to access deep datastructures with multilevel keys delimited
+    # with '.'
+    multilevel = True
+
     File_Attachment_Class = KPM_File_Attachment
 
     def __init__ (self, kpm, id, rec, canceled = False) :

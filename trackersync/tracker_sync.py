@@ -27,6 +27,7 @@ from __future__ import absolute_import
 
 import os
 import json
+from   copy             import deepcopy
 from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import string_types
 from   rsclib.execute   import Log
@@ -273,7 +274,13 @@ class Remote_Issue (Backend_Common) :
                         nitem = nitem [n]
                     else :
                         nitem = None
-                item = item [n]
+                if item is not None :
+                    if n in item :
+                        item = item [n]
+                    else :
+                        item = None
+                if not item and not nitem :
+                    raise KeyError ("Not found: %s" % name)
             if nitem is not None :
                 return nitem
             return item
@@ -382,7 +389,8 @@ class Remote_Issue (Backend_Common) :
             names = name.split ('.')
             item  = self.newvalues
             # Copy over the current value to ease later update
-            item [names [0]] = self [names [0]]
+            if self.record.get (names [0]) and names [0] not in item :
+                item [names [0]] = deepcopy (self [names [0]])
             for n in names [:-1] :
                 if n not in item :
                     self.dirty = True
