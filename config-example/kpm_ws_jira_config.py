@@ -101,7 +101,11 @@ KPM_ATTRIBUTES = \
           , 'ForemostTestPart.Hardware'
           , 'Repeatable'
           , 'Frequency'
+          , 'Creator.Address.ContactPerson'
+          , 'Creator.PersonalContractor.UserName'
           , 'ProblemSolver.Address.ContactPerson'
+          , 'ProblemSolver.Contractor.Address.ContactPerson'
+          , 'ProblemSolver.Contractor.PersonalContractor.UserName'
           ]
         , delimiter     = '\n\n'
         , field_prefix  = '*'
@@ -110,7 +114,7 @@ KPM_ATTRIBUTES = \
     # "Release Note" field in Jira, some customfield_12009
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name    = 'customfield_12009'
-        , remote_name   = 'SupplierResponse'
+        , remote_name   = None
         , r_default     = 'Under Investigation'
         , l_only_update = True
         )
@@ -120,23 +124,27 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'SupplierResponse'
         )
     # priority can currently only be set during creation
+    # Seems we have no permission, we get 400 with:
+    # id=... {'fields': {'priority': {'name': 'Minor'}}}
+    # when trying to set Unspecified -> Minor
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'priority.name'
         , remote_name  = 'Rating'
         , r_default    = 'Minor'
         , l_default    = 'DB'
-        #, only_update  = True
+        , only_update  = True
+        #, local_unset  = 'Unspecified'
         , imap =
-            { '1'  : 'Showstopper'
-            , '2'  : 'Showstopper'
-            , '3'  : 'Major'
-            , '4'  : 'Major'
-            , '5'  : 'Minor'
-            , '6'  : 'Minor'
-            , '7'  : 'Minor'
-            , '8'  : 'Minor'
-            , '9'  : 'Minor'
-            , '10' : 'Minor'
+            { '1'  : 'Showstopper' # A
+            , '2'  : 'Showstopper' # A
+            , '3'  : 'Showstopper' # A
+            , '4'  : 'Major'       # B
+            , '5'  : 'Major'       # B
+            , '6'  : 'Minor'       # C
+            , '7'  : 'Minor'       # C
+            , '8'  : 'Minor'       # D
+            , '9'  : 'Minor'       # D
+            , '10' : 'Minor'       # D
             }
         )
     , jira_sync.Sync_Attribute_To_Remote
@@ -172,12 +180,12 @@ KPM_ATTRIBUTES = \
         )
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name    = 'key'
-        , remote_name   = 'ExternalProblemNumber'
+        , remote_name   = 'SupplierErrorNumber'
         )
     # FIXME: Does this have a representation in the main problem?
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name     = 'fixVersions.name'
-        , remote_name    = 'VersionOK'
+        , remote_name    = 'SupplierVersionOk'
         , join_multilink = True
         )
 # FIXME: Maybe we want to transmit a data, is this the expected delivery?
@@ -185,5 +193,6 @@ KPM_ATTRIBUTES = \
 #        ( local_name     = 'FIXME'
 #        , remote_name    = 'SupplierResponse.DueDate'
 #        )
+    , jira_sync.Sync_Attribute_Files ()
     )
 

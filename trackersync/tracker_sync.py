@@ -489,6 +489,7 @@ class Sync_Attribute (autosuper) :
         , local_prefix   = None
         , l_only_update  = False
         , allowed_chars  = None
+        , local_unset    = None
         ) :
         self.name           = local_name
         self.remote_name    = remote_name
@@ -504,6 +505,8 @@ class Sync_Attribute (autosuper) :
         self.local_prefix   = local_prefix
         self.l_only_update  = l_only_update
         self.allowed_chars  = allowed_chars
+        # only used for Sync_Attribute_To_Local_Default:
+        self.local_unset    = local_unset
         if not self.imap and self.map :
             self.imap = dict ((v, k) for k, v in  map.items ())
         if not self.map and self.imap :
@@ -738,7 +741,8 @@ class Sync_Attribute_To_Local_Default (Sync_Attribute) :
             v = self.r_default
         if isinstance (v, string_types) and self.local_prefix :
             v = local_prefix + v
-        if syncer.get (id, self.name) is None :
+        rv = syncer.get (id, self.name)
+        if rv is None or self.local_unset and rv == self.local_unset :
             syncer.set (id, self.name, v)
     # end def sync
 

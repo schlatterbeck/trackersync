@@ -153,14 +153,12 @@ class Problem (tracker_sync.Remote_Issue) :
         attributes = {}
         if self.canceled :
             attributes ['Status'] = True
-        rec = serialize_object (rec)
-        self.make_serializable (rec)
         self.__super.__init__ (rec, attributes)
         self.id = self.record ['ProblemNumber']
     # end def __init__
 
     def convert_date (self, value) :
-        """ Convert date from roundup value to german date
+        """ Convert date from roundup value to KPM WS date
             representation. Used only for KPM 'Datum'. Currently we
             don't care about timezone, KPM document doesn't specify the
             timezone used. Roundup XMLRPC dates come as UTC if not
@@ -171,7 +169,7 @@ class Problem (tracker_sync.Remote_Issue) :
         if not value :
             return value
         dt = datetime.strptime (value, "%Y-%m-%d.%H:%M:%S.%f")
-        return dt.strftime ('%Y-%m-%d %H:%M:%S.%f')
+        return dt.strftime ('%Y-%m-%d-%H:%M:%S.%f')
     # end def convert_date
 
     def file_attachments (self, name = None) :
@@ -198,23 +196,6 @@ class Problem (tracker_sync.Remote_Issue) :
         """
         raise NotImplementedError ("Creation in KPM not yet implemented")
     # end def create
-
-    def make_serializable (self, rec) :
-        """ This makes the returned data structure serializable (e.g.
-            convert date to string) and fixes some problems witht the
-            data, e.g., the ProblemNumber is numeric which needs to be a
-            string.
-        """
-        for k in rec.keys () :
-            if k == 'ProblemNumber' :
-                rec [k] = str (rec [k])
-            if k == 'Rating' :
-                rec [k] = rec [k].strip ()
-            if isinstance (rec [k], type ({})) :
-                self.make_serializable (rec [k])
-            elif isinstance (rec [k], date) :
-                rec [k] = rec [k].strftime ('%Y-%m-%d')
-    # end def make_serializable
 
     def sync (self, syncer) :
         syncer.log.info ('Syncing %s' % self.id)
@@ -321,11 +302,13 @@ class KPM_WS (Log, Lock_Mixin) :
         """ Iterate over all relevant 'Problem' records
         """
         self.log.debug ('In __iter__')
+        # Note that PassiveOverview will be needed when we're creating
+        # remote issues that need update.
         info = self.client.service.GetMultipleProblemData \
             ( UserAuthentification = self.auth
             , OverviewAddress      = self.adr
             , ActiveOverview       = True
-            , PassiveOverview      = True
+            , PassiveOverview      = False
             )
         if self.check_error ('GetMultipleProblemData', info) :
             return
@@ -343,6 +326,19 @@ class KPM_WS (Log, Lock_Mixin) :
             if self.check_error ('GetDevelopmentProblemData', rec) :
                 continue
             rec = rec ['DevelopmentProblem']
+            rec = serialize_object (rec)
+            self.make_serializable (rec)
+            pss = self.get_process_steps (id)
+            for ps in pss :
+                pstype = ps ['ProcessStepTypeDescription']
+                if pstype == 'Lieferantenaussage' :
+                    sr = ps ['SupplierResponse']
+                    rec ['SupplierResponse']    = ps ['Text']
+                    rec ['SupplierVersionOk']   = sr ['VersionOk']
+                    rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
+                    assert rec ['SupplierStatus'] == sr ['Status']
+                if pstype == 'Analyse abgeschlossen' :
+                    rec ['Analysis'] = ps ['Text']
             p = Problem (self, id, rec)
             p.allowed_actions = rights ['Action']
             yield (p)
@@ -397,13 +393,62 @@ class KPM_WS (Log, Lock_Mixin) :
         return doc ['Document']
     # end def get_file
 
+    def get_process_steps (self, problem_id) :
+        """ Get additional information about problem that is carried
+            only in process steps.
+        """
+        info = self.client.service.GetProcessStepList \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = problem_id
+            )
+        self.check_error ('GetProcessStepList', info)
+        # Loop over steps and decide which to retrieve
+        latest    = {}
+        steplist  = []
+        for ps in info ['ProcessStepItem'] :
+            assert int (ps ['ProblemNumber']) == int (problem_id)
+            pstype = ps ['ProcessStepTypeDescription']
+            psid   = ps ['ProcessStepId']
+            for relevant in 'Lieferantenaussage', 'Analyse abgeschlossen' :
+                if pstype == relevant :
+                    # Only keep newest
+                    if relevant not in latest or latest [relevant] < psid :
+                        latest [relevant] = psid
+            if pstype == 'Aussage' :
+                steplist.append (psid)
+        info = self.client.service.GetProcessSteps \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = problem_id
+            , ProcessStepId        = steplist + list (latest.values ())
+            )
+        self.check_error ('GetProcessStepList', info)
+        return info ['ProcessStep']
+    # end def get_process_steps
+
+    def make_serializable (self, rec) :
+        """ This makes the returned data structure serializable (e.g.
+            convert date to string) and fixes some problems with the
+            data, e.g., the ProblemNumber is numeric which needs to be a
+            string.
+        """
+        for k in rec.keys () :
+            if k == 'ProblemNumber' :
+                rec [k] = str (rec [k])
+            if k == 'Rating' :
+                rec [k] = rec [k].strip ()
+            if isinstance (rec [k], type ({})) :
+                self.make_serializable (rec [k])
+            elif isinstance (rec [k], date) :
+                rec [k] = rec [k].strftime ('%Y-%m-%d')
+    # end def make_serializable
+
     def update (self, problem) :
         d = dict \
             ( Status      = problem.SupplierStatus
-            , ErrorNumber = problem.ExternalProblemNumber
+            , ErrorNumber = problem.SupplierErrorNumber
             )
-        if problem.get ('VersionOK', None) :
-            d ['VersionOK'] = problem.VersionOK
+        if problem.get ('SupplierVersionOk', None) :
+            d ['VersionOk'] = problem.SupplierVersionOk
         sr = self.fac.SupplierResponse (** d)
         d = dict \
             ( UserAuthentification = self.auth
