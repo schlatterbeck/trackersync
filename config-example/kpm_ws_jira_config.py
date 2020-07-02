@@ -26,6 +26,7 @@ from __future__ import absolute_import
 """ Example configuration for KPM Sync with Jira """
 
 from trackersync import jira_sync
+from trackersync import kpmwssync
 
 KPM_USERNAME   = 'user'
 KPM_SITE       = 'https://ws-gateway-cert.volkswagenag.com'
@@ -194,5 +195,6 @@ KPM_ATTRIBUTES = \
 #        , remote_name    = 'SupplierResponse.DueDate'
 #        )
     , jira_sync.Sync_Attribute_Files ()
+    , kpmwssync.Sync_Attribute_KPM_Message (prefix = 'TO AUDI:')
     )
 

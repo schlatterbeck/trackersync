@@ -48,6 +48,56 @@ from zeep.helpers       import serialize_object
 from trackersync        import tracker_sync
 from trackersync        import jira_sync
 
+class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute) :
+
+    def __init__ (self, prefix = None, ** kw) :
+        self.__super.__init__ (local_name = None, ** kw)
+        self.prefix = prefix
+    # end def __init__
+
+    def sync (self, syncer, id, remote_issue) :
+        """ Note that like for all Sync_Attribute classes the remote
+            issue is the KPM issue.
+        """
+        lmsg = syncer.get_messages (id)
+        # Get previously synced keys
+        remote_issue.get_old_message_keys (syncer)
+        local_issue = syncer.localissues [id]
+        for k in remote_issue.Aussagen :
+            a = remote_issue.Aussagen [k]
+            if a.get ('foreign_id') :
+                continue
+            message = local_issue.Message_Class \
+                ( local_issue
+                , id      = k
+                , date    = datetime.strptime
+                    (a ['date'], '%Y-%m-%d-%H.%M.%S.%f')
+                , content = a ['content']
+                )
+            # There may be a problem if later during sync of the same
+            # issue an error occurs and we cannot write the sync db.
+            a ['foreign_id'] = local_issue.add_message (message)
+            assert a ['foreign_id']
+            remote_issue.dirty = True
+        if self.prefix :
+            for id in lmsg :
+                if id in remote_issue.msg_by_foreign_id :
+                    continue
+                if not lmsg [id].content.startswith (self.prefix) :
+                    continue
+                msg = self._mangle_rec (lmsg [id])
+                remote_issue.add_message (msg)
+    # end def sync
+
+    def _mangle_rec (self, oldrec) :
+        rec = oldrec.copy ()
+        if rec.content.startswith (self.prefix) :
+            rec.content = rec.content [len (self.prefix):].lstrip ()
+        return rec
+    # end def _mangle_rec
+
+# end class Sync_Attribute_KPM_Message
+
 class Config (Config_File) :
 
     config = 'kpm_ws_config'
@@ -155,7 +205,14 @@ class Problem (tracker_sync.Remote_Issue) :
             attributes ['Status'] = True
         self.__super.__init__ (rec, attributes)
         self.id = self.record ['ProblemNumber']
+        self.messages = []
     # end def __init__
+
+    def add_message (self, msg) :
+        self.dirty = True
+        msgid = self.kpm.add_message (self, msg)
+        return msgid
+    # end def add_message
 
     def convert_date (self, value) :
         """ Convert date from roundup value to KPM WS date
@@ -169,7 +226,7 @@ class Problem (tracker_sync.Remote_Issue) :
         if not value :
             return value
         dt = datetime.strptime (value, "%Y-%m-%d.%H:%M:%S.%f")
-        return dt.strftime ('%Y-%m-%d-%H:%M:%S.%f')
+        return dt.strftime ('%Y-%m-%d-%H.%M.%S.%f')
     # end def convert_date
 
     def file_attachments (self, name = None) :
@@ -197,6 +254,20 @@ class Problem (tracker_sync.Remote_Issue) :
         raise NotImplementedError ("Creation in KPM not yet implemented")
     # end def create
 
+    def get_old_message_keys (self, syncer) :
+        aussagen = syncer.oldremote.get ('Aussagen', {})
+        for k in aussagen :
+            d = aussagen [k]
+            if 'foreign_id' in d :
+                self ['Aussagen'][k]['foreign_id'] = d ['foreign_id']
+        self.msg_by_foreign_id = {}
+        for k in self ['Aussagen'] :
+            m = self ['Aussagen'][k]
+            fk = m.get ('foreign_id')
+            if fk :
+                self.msg_by_foreign_id [fk] = k
+    # end def get_old_message_keys
+
     def sync (self, syncer) :
         syncer.log.info ('Syncing %s' % self.id)
         try :
@@ -212,6 +283,7 @@ class Problem (tracker_sync.Remote_Issue) :
         """ Update remote issue tracker with self.newvalues.
         """
         if self.dirty :
+            # This check needs update if we ever create issues
             self.kpm.update (self)
     # end def update
 
@@ -328,6 +400,7 @@ class KPM_WS (Log, Lock_Mixin) :
             rec = rec ['DevelopmentProblem']
             rec = serialize_object (rec)
             self.make_serializable (rec)
+            rec ['Aussagen'] = {}
             pss = self.get_process_steps (id)
             for ps in pss :
                 pstype = ps ['ProcessStepTypeDescription']
@@ -339,6 +412,13 @@ class KPM_WS (Log, Lock_Mixin) :
                     assert rec ['SupplierStatus'] == sr ['Status']
                 if pstype == 'Analyse abgeschlossen' :
                     rec ['Analysis'] = ps ['Text']
+                if pstype == 'Aussage' :
+                    psid = ps ['ProcessStepId']
+                    rec ['Aussagen'][psid] = dict \
+                        ( id      = psid
+                        , date    = ps ['CreationDate']
+                        , content = ps ['Text']
+                        )
             p = Problem (self, id, rec)
             p.allowed_actions = rights ['Action']
             yield (p)
@@ -358,6 +438,43 @@ class KPM_WS (Log, Lock_Mixin) :
             return 1
         return 0
     # end def check_error
+
+    def add_message (self, problem, msg) :
+        if 'ADD_NOTICE' not in problem.allowed_actions :
+            self.log.error \
+                ('No permission to add message to %s' % problem.id)
+        else :
+            r = self.client.service.AddNotice \
+                ( UserAuthentification = self.auth
+                , ProblemNumber        = problem.ProblemNumber
+                , Notice               = msg.content
+                )
+            self.check_error ('AddNotice', r)
+            id = r ['ProcessStepId']
+            # Workaround: Seems the ID is in different date format
+            id = self.fix_process_step_date (id)
+            problem.Aussagen [id] = dict \
+                ( id         = id
+                , content    = msg.content
+                , date       = msg.date.strftime ('%Y-%m-%d-%H.%M.%S.%f')
+                , foreign_id = msg.id
+                )
+    # end def add_message
+
+    def fix_process_step_date (self, timestamp) :
+        """ Workaround: Seems the ID is in different date format
+            The IDs returned with GetProcessStepList are in a different
+            format than the ID returned with AddNotice.
+        """
+        try :
+            dt = datetime.strptime (timestamp, "%Y-%m-%d %H:%M:%S.%f")
+            return dt.strftime ("%Y-%m-%d-%H.%M.%S.%f")
+        except ValueError :
+            pass
+        # Make sure it's the right format before returning:
+        dt = datetime.strptime (timestamp, "%Y-%m-%d-%H.%M.%S.%f")
+        return timestamp
+    # end def fix_process_step_date
 
     def document_list (self, problem) :
         if 'GET_DOCUMENT_LIST' not in problem.allowed_actions :
@@ -443,6 +560,17 @@ class KPM_WS (Log, Lock_Mixin) :
     # end def make_serializable
 
     def update (self, problem) :
+        response_attrs = set \
+            (( 'SupplierStatus', 'SupplierErrorNumber'
+            ,  'SupplierVersionOk', 'SupplierResponse'
+            ))
+        nv = set (problem.newvalues.keys ())
+        # Only update if at least one of the attributes is in newvalues
+        if response_attrs & nv :
+            self.update_supplier_response (problem)
+    # end def update
+
+    def update_supplier_response (self, problem) :
         d = dict \
             ( Status      = problem.SupplierStatus
             , ErrorNumber = problem.SupplierErrorNumber
@@ -456,8 +584,12 @@ class KPM_WS (Log, Lock_Mixin) :
             , SupplierResponse     = sr
             )
         d ['ResponseText'] = problem.SupplierResponse
-        r = self.client.service.AddSupplierResponse (** d)
-        self.check_error ('AddSupplierResponse', r)
+        if 'ADD_SUPPLIER_RESPONSE' not in problem.allowed_actions :
+            self.log.error \
+                ('No permission to set supplier response for %s' % problem.id)
+        else :
+            r = self.client.service.AddSupplierResponse (** d)
+            self.check_error ('AddSupplierResponse', r)
     # end def update
 
 # end class KPM_WS

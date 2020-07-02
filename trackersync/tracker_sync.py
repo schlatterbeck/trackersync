@@ -433,6 +433,7 @@ class Remote_Issue (Backend_Common) :
 
     def update (self, syncer) :
         """ Update remote issue tracker with self.newvalues.
+            This is expected to *not* update the syncdb anymore!
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def update
@@ -1593,6 +1594,8 @@ class Trackersync_Syncer (Log) :
                 if a.sync (self, id, remote_issue) :
                     self.log_verbose ("Not syncing: %s/%s" % (id, remote_id))
                     return
+
+        # Note: This already updates the syncdb!
         if self.get_existing_id (id) is None :
             if not remote_issue.attributes :
                 self.log_verbose \
@@ -1614,6 +1617,7 @@ class Trackersync_Syncer (Log) :
         elif self.localissues [id].dirty or remote_issue.dirty :
             self.update_issue (id, remote_id, remote_issue)
         if remote_issue.dirty :
+            # This is expected to *not* change the syncdb anymore
             if not self.dry_run and not self.remote_dry_run :
                 self.log_verbose ("Update remote:", remote_issue.newvalues)
                 remote_issue.update (self)

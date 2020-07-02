@@ -246,6 +246,13 @@ class Jira_Backend (autosuper) :
         return self.issue_comments
     # end def get_messages
 
+    def add_message (self, msg) :
+        """ Add a jira notice and return the id
+        """
+        self.dirty = True # Needed for syncdb update
+        return self.syncer.add_comment (self.id, msg)
+    # end def add_message
+
     @classmethod
     def raise_error (cls, r, *args) :
         """ Used for errors whenever r (the result of a http method) has
@@ -375,6 +382,17 @@ class Jira_Syncer (tracker_sync.Syncer) :
         j = r.json ()
         return j ['key']
     # end def _create
+
+    def add_comment (self, id, msg) :
+        u = self.url + '/' + self.default_class + '/' + str (id) + '/comment'
+        c = [ dict (type = 'text', text = msg.content) ]
+        b = dict (body = msg.content)
+        r = self.session.post (u, json = b, headers = self.json_header)
+        if not r.ok or not 200 <= r.status_code < 300 :
+            self.raise_error (r, "Add comment for %s" % id)
+        j = r.json ()
+        return j ['id']
+    # end def add_comment
 
     def dump_schema (self) :
         self.__super.dump_schema ()
