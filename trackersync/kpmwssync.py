@@ -59,6 +59,8 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute) :
         """ Note that like for all Sync_Attribute classes the remote
             issue is the KPM issue.
         """
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         lmsg = syncer.get_messages (id)
         # Get previously synced keys
         remote_issue.get_old_message_keys (syncer)

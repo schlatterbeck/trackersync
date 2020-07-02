@@ -672,6 +672,8 @@ class Sync_Attribute_Files (Sync_Attribute) :
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
+        if self.l_only_update and syncer.get_existing_id (id) is None :
+            return
         lfiles = syncer.file_attachments (id, self.name)
         rfiles = remote_issue.file_attachments (self.remote_name)
         lnames = dict ((x.name, x) for x in lfiles)

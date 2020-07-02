@@ -194,7 +194,10 @@ KPM_ATTRIBUTES = \
 #        ( local_name     = 'FIXME'
 #        , remote_name    = 'SupplierResponse.DueDate'
 #        )
-    , jira_sync.Sync_Attribute_Files ()
-    , kpmwssync.Sync_Attribute_KPM_Message (prefix = 'TO AUDI:')
+    , jira_sync.Sync_Attribute_Files (l_only_update = True)
+    , kpmwssync.Sync_Attribute_KPM_Message
+        ( prefix        = 'TO AUDI:'
+        , l_only_update = True
+        )
     )
 
