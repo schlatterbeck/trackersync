@@ -498,7 +498,7 @@ class Pfiff (Log, Lock_Mixin) :
         , COMMITTEE       = 'ccb_relevant'
         , VARIANTS        = 'var_product_name'
         , PROJECT         = 'vehicle_project'
-        , EXT_TEST_SYTEM  = 'ets'
+        , EXT_TEST_SYSTEM = 'ets'
         , EXT_TEST_ID     = 'ets_id'
         , EXT_TEST_STATUS = 'ets_status'
         , ISSUE_REPORTER  = 'issue_reporter'
