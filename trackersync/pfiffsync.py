@@ -1080,7 +1080,7 @@ class Engdat_Sync (autosuper) :
                     ssh.rename (bn, np)
                     # files need to be group-writeable for oftp server
                     # to process them
-                    ssh.chmod (np, 0664)
+                    ssh.chmod (np, 0o664)
                     # Get my own uid from created file once
                     if not uid :
                         perm = ssh.stat (np)
@@ -1103,7 +1103,7 @@ class Engdat_Sync (autosuper) :
                         shutil.copy (f, fnew)
                     else :
                         os.rename (f, fnew)
-                    os.chmod  (fnew, 0664)
+                    os.chmod  (fnew, 0o664)
                     os.chown  (fnew, -1, dirperm.st_gid)
     # end def write_output
 
