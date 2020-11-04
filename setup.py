@@ -50,7 +50,7 @@ setup \
     , author_email     = "rsc@runtux.com"
     , packages         = ['trackersync']
     , platforms        = 'Any'
-    , scripts          = ['bin/jirasync', 'bin/kpmsync', 'bin/pfiffsync']
+    , scripts          = ['bin/jirasync', 'bin/kpmwssync', 'bin/pfiffsync']
     , url              = "http://trackersync.sourceforge.net/"
     , download_url     = \
         "%(download)s/%(VERSION)s/trackersync-%(VERSION)s.tar.gz" % locals ()
