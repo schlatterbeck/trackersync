@@ -25,6 +25,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import absolute_import
 
+import sys
 import os
 import json
 from   copy             import deepcopy
@@ -32,6 +33,8 @@ from   rsclib.autosuper import autosuper
 from   rsclib.pycompat  import string_types
 from   rsclib.execute   import Log
 from   rsclib.pycompat  import string_types
+
+PY2 = sys.version_info [0] == 2
 
 class File_Attachment (autosuper) :
     """ Model a local or remote file attachment.
@@ -296,10 +299,12 @@ class Remote_Issue (Backend_Common) :
             r.append ("%(k)s: >%(v)s<" % locals ())
         return '\n'.join (r)
     # end def __unicode__
-
-    def __str__ (self) :
-        return unicode (self).encode ('utf-8')
-    # end def __str__
+    if PY2 :
+        def __str__ (self) :
+            return unicode (self).encode ('utf-8')
+        # end def __str__
+    else :
+        __str__ = __unicode__
     __repr__ = __str__
 
     def add_message (self, msg) :
