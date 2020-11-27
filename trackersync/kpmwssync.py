@@ -294,6 +294,8 @@ class Problem (tracker_sync.Remote_Issue) :
 class KPM_Header (autosuper) :
     """ Tools to build the header for the webservice request.
         FIXME: For now this seems to working without a header
+        FIXME: If we ever use this, we want to give the webservice as
+        a parameter.
     """
 
     def __init__ (self) :
