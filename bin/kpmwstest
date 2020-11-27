@@ -2,8 +2,9 @@
 
 import sys
 import os
-from trackersync.kpmwssync import KPM_WS, Config
+from trackersync.kpmwssync import KPM_WS, Config, KPM_Header
 from argparse              import ArgumentParser
+from lxml.etree            import tostring
 
 def main () :
     cmd = ArgumentParser ()
@@ -44,7 +45,19 @@ def main () :
         , debug   = opt.debug
         , lock    = opt.lock_name
         )
-    vv = kpm.client.service.GetServiceInfo (UserAuthentification = kpm.auth)
+    head = KPM_Header (stage = 'Production')
+    if opt.debug :
+        x = kpm.client.create_message \
+            ( kpm.client.service
+            , 'GetServiceInfo'
+            , UserAuthentification = kpm.auth
+            , _soapheaders = head.header ('GetServiceInfoRequest')
+            )
+        print (tostring (x, pretty_print = True, encoding = 'unicode'))
+    vv = kpm.client.service.GetServiceInfo \
+        ( UserAuthentification = kpm.auth
+        , _soapheaders = head.header ('GetServiceInfoRequest')
+        )
     print (vv)
 
     if opt.verbose :

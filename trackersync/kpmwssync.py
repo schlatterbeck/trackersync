@@ -34,12 +34,13 @@ except ImportError :
     from urlparse       import parse_qs
 from argparse           import ArgumentParser
 from datetime           import datetime, date
-from lxml.etree         import Element
+from lxml.etree         import Element, ElementTree, tostring
 from traceback          import print_exc
 from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
 from rsclib.pycompat    import string_types
+from uuid               import uuid4
 
 from zeep               import Client
 from zeep.transports    import Transport
@@ -111,6 +112,7 @@ class Config (Config_File) :
             , LOCAL_TRACKER = 'jira'
             , KPM_CERTPATH  = '/etc/trackersync/kpm_certificate.pem'
             , KPM_KEYPATH   = '/etc/trackersync/kpm_certificate.key'
+            , KPM_STAGE     = 'Production'
             )
     # end def __init__
 
@@ -293,47 +295,64 @@ class Problem (tracker_sync.Remote_Issue) :
 
 class KPM_Header (autosuper) :
     """ Tools to build the header for the webservice request.
-        FIXME: For now this seems to working without a header
-        FIXME: If we ever use this, we want to give the webservice as
-        a parameter.
+        Note that the stage *should* be given in the constructor.
+        Possible parameters are 'Test', 'Production' or 'QualityAssurance'
+        Brand may be undefined, possible values are 'V' or 'AU'
+        The country also is left out, no idea if this is the country of
+        the OEM or what is expected there.
     """
 
-    def __init__ (self) :
-        self.adr_ns = 'http://www.w3.org/2005/08/addressing'
-        self.vw_ns  = 'http://xmldefs.volkswagenag.com/Technical/Addressing/V1'
-        self.ws     = \
-            'ws://volkswagenag.com/PP/QM/GroupProblemManagementService/V3'
-        self._seqno = 0
+    xmldefs = 'http://xmldefs.volkswagenag.com'
+    adr_ns  = 'http://www.w3.org/2005/08/addressing'
+    vw_ns   = 'http://xmldefs.volkswagenag.com/Technical/Addressing/V1'
+    ws      = 'ws://volkswagenag.com'
+    wspath  = '/PP/QM/GroupProblemManagementService/V3'
+    wsuri   = ws + wspath
+
+    def __init__ (self, stage = 'Production', brand = None) :
+        self.stage  = stage
+        self.brand  = brand
     # end def __init__
 
     def element (self, ns, name, value) :
-        e = Element (tag (ns, name))
+        e = Element (self.tag (ns, name))
         e.text = str (value)
         return e
     # end def element
 
     def header (self, rqname) :
-        h = [ self.element (self.adr_ns, 'To',        self.ws)
+        h = [ self.element (self.adr_ns, 'To',        self.wsuri)
             , self.element (self.adr_ns, 'Action',    self.rq (rqname))
             , self.element (self.adr_ns, 'MessageID', self.seqno)
-            , self.element (self.vw_ns,  'Stage',     'Test')
-            , self.element (self.vw_ns,  'Country',   'AT')
+            , self.element (self.vw_ns,  'Stage',     self.stage)
+            #, self.element (self.vw_ns,  'Country',   'AT')
             ]
+        if self.brand :
+            h.append (self.element (self.vw_ns, 'Brand', self.brand))
         return h
     # end def header
 
+    @property
     def seqno (self) :
-        self._seqno += 1
-        return str (self._seqno)
+        return 'urn:uuid:' + str (uuid4 ())
     # end def seqno
 
     def rq (self, rqname) :
-        return self.ws + '/KpmService/' + rqname
+        return self.xmldefs + self.wspath + '/KpmService/' + rqname
     # end def rq
 
     def tag (self, ns, name) :
         return '{%s}%s' % (ns, name)
     # end def tag
+
+    def __str__ (self) :
+        tree = ElementTree ()
+        tree._setroot (Element ('Header'))
+        r = tree.getroot ()
+        for e in self.header ('HUHU') :
+            r.append (e)
+        return tostring (tree, pretty_print = True, encoding = 'unicode')
+    # end def __str__
 
 # end class KPM_Header
 
@@ -371,6 +390,7 @@ class KPM_WS (Log, Lock_Mixin) :
             (OrganisationalUnit = self.cfg.KPM_OU, Plant = self.cfg.KPM_PLANT)
         if lock :
             self.lockfile = lock
+        self.header = KPM_Header (stage = self.cfg.KPM_STAGE)
         self.__super.__init__ (** kw)
     # end def __init__
 
@@ -380,25 +400,35 @@ class KPM_WS (Log, Lock_Mixin) :
         self.log.debug ('In __iter__')
         # Note that PassiveOverview will be needed when we're creating
         # remote issues that need update.
+        head = self.header.header ('GetMultipleProblemDataRequest')
         info = self.client.service.GetMultipleProblemData \
             ( UserAuthentification = self.auth
             , OverviewAddress      = self.adr
             , ActiveOverview       = True
             , PassiveOverview      = False
+            , _soapheaders         = head
             )
         if self.check_error ('GetMultipleProblemData', info) :
             return
         for pr in info ['ProblemReference'] :
             id = pr ['ProblemNumber']
+            head   = self.header.header ('GetProblemActionsRequest')
             rights = self.client.service.GetProblemActions \
-                (UserAuthentification = self.auth, ProblemNumber = id)
+                ( UserAuthentification = self.auth
+                , ProblemNumber        = id
+                , _soapheaders         = head
+                )
             if self.check_error ('GetProblemActions', rights) :
                 continue
             if 'GET_DEVELOPMENT_PROBLEM_DATA' not in rights ['Action'] :
                 self.log.info ("No right to get problem data for %s" % id)
                 continue
-            rec = self.client.service.GetDevelopmentProblemData \
-                (UserAuthentification = self.auth, ProblemNumber = id)
+            head = self.header.header ('GetDevelopmentProblemDataRequest')
+            rec  = self.client.service.GetDevelopmentProblemData \
+                ( UserAuthentification = self.auth
+                , ProblemNumber        = id
+                , _soapheaders         = head
+                )
             if self.check_error ('GetDevelopmentProblemData', rec) :
                 continue
             rec = rec ['DevelopmentProblem']
@@ -453,10 +483,12 @@ class KPM_WS (Log, Lock_Mixin) :
             self.log.error \
                 ('No permission to add message to %s' % problem.id)
         else :
-            r = self.client.service.AddNotice \
+            head = self.header.header ('AddNoticeRequest')
+            r    = self.client.service.AddNotice \
                 ( UserAuthentification = self.auth
                 , ProblemNumber        = problem.ProblemNumber
                 , Notice               = msg.content
+                , _soapheaders         = head
                 )
             self.check_error ('AddNotice', r)
             id = r ['ProcessStepId']
@@ -490,8 +522,12 @@ class KPM_WS (Log, Lock_Mixin) :
             self.log.error \
                 ('No permission to list documents for %s' % problem.id)
             return []
-        pl = self.client.service.GetDocumentList \
-            (UserAuthentification = self.auth, ProblemNumber = problem.id)
+        head = self.header.header ('GetDocumentListRequest')
+        pl   = self.client.service.GetDocumentList \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = problem.id
+            , _soapheaders         = head
+            )
         if self.check_error ('GetDocumentList', pl) :
             return []
         return pl ['DocumentReference']
@@ -509,10 +545,12 @@ class KPM_WS (Log, Lock_Mixin) :
             self.log.error \
                 ('No permission to retrieve document for %s' % issue.id)
             return
-        doc = self.client.service.GetDocument \
+        head = self.header.header ('GetDocumentRequest')
+        doc  = self.client.service.GetDocument \
             ( UserAuthentification = self.auth
             , ProblemNumber        = issue.id
             , DocumentId           = doc.id
+            , _soapheaders         = head
             )
         if self.check_error ('GetDocument', doc) :
             return
@@ -523,9 +561,11 @@ class KPM_WS (Log, Lock_Mixin) :
         """ Get additional information about problem that is carried
             only in process steps.
         """
+        head = self.header.header ('GetProcessStepListRequest')
         info = self.client.service.GetProcessStepList \
             ( UserAuthentification = self.auth
             , ProblemNumber        = problem_id
+            , _soapheaders         = head
             )
         self.check_error ('GetProcessStepList', info)
         # Loop over steps and decide which to retrieve
@@ -542,10 +582,12 @@ class KPM_WS (Log, Lock_Mixin) :
                         latest [relevant] = psid
             if pstype == 'Aussage' :
                 steplist.append (psid)
+        head = self.header.header ('GetProcessStepsRequest')
         info = self.client.service.GetProcessSteps \
             ( UserAuthentification = self.auth
             , ProblemNumber        = problem_id
             , ProcessStepId        = steplist + list (latest.values ())
+            , _soapheaders         = head
             )
         self.check_error ('GetProcessStepList', info)
         return info ['ProcessStep']
@@ -587,10 +629,12 @@ class KPM_WS (Log, Lock_Mixin) :
         if problem.get ('SupplierVersionOk', None) :
             d ['VersionOk'] = problem.SupplierVersionOk
         sr = self.fac.SupplierResponse (** d)
+        h = self.header.header ('AddSupplierResponseRequest')
         d = dict \
             ( UserAuthentification = self.auth
             , ProblemNumber        = problem.ProblemNumber
             , SupplierResponse     = sr
+            , _soapheaders         = head
             )
         d ['ResponseText'] = problem.SupplierResponse
         if 'ADD_SUPPLIER_RESPONSE' not in problem.allowed_actions :
