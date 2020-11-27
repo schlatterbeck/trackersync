@@ -411,7 +411,12 @@ class KPM_WS (Log, Lock_Mixin) :
                     rec ['SupplierResponse']    = ps ['Text']
                     rec ['SupplierVersionOk']   = sr ['VersionOk']
                     rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
-                    assert rec ['SupplierStatus'] == sr ['Status']
+                    if rec ['SupplierStatus'] != sr ['Status'] :
+                        self.log.warn \
+                            ('SupplierStatus does not match '
+                             'SupplierResponse.Status: %s vs %s'
+                            % (rec ['SupplierStatus'], sr ['Status'])
+                            )
                 if pstype == 'Analyse abgeschlossen' :
                     rec ['Analysis'] = ps ['Text']
                 if pstype == 'Aussage' :
@@ -553,7 +558,7 @@ class KPM_WS (Log, Lock_Mixin) :
         for k in rec.keys () :
             if k == 'ProblemNumber' :
                 rec [k] = str (rec [k])
-            if k == 'Rating' :
+            if k == 'Rating' and rec [k] is not None :
                 rec [k] = rec [k].strip ()
             if isinstance (rec [k], type ({})) :
                 self.make_serializable (rec [k])
