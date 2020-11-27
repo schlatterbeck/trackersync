@@ -66,7 +66,12 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute) :
         # Get previously synced keys
         remote_issue.get_old_message_keys (syncer)
         local_issue = syncer.localissues [id]
-        for k in remote_issue.Aussagen :
+        aussagen = []
+        try :
+            aussagen = remote_issue.Aussagen
+        except AttributeError :
+            pass
+        for k in aussagen :
             a = remote_issue.Aussagen [k]
             if a.get ('foreign_id') :
                 continue
@@ -265,7 +270,12 @@ class Problem (tracker_sync.Remote_Issue) :
             if 'foreign_id' in d :
                 self ['Aussagen'][k]['foreign_id'] = d ['foreign_id']
         self.msg_by_foreign_id = {}
-        for k in self ['Aussagen'] :
+        mlist = []
+        try :
+            mlist = self ['Aussagen']
+        except KeyError :
+            pass
+        for k in mlist :
             m = self ['Aussagen'][k]
             fk = m.get ('foreign_id')
             if fk :
@@ -383,6 +393,7 @@ class KPM_WS (Log, Lock_Mixin) :
         self.session.cert = (self.cert, self.key)
         transport   = Transport (session = self.session)
         self.client = Client (self.wsdl, transport = transport)
+        self.client.settings.strict = False
         self.fac    = self.client.type_factory ('ns0')
         self.auth   = self.fac.UserAuthentification \
             (UserId = self.cfg.KPM_USERNAME)

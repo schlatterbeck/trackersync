@@ -603,7 +603,7 @@ class Sync_Attribute_Check (Sync_Attribute) :
         if self.invert :
             stop = not stop
         # Stop sync if following condition is true:
-        if stop and id > 0 and synccheck :
+        if stop and (isinstance (id, type ('')) or id > 0) and synccheck :
             return True
         if self.update and lv is None :
             rv = remote_issue.get (self.remote_name, self.r_default)
