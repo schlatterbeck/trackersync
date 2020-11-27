@@ -48,7 +48,7 @@ except ImportError :
     import StringIO as BytesIO
 
 from trackersync        import tracker_sync
-from trackersync        import roundup_sync
+#from trackersync        import roundup_sync
 from trackersync        import jira_sync
 
 class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
@@ -835,7 +835,8 @@ class Pfiff (Log, Lock_Mixin) :
 
 # end class Pfiff
 
-local_trackers = dict (jira = jira_sync.Syncer, roundup = roundup_sync.Syncer)
+#local_trackers = dict (jira = jira_sync.Syncer, roundup = roundup_sync.Syncer)
+local_trackers = dict (jira = jira_sync.Syncer)
 lastsync_fmt   = '%Y-%m-%dT%H:%M:%S'
 
 class Engdat_Sync (autosuper) :
@@ -1056,7 +1057,7 @@ class Engdat_Sync (autosuper) :
             for k in range (2, npkg) :
                 em.append_efc ()
             with open (self.outname + '%03d%03d' % (npkg - 1, 1), "w") as f :
-                f.write (em.to_bytes ())
+                f.write (em)
             # Now copy the resulting files to the remote OFTP tmp.
             flist = glob (pat)
             if ':' in cfg.OFTP_OUTGOING :
