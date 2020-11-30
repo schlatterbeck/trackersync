@@ -645,7 +645,7 @@ class KPM_WS (Log, Lock_Mixin) :
             ( UserAuthentification = self.auth
             , ProblemNumber        = problem.ProblemNumber
             , SupplierResponse     = sr
-            , _soapheaders         = head
+            , _soapheaders         = h
             )
         d ['ResponseText'] = problem.SupplierResponse
         if 'ADD_SUPPLIER_RESPONSE' not in problem.allowed_actions :
