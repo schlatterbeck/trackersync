@@ -526,10 +526,22 @@ class Sync_Attribute (autosuper) :
             # Both maps need to disagree for non-equal -- this prevents
             # ping-pong updates in case the mappings are not fully
             # consistent
-            equal = \
-                (  self.map.get  (lv, l_def) == rv
-                or self.imap.get (rv, None)  == lv
-                )
+            # For multistring properties we need to map each item in the
+            # list, the items are already prefix-mapped, so we don't
+            # need to compare both mappings.
+            if isinstance (lv, list) :
+                assert isinstance (rv, list)
+                tmplv = lv
+                tmprv = rv
+                if self.prefix :
+                    tmplv = [l for l in lv if l.startswith (self.prefix)]
+                    tmprv = [r for r in rv if r.startswith (self.prefix)]
+                equal = tmplv == tmprv
+            else :
+                equal = \
+                    (  self.map.get  (lv, l_def) == rv
+                    or self.imap.get (rv, None)  == lv
+                    )
         else :
             equal = remote_issue.equal (lv, rv)
         return  (   equal
