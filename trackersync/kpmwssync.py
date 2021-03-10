@@ -34,13 +34,14 @@ except ImportError :
     from urlparse       import parse_qs
 from argparse           import ArgumentParser
 from datetime           import datetime, date
-from lxml.etree         import Element, ElementTree, tostring
+from lxml.etree         import Element, ElementTree, tostring, _Element
 from traceback          import print_exc
 from rsclib.autosuper   import autosuper
 from rsclib.execute     import Lock_Mixin, Log
 from rsclib.Config_File import Config_File
 from rsclib.pycompat    import string_types
 from uuid               import uuid4
+from collections        import deque
 
 from zeep               import Client
 from zeep.transports    import Transport
@@ -613,12 +614,20 @@ class KPM_WS (Log, Lock_Mixin) :
         for k in rec.keys () :
             if k == 'ProblemNumber' :
                 rec [k] = str (rec [k])
-            if k == 'Rating' and rec [k] is not None :
+            elif k == 'Rating' and rec [k] is not None :
                 rec [k] = rec [k].strip ()
-            if isinstance (rec [k], type ({})) :
+            elif k == '_raw_elements' :
+                del rec [k]
+            elif isinstance (rec [k], type ({})) :
                 self.make_serializable (rec [k])
+            elif isinstance (rec [k], (list, deque)) :
+                r = dict ((n, item) for n, item in enumerate (rec [k]))
+                self.make_serializable (r)
+                rec [k] = list (r [i] for i in sorted (r))
             elif isinstance (rec [k], date) :
                 rec [k] = rec [k].strftime ('%Y-%m-%d')
+            elif isinstance (rec [k], _Element) :
+                rec [k] = str (rec [k])
     # end def make_serializable
 
     def update (self, problem) :
