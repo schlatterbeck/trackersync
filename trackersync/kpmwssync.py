@@ -452,15 +452,16 @@ class KPM_WS (Log, Lock_Mixin) :
                 pstype = ps ['ProcessStepTypeDescription']
                 if pstype == 'Lieferantenaussage' :
                     sr = ps ['SupplierResponse']
-                    rec ['SupplierResponse']    = ps ['Text']
-                    rec ['SupplierVersionOk']   = sr ['VersionOk']
-                    rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
-                    if rec ['SupplierStatus'] != sr ['Status'] :
-                        self.log.warn \
-                            ('SupplierStatus does not match '
-                             'SupplierResponse.Status: %s vs %s'
-                            % (rec ['SupplierStatus'], sr ['Status'])
-                            )
+                    rec ['SupplierResponse'] = ps ['Text']
+                    if sr is not None:
+                        rec ['SupplierVersionOk']   = sr ['VersionOk']
+                        rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
+                        if rec ['SupplierStatus'] != sr ['Status'] :
+                            self.log.warn \
+                                ('SupplierStatus does not match '
+                                 'SupplierResponse.Status: %s vs %s'
+                                % (rec ['SupplierStatus'], sr ['Status'])
+                                )
                 if pstype == 'Analyse abgeschlossen' :
                     rec ['Analysis'] = ps ['Text']
                 if pstype == 'Aussage' :
