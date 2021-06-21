@@ -647,8 +647,10 @@ class KPM_WS (Log, Lock_Mixin) :
             ( Status      = problem.SupplierStatus
             , ErrorNumber = problem.SupplierErrorNumber
             )
-        if problem.get ('SupplierVersionOk', None) :
-            d ['VersionOk'] = problem.SupplierVersionOk
+        if problem.newvalues.get ('SupplierVersionOk', None) :
+            d ['VersionOk'] = problem.newvalues ['SupplierVersionOk']
+        else :
+            d ['VersionOk'] = None
         sr = self.fac.SupplierResponse (** d)
         h = self.header.header ('AddSupplierResponseRequest')
         d = dict \
@@ -664,7 +666,7 @@ class KPM_WS (Log, Lock_Mixin) :
         else :
             r = self.client.service.AddSupplierResponse (** d)
             self.check_error ('AddSupplierResponse', r)
-    # end def update
+    # end def update_supplier_response
 
 # end class KPM_WS
 
