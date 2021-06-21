@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (C) 2020 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2021 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -102,15 +102,30 @@ KPM_ATTRIBUTES = \
           , 'ForemostTestPart.Hardware'
           , 'Repeatable'
           , 'Frequency'
-          , 'Creator.Address.ContactPerson'
           , 'Creator.PersonalContractor.UserName'
-          , 'ProblemSolver.Address.ContactPerson'
-          , 'ProblemSolver.Contractor.Address.ContactPerson'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName'
           ]
         , delimiter     = '\n\n'
         , field_prefix  = '*'
         , field_postfix = ':*\n'
+        , name_map      =
+          { 'ForemostTestPart.Software'           : 'Affects SW version'
+          , 'ForemostTestPart.Hardware'           : 'Affects HW version'
+          , 'Creator.PersonalContractor.UserName' : 'Creator'
+          , 'ProblemSolver.Contractor.PersonalContractor.UserName' :
+            'Problem responsible'
+          }
+        , content_map =
+          { 'Frequency' :
+            { 'XF' : 'Intermittent'
+            , 'XG' : 'Always'
+            , 'XE' : 'Only once'
+            }
+          , 'Repeatable' :
+            { 'XH' : 'yes'
+            , 'XI' : 'no'
+            }
+          }
         )
     # "Release Note" field in Jira, some customfield_12009
     , jira_sync.Sync_Attribute_To_Local_Default
@@ -148,6 +163,18 @@ KPM_ATTRIBUTES = \
             , '10' : 'Minor'       # D
             }
         )
+    # "Frequency" field in Jira e.g. customfield_16400
+    , jira_sync.Sync_Attribute_To_Local_Default
+        ( local_name   = 'customfield_16400.value'
+        , remote_name  = 'Frequency'
+        , r_default    = 'Always'
+        , l_default    = 'XG'
+        , imap =
+            { 'XF' : 'Intermittent'
+            , 'XG' : 'Always'
+            , 'XE' : 'Only once'
+            }
+        )
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'status.name'
         , remote_name  = 'SupplierStatus'
@@ -178,18 +205,29 @@ KPM_ATTRIBUTES = \
         , remote_name   = 'Rating'
         , prefix        = 'KPM-Priority-'
         , l_only_update = True
+        , imap =
+            { '1'  : 'A'
+            , '2'  : 'A'
+            , '3'  : 'A'
+            , '4'  : 'B'
+            , '5'  : 'B'
+            , '6'  : 'C'
+            , '7'  : 'C'
+            , '8'  : 'D'
+            , '9'  : 'D'
+            , '10' : 'D'
+            }
         )
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name    = 'key'
         , remote_name   = 'SupplierErrorNumber'
         )
-    # FIXME: Does this have a representation in the main problem?
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name     = 'fixVersions.name'
         , remote_name    = 'SupplierVersionOk'
         , join_multilink = True
         )
-# FIXME: Maybe we want to transmit a data, is this the expected delivery?
+# FIXME: Maybe we want to transmit a date, is this the expected delivery?
 #    , jira_sync.Sync_Attribute_To_Remote
 #        ( local_name     = 'FIXME'
 #        , remote_name    = 'SupplierResponse.DueDate'

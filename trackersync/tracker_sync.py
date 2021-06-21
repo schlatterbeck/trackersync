@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2018 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-21 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -788,6 +788,8 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
         , field_postfix  = ':\n'
         , add_prefix     = True
         , l_only_update  = False
+        , name_map       = {}
+        , content_map    = {}
         ) :
         self.name          = local_name
         self.remote_names  = remote_names
@@ -801,6 +803,8 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
         self.strip_prefix  = False
         self.l_only_update = l_only_update
         self.map = self.imap = None
+        self.name_map      = name_map
+        self.content_map   = content_map
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -814,9 +818,11 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
             if self.add_prefix :
                 if self.field_prefix :
                     v.append (self.field_prefix)
-                v.append (k)
+                v.append (self.name_map.get (k, k))
                 if self.field_postfix :
                     v.append (self.field_postfix)
+            if k in self.content_map :
+                val = self.content_map [k].get (val, val)
             v.append (val)
             if n != len (self.remote_names) - 1 :
                 v.append (self.delimiter)

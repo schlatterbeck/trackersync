@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2018-19 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-21 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -344,6 +344,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
         # Some day find out if we can discover the schema via REST
         for k in self.schema_classes :
             self.schema [k] = dict (id = 'string', name = 'string')
+        # These are custom options
+        self.schema ['option'] = dict (id = 'string', value = 'string')
         self.schema ['user']['key'] = 'string'
         self.schema ['user']['displayName'] = 'string'
         self.schema ['project']['key'] = 'string'
@@ -423,7 +425,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
                 # Special case: We may reference link values with the
                 # name instead of the id in jira's REST api
                 cls, attrname = lst
-                if attrname in ('name', 'id', 'key') :
+                if attrname in ('name', 'id', 'key', 'value') :
                     if cls == 'versions' :
                         assert len (attrs [k]) == 1
                         new [cls] = [dict (id = attrs [k][0])]
