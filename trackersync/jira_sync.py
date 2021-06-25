@@ -468,6 +468,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
         u = self.url + '/' + cls + '/' + id
         if cls == 'user' :
             u = self.url + '/' + cls + '?key=' + id
+        elif cls == 'option' :
+            u = self.url + '/' + 'customFieldOption' + '/' + id
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300 :
             self.raise_error (r, "Getitem %s %s" % (cls, id))
