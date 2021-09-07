@@ -783,8 +783,20 @@ def main () :
         syncer.dump_schema ()
         sys.exit (0)
 
-    for problem in kpm :
-        problem.sync (syncer)
+    nproblems = 0
+    try :
+        for problem in kpm :
+            problem.sync (syncer)
+            nproblems += 1
+    except :
+        kpm.log_exception ()
+        kpm.log.error \
+            ("Exception while syncing, synced %d KPM issues" % nproblems)
+        # Normally unlock is registered as an atexit handler.
+        # No idea why this is not called when a zeep exception occurs.
+        kpm.unlock ()
+    else :
+        kpm.log.info ("Synced %d KPM issues" % nproblems)
 # end def main
 
 if __name__ == '__main__' :
