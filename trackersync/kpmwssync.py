@@ -374,7 +374,7 @@ class KPM_WS (Log, Lock_Mixin) :
     def __init__ \
         ( self
         , cfg
-        , timeout = None
+        , timeout = 300
         , verbose = False
         , debug   = False
         , lock    = None
@@ -392,7 +392,8 @@ class KPM_WS (Log, Lock_Mixin) :
         if timeout :
             self.session.timeout = timeout
         self.session.cert = (self.cert, self.key)
-        transport   = Transport (session = self.session)
+        transport   = Transport \
+            (session = self.session, operation_timeout = timeout)
         self.client = Client (self.wsdl, transport = transport)
         self.client.settings.strict = False
         self.fac    = self.client.type_factory ('ns0')
@@ -739,6 +740,12 @@ def main () :
         , action  = 'store_true'
         )
     cmd.add_argument \
+        ( "-t", "--timeout"
+        , help    = "Timeout for SOAP requests in seconds, default=%(default)s"
+        , default = 300
+        , type    = int
+        )
+    cmd.add_argument \
         ( "-u", "--url"
         , help    = "Local Tracker URL for XMLRPC/REST"
         )
@@ -766,6 +773,7 @@ def main () :
         , verbose = opt.verbose
         , debug   = opt.debug
         , lock    = opt.lock_name
+        , timeout = opt.timeout
         )
     url       = opt.url         or cfg.get ('LOCAL_URL', None)
     lpassword = opt.local_password or cfg.LOCAL_PASSWORD
