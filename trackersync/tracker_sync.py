@@ -1529,6 +1529,15 @@ class Trackersync_Syncer (Log) :
             self.log.debug (msg)
     # end def log_debug
 
+    def log_info (self, msg, *args) :
+        """ Always log info message. Print to stdout only when verbose
+            logging is enabled.
+        """
+        if self.verbose :
+            print (msg, *args)
+        self.log.info (msg)
+    # end def log_info
+
     def log_verbose (self, msg, *args) :
         if self.verbose :
             print (msg, *args)
@@ -1617,7 +1626,7 @@ class Trackersync_Syncer (Log) :
                     % (id, a.__class__.__name__, a.name, a.remote_name)
                     )
                 if a.sync (self, id, remote_issue) :
-                    self.log_verbose ("Not syncing: %s/%s" % (id, remote_id))
+                    self.log_info ("Not syncing: %s/%s" % (id, remote_id))
                     return
 
         # Note: This already updates the syncdb!
@@ -1629,7 +1638,7 @@ class Trackersync_Syncer (Log) :
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
                 iid = self.create (self.default_class, ** attr)
-                self.log_verbose ("created issue: %s/%s" % (iid, remote_id))
+                self.log_info ("created issue: %s/%s" % (iid, remote_id))
                 del classdict [self.default_class]
                 self.current_id = iid
                 # Need to set up localissues for this new id so
@@ -1704,11 +1713,7 @@ class Trackersync_Syncer (Log) :
                 % (iid, a.__class__.__name__, a.name, a.remote_name)
                 )
             if a.sync (self, iid, remote_issue) :
-                # Log in any case
-                msg = "Not syncing: %s" % iid
-                self.log.info (msg)
-                if self.verbose :
-                    print (msg)
+                self.log_info ("Not syncing: %s" % iid)
                 do_sync = False
                 break
         if not do_sync :
@@ -1754,7 +1759,7 @@ class Trackersync_Syncer (Log) :
                 self.setitem (self.default_class, id, ** attr)
         del classdict [self.default_class]
         self.update_aux_classes (id, remote_id, remote_issue, classdict)
-        self.log_verbose ("Synced: %s/%s" % (id, remote_id))
+        self.log_info ("Synced: %s/%s" % (id, remote_id))
     # end def update_issue
 
     def update_sync_db (self, iid, rid, remote_issue, classdict) :
