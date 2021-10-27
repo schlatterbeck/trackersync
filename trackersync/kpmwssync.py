@@ -217,8 +217,6 @@ class Problem (tracker_sync.Remote_Issue) :
         self.__super.__init__ (rec, attributes)
         self.id = self.record ['ProblemNumber']
         self.messages = []
-        if self.raw :
-            self.log.warn ('KPM-%s has raw elements' % self.id)
     # end def __init__
 
     def add_message (self, msg) :
@@ -477,6 +475,11 @@ class KPM_WS (Log, Lock_Mixin) :
                         , content = ps ['Text']
                         )
             p = Problem (self, id, rec, raw = raw)
+            # If raw elements exist, parsing wasn't fully successful
+            if p.raw :
+                tags = ','.join (x.tag for x in p.raw)
+                self.log.warn \
+                    ('KPM-%s has raw elements with tags: %s' % (p.id, tags))
             p.allowed_actions = rights ['Action']
             yield (p)
     # end def __iter__
