@@ -1704,7 +1704,11 @@ class Trackersync_Syncer (Log) :
                 % (iid, a.__class__.__name__, a.name, a.remote_name)
                 )
             if a.sync (self, iid, remote_issue) :
-                self.log_verbose ("Not syncing: %s" % iid)
+                # Log in any case
+                msg = "Not syncing: %s" % iid
+                self.log.info (msg)
+                if self.verbose :
+                    print (msg)
                 do_sync = False
                 break
         if not do_sync :
