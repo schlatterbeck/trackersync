@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2020 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2020-21 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -204,10 +204,11 @@ class Problem (tracker_sync.Remote_Issue) :
 
     File_Attachment_Class = KPM_File_Attachment
 
-    def __init__ (self, kpm, id, rec, canceled = False) :
+    def __init__ (self, kpm, id, rec, canceled = False, raw = False) :
         self.kpm         = kpm
         self.debug       = self.kpm.debug
         self.canceled    = canceled
+        self.raw         = raw
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         attributes = {}
@@ -216,6 +217,8 @@ class Problem (tracker_sync.Remote_Issue) :
         self.__super.__init__ (rec, attributes)
         self.id = self.record ['ProblemNumber']
         self.messages = []
+        if self.raw :
+            self.log.warn ('KPM-%s has raw elements' % self.id)
     # end def __init__
 
     def add_message (self, msg) :
@@ -446,6 +449,7 @@ class KPM_WS (Log, Lock_Mixin) :
                 continue
             rec = rec ['DevelopmentProblem']
             rec = serialize_object (rec)
+            raw = rec.get ('_raw_elements', None)
             self.make_serializable (rec)
             rec ['Aussagen'] = {}
             pss = self.get_process_steps (id)
@@ -472,7 +476,7 @@ class KPM_WS (Log, Lock_Mixin) :
                         , date    = ps ['CreationDate']
                         , content = ps ['Text']
                         )
-            p = Problem (self, id, rec)
+            p = Problem (self, id, rec, raw = raw)
             p.allowed_actions = rights ['Action']
             yield (p)
     # end def __iter__
