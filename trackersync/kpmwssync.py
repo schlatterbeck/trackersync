@@ -786,8 +786,15 @@ def main () :
     opt.local_tracker  = ltracker
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES') :
-        syncer = local_trackers [opt.local_tracker] \
-            ('KPM', cfg.KPM_ATTRIBUTES, opt)
+        try :
+            syncer = local_trackers [opt.local_tracker] \
+                ('KPM', cfg.KPM_ATTRIBUTES, opt)
+        except :
+            kpm.log_exception ()
+            kpm.log.error ("Exception before starting sync")
+            # Better explicit, twice won't hurt
+            kpm.unlock ()
+            return 1
     if opt.schema_only :
         syncer.dump_schema ()
         sys.exit (0)
