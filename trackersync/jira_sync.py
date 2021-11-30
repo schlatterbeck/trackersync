@@ -326,8 +326,14 @@ class Jira_Syncer (tracker_sync.Syncer) :
             else :
                 type = k ['schema']['type']
             if type == 'array' :
-                t = k ['schema']['items']
-                if t == 'string' :
+                # Seems custom fields do not have an 'items' key
+                # FIXME: This may still need some investigation if we
+                # need such a field in the future
+                t = k ['schema'].get ('items')
+                if not t :
+                    assert 'custom' in k ['schema']
+                    type = 'custom'
+                elif t == 'string' :
                     type = 'stringlist'
                 else :
                     type = ('Multilink', t)

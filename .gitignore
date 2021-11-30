@@ -8,3 +8,17 @@ JOB-*
 *.csv
 syncdir
 testdir
+*wsdl*
+*schema*
+*.key
+*.encrkey
+*.pem
+cert*
+*.png
+*.xml
+*.err
+*.old
+*.json
+pypath
+tree.py
+tzeep.py
