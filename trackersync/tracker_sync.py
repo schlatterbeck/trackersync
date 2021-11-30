@@ -948,6 +948,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
         self.prefix = prefix
         if not prefix :
             raise ValueError ("The prefix is required")
+        self.do_only_default = False
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
@@ -980,10 +981,22 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
         rv = list (sorted (rv))
         if self.no_sync_necessary (lv, rv, remote_issue) :
             return
+        if self.do_only_default and lv is not None :
+            return
         syncer.set (id, self.name, rv)
     # end def sync
 
 # end class Sync_Attribute_To_Local_Multistring
+
+class Sync_Attribute_To_Local_Multistring_Default \
+    (Sync_Attribute_To_Local_Multistring) :
+
+    def __init__ (self, local_name, ** kw) :
+        self.__super.__init__ (local_name, ** kw)
+        self.do_only_default = True
+    # end def __init__
+
+# end class Sync_Attribute_To_Local_Multistring_Default
 
 class Sync_Attribute_To_Remote (Sync_Attribute) :
     """ Unconditionally synchronize a local attribute to the remote
