@@ -287,16 +287,6 @@ class Jira_Syncer (tracker_sync.Syncer) :
     File_Attachment_Class = Jira_File_Attachment
     raise_error = Local_Issue_Class.raise_error
     json_header = { 'content-type' : 'application/json' }
-    schema_classes = \
-        ( 'priority'
-        , 'status'
-        , 'project'
-        , 'issuetype'
-        , 'securitylevel'
-        , 'version'
-        , 'user'
-        , 'resolution'
-        )
 
     def __init__ (self, remote_name, attributes, opt) :
         self.url          = opt.url
@@ -337,10 +327,16 @@ class Jira_Syncer (tracker_sync.Syncer) :
                     type = 'stringlist'
                 else :
                     type = ('Multilink', t)
+                    # The default schema entry, see below for special cases
+                    if t not in self.schema :
+                        self.schema [t] = dict (id = 'string', name = 'string')
             elif type == 'datetime' :
                 type = 'date'
             elif type not in ('string', 'number') :
                 type = ('Link', type)
+                # The default schema entry, see below for special cases
+                if type not in schema :
+                    self.schema [type] = dict (id = 'string', name = 'string')
             s [name] = type
         # The default class 'issue' contains property 'id' which is not
         # discovered automagically: id and key are not in fields but in
@@ -348,9 +344,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         s ['id']  = 'string'
         s ['key'] = 'string'
         # Some day find out if we can discover the schema via REST
-        for k in self.schema_classes :
-            self.schema [k] = dict (id = 'string', name = 'string')
-        # These are custom options
+        # These are custom schema options
         self.schema ['option'] = dict (id = 'string', value = 'string')
         self.schema ['user']['key'] = 'string'
         self.schema ['user']['displayName'] = 'string'
