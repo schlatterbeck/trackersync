@@ -307,6 +307,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         self.schema ['issue'] = {}
         self.schema_namemap = {}
         s = self.schema ['issue']
+        schema_classes = set ()
         for k in j :
             name = k ['id']
             if 'name' in k :
@@ -329,14 +330,17 @@ class Jira_Syncer (tracker_sync.Syncer) :
                     type = ('Multilink', t)
                     # The default schema entry, see below for special cases
                     if t not in self.schema :
-                        self.schema [t] = dict (id = 'string', name = 'string')
+                        schema_classes.add (t)
             elif type == 'datetime' :
                 type = 'date'
+            elif type == 'date' :
+                type = 'date'
             elif type not in ('string', 'number') :
+                t    = type
                 type = ('Link', type)
                 # The default schema entry, see below for special cases
-                if type not in self.schema :
-                    self.schema [type] = dict (id = 'string', name = 'string')
+                if t not in self.schema :
+                    schema_classes.add (t)
             s [name] = type
         # The default class 'issue' contains property 'id' which is not
         # discovered automagically: id and key are not in fields but in
@@ -346,9 +350,11 @@ class Jira_Syncer (tracker_sync.Syncer) :
         # Some day find out if we can discover the schema via REST
         # These are custom schema options
         self.schema ['option'] = dict (id = 'string', value = 'string')
-        self.schema ['user']['key'] = 'string'
+        for name in schema_classes :
+            if name not in self.schema :
+                self.schema [name] = dict \
+                    (id = 'string', name = 'string', key = 'string')
         self.schema ['user']['displayName'] = 'string'
-        self.schema ['project']['key'] = 'string'
         self.default_class = 'issue'
         # Special hack to get all versions allowed. We query
         # /issue/createmeta?expand=projects.issuetypes.fields
@@ -415,6 +421,19 @@ class Jira_Syncer (tracker_sync.Syncer) :
             {'name' : 'name-of-entity'}
             We distinguish creation and update (transformation might be
             different) via the create flag.
+            The components property is special, it is of the form:
+            {'components' :
+                [{'set' : [{'name' : 'somename'}, {'name': 'someothername'}]}]
+            }
+            and it can take add/remove events like
+            {'components' :
+                [ {'add' : {'name' : 'somename'}}
+                , {'remove' :{'name': 'someothername'}]}
+                , ...
+                ]
+            }
+            see
+            https://developer.atlassian.com/server/jira/platform/jira-rest-api-examples/#editing-an-issue-examples
         """
         new = dict ()
         for k in attrs :
@@ -429,6 +448,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
                     if cls == 'versions' :
                         assert len (attrs [k]) == 1
                         new [cls] = [dict (id = attrs [k][0])]
+                    # FIXME: Special handling
+                    #elif cls == 'components' :
                     else :
                         if cls not in new :
                             new [cls] = {attrname : attrs [k]}
@@ -511,10 +532,15 @@ class Jira_Syncer (tracker_sync.Syncer) :
         if cls == 'version' :
             pkey = self.get (self.current_id, 'project.key')
             return self.versions_by_project [pkey][key]
+        # FIXME: special handling of component
         try :
             j = self.getitem (cls, key)
         except RuntimeError as err :
-            raise KeyError (err.message)
+            m = getattr (err, 'message', None)
+            if m :
+                raise KeyError (err.message)
+            else :
+                raise KeyError (key)
         if 'key' in j :
             return j ['key']
         return j ['id']
