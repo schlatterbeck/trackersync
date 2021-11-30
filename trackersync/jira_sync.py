@@ -335,7 +335,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
             elif type not in ('string', 'number') :
                 type = ('Link', type)
                 # The default schema entry, see below for special cases
-                if type not in schema :
+                if type not in self.schema :
                     self.schema [type] = dict (id = 'string', name = 'string')
             s [name] = type
         # The default class 'issue' contains property 'id' which is not
