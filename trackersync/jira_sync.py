@@ -59,6 +59,10 @@ Sync_Attribute_To_Local_Multistring = \
 def jira_utctime (jiratime) :
     """ Time with numeric timestamp converted to UTC.
         Note that roundup strips trailing decimal places to 0.
+        Also note: We've recently added 'date' to the known types when
+        parsing the schema, the previous known format was only
+        'datetime'. So it may well be that we should anticipate
+        additional date formats here.
     >>> jira_utctime ('2014-10-28T13:29:22.585+0100')
     '2014-10-28.12:29:22.000+0000'
     >>> jira_utctime ('2014-10-28T13:29:22.385+0100')
@@ -308,6 +312,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
         self.schema_namemap = {}
         s = self.schema ['issue']
         schema_classes = set ()
+        self.multilinks = set ()
         for k in j :
             name = k ['id']
             if 'name' in k :
@@ -331,6 +336,7 @@ class Jira_Syncer (tracker_sync.Syncer) :
                     # The default schema entry, see below for special cases
                     if t not in self.schema :
                         schema_classes.add (t)
+                        self.multilinks.add (t)
             elif type == 'datetime' :
                 type = 'date'
             elif type == 'date' :
@@ -356,27 +362,44 @@ class Jira_Syncer (tracker_sync.Syncer) :
                     (id = 'string', name = 'string', key = 'string')
         self.schema ['user']['displayName'] = 'string'
         self.default_class = 'issue'
-        # Special hack to get all versions allowed. We query
-        # /issue/createmeta?expand=projects.issuetypes.fields
-        # and find out all versions. Note that we *should* do this only
+        # Special hack to get all multilink values allowed.
+        # Examples: versions, components
+        # We query /issue/createmeta?expand=projects.issuetypes.fields
+        # and find out all multilinks. Note that we *should* do this only
         # for the default project we're using but we don't have the
         # project in a sync type. The project could be selected with the
         # additional parameter ?projectKeys=<key> in the request.
-        self.versions_by_project = {}
+        # We build the multilinks_by_project on the fly here.
+        self.multilinks_by_project = {}
+        self.multilink_keyattr     = {}
         cm = self.getitem \
             ('issue', 'createmeta?expand=projects.issuetypes.fields')
         for project in cm ['projects'] :
             pkey = project ['key']
+            ml = self.multilinks_by_project [pkey] = {}
             for type in project ['issuetypes'] :
-                if 'versions' in type ['fields'] :
-                    ver = type ['fields']['versions']
-                    if not ver ['allowedValues'] :
-                        continue
-                    if pkey not in self.versions_by_project :
-                        self.versions_by_project [pkey] = {}
-                    for av in ver ['allowedValues'] :
-                        vn = av ['name']
-                        self.versions_by_project [pkey][vn] = av ['id']
+                for fieldname in type ['fields'] :
+                    entry = type ['fields'][fieldname]
+                    m = entry ['schema'].get ('items')
+                    if m in self.multilinks :
+                        if not entry.get ('allowedValues') :
+                            continue
+                        assert entry ['schema']['type'] == 'array'
+                        assert 'set' in entry ['operations']
+                        ml [m] = {}
+                        for av in entry ['allowedValues'] :
+                            for k in ('key', 'name', 'value') :
+                                if k in av :
+                                    break
+                            else :
+                                raise KeyError ('No key attr found: %s' % av)
+                            if m in self.multilink_keyattr :
+                                assert self.multilink_keyattr [m] == k
+                            else :
+                                self.multilink_keyattr [m] = k
+                            vn = av [k]
+                            ml [m][vn] = dict \
+                                ((k, av [k]) for k in av if k != 'self')
     # end def compute_schema
 
     def _create (self, cls, ** kw) :
@@ -407,21 +430,21 @@ class Jira_Syncer (tracker_sync.Syncer) :
         print ('NAMES:')
         for n in self.schema_namemap :
             print ("%s: %s" % (n, self.schema_namemap [n]))
+        for p in self.multilinks_by_project :
+            print ("PROJECT: %s" % p)
+            for m in self.multilinks_by_project [p] :
+                print ("MULTILINK: %s" % m)
+                ml = self.multilinks_by_project [p][m]
+                for k in ml :
+                    print ("    %s: %s" % (k, ml [k]))
     # end def dump_schema
 
     def filter (self, classname, searchdict) :
         raise NotImplementedError
     # end def filter
 
-    def fix_attributes (self, classname, attrs, create = False) :
-        """ Fix transitive attributes.
-            In case of links, we can use the name or the id (and
-            sometimes a key) in jira. But this has to be passed as a
-            dictionary, e.g. the value is something like
-            {'name' : 'name-of-entity'}
-            We distinguish creation and update (transformation might be
-            different) via the create flag.
-            The components property is special, it is of the form:
+    def format_multilink (self, attrname, values, fancy = False) :
+        """ The components property is special, it is of the form:
             {'components' :
                 [{'set' : [{'name' : 'somename'}, {'name': 'someothername'}]}]
             }
@@ -434,8 +457,37 @@ class Jira_Syncer (tracker_sync.Syncer) :
             }
             see
             https://developer.atlassian.com/server/jira/platform/jira-rest-api-examples/#editing-an-issue-examples
+
+            But it looks like that description does not work.
+            Maybe a version issue of the Jira API.
+            So we use the old schema:
         """
-        new = dict ()
+        if isinstance (values, str) :
+            values = [values]
+        new = []
+        # See above for documented format with fancy set
+        if fancy :
+            c   = []
+            new.append (dict (set = c))
+            for v in values :
+                c.append ({attrname : v})
+        else :
+            for v in values :
+                new.append ({attrname : v})
+        return new
+
+    def fix_attributes (self, classname, attrs, create = False) :
+        """ Fix transitive attributes.
+            In case of links, we can use the name or the id (and
+            sometimes a key) in jira. But this has to be passed as a
+            dictionary, e.g. the value is something like
+            {'name' : 'name-of-entity'}
+            We distinguish creation and update (transformation might be
+            different) via the create flag.
+            For Multilinks see format_multilink above.
+        """
+        pkey = self.get (self.current_id, 'project.key')
+        new  = dict ()
         for k in attrs :
             lst = k.split ('.')
             l   = len (lst)
@@ -443,18 +495,36 @@ class Jira_Syncer (tracker_sync.Syncer) :
             if l == 2 :
                 # Special case: We may reference link values with the
                 # name instead of the id in jira's REST api
-                cls, attrname = lst
+                prop, attrname = lst
                 if attrname in ('name', 'id', 'key', 'value') :
-                    if cls == 'versions' :
-                        assert len (attrs [k]) == 1
-                        new [cls] = [dict (id = attrs [k][0])]
-                    # FIXME: Special handling
-                    #elif cls == 'components' :
-                    else :
-                        if cls not in new :
-                            new [cls] = {attrname : attrs [k]}
+                    #if prop == 'components' :
+                    #    continue
+                    if self.schema [classname][prop][0] == 'Multilink' :
+                        cls = self.schema [classname][prop][1]
+                        mbp = self.multilinks_by_project [pkey].get (cls)
+                        mlk = self.multilink_keyattr.get (cls)
+                        if mbp and mlk :
+                            if attrname != mlk :
+                                raise ValueError \
+                                    ('Configured attribute "%s" of "%s" '
+                                     'should be "%s".'
+                                    % (attrname, prop, mlk)
+                                    )
+                            d = {}
+                            #if cls == 'component' :
+                            #    d ['fancy'] = True
+                            new [prop] = self.format_multilink \
+                                (mlk, attrs [k], **d)
                         else :
-                            new [cls][attrname] = attrs [k]
+                            raise ValueError \
+                                ( 'Autodetect for multilink %s.%s failed'
+                                % propname, attrname
+                                )
+                    else :
+                        if prop not in new :
+                            new [prop] = {attrname : attrs [k]}
+                        else :
+                            new [prop][attrname] = attrs [k]
                 else :
                     raise AttributeError ("Unknown jira Link: %s" % k)
             else :
@@ -529,10 +599,18 @@ class Jira_Syncer (tracker_sync.Syncer) :
         """ Should work like getitem in jira
         """
         # Note: This needs the project.key in the current issue
-        if cls == 'version' :
-            pkey = self.get (self.current_id, 'project.key')
-            return self.versions_by_project [pkey][key]
-        # FIXME: special handling of component
+        if cls in self.multilink_keyattr :
+            mkey = self.multilink_keyattr [cls]
+            if self.current_id == -1 :
+                for pkey in self.multilinks_by_project :
+                    try :
+                        return self.multilinks_by_project [pkey][cls][key][mkey]
+                    except KeyError :
+                        pass
+                raise KeyError (key)
+            else :
+                pkey = self.get (self.current_id, 'project.key')
+                return self.multilinks_by_project [pkey][cls][key][mkey]
         try :
             j = self.getitem (cls, key)
         except RuntimeError as err :

@@ -857,6 +857,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
         , strip_prefix  = None
         , use_r_default = False
         , l_only_update = False
+        , l_only_create = False
         ) :
         self.__super.__init__ \
             ( local_name
@@ -870,13 +871,18 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
             , strip_prefix
             , l_only_update = l_only_update
             )
+        self.l_only_create   = l_only_create
         self.use_r_default   = use_r_default
         self.do_only_default = False
     # end def __init__
 
     def sync (self, syncer, id, remote_issue) :
-        if self.l_only_update and syncer.get_existing_id (id) is None :
-            return
+        if syncer.get_existing_id (id) is None :
+            if self.l_only_update :
+                return
+        else :
+            if self.l_only_create :
+                return
         rv = remote_issue.get (self.remote_name, None)
         if rv is None and self.r_default :
             rv = self.r_default
@@ -1649,6 +1655,7 @@ class Trackersync_Syncer (Log) :
                 classdict = self.localissues [id].split_newvalues ()
                 attr = self.fix_attributes \
                     (self.default_class, classdict [self.default_class], True)
+                self.log_verbose ("Create local (after fixattr):", attr)
                 iid = self.create (self.default_class, ** attr)
                 self.log_info ("created issue: %s/%s" % (iid, remote_id))
                 del classdict [self.default_class]
@@ -1766,6 +1773,7 @@ class Trackersync_Syncer (Log) :
         classdict = self.localissues [id].split_newvalues ()
         attr = self.fix_attributes \
             (self.default_class, classdict [self.default_class])
+        self.log_verbose ("Update local (after fixattr):", attr)
         if self.localissues [id].dirty :
             if attr :
                 self.setitem (self.default_class, id, ** attr)

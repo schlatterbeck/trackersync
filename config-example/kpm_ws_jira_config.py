@@ -54,6 +54,12 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'EngineeringStatus'
         , value        = '2'
         )
+    , jira_sync.Sync_Attribute_To_Local_Multilink_Default
+        ( local_name    = 'components.name'
+        , remote_name   = None
+        , r_default     = 'default component'
+        , l_only_create = True
+        )
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'project.key'
         , remote_name  = None
@@ -87,7 +93,7 @@ KPM_ATTRIBUTES = \
         , l_only_update = True
         )
     , jira_sync.Sync_Attribute_To_Local_Multilink_Default
-        ( local_name    = 'versions.id'
+        ( local_name    = 'versions.name'
         , remote_name   = 'ForemostTestPart.Software'
         , r_default     = 'defaultversion'
         , use_r_default = True
@@ -179,10 +185,10 @@ KPM_ATTRIBUTES = \
         ( local_name   = 'status.name'
         , remote_name  = 'SupplierStatus'
         , map =
-            { 'Analyzing'                  : '0'
-            , 'Deciding'                   : '0'
+            { 'Analyzing'                  : '1'
+            , 'Deciding'                   : '1'
             , 'Suspended'                  : '0'
-            , 'Open'                       : '1'
+            , 'Open'                       : '0'
             , 'To Do'                      : '1'
             , 'Implementation Approval'    : '1'
             , 'Implementation Pending'     : '1'
@@ -227,11 +233,6 @@ KPM_ATTRIBUTES = \
         , remote_name    = 'SupplierVersionOk'
         , join_multilink = True
         )
-# FIXME: Maybe we want to transmit a date, is this the expected delivery?
-#    , jira_sync.Sync_Attribute_To_Remote
-#        ( local_name     = 'FIXME'
-#        , remote_name    = 'SupplierResponse.DueDate'
-#        )
     , jira_sync.Sync_Attribute_Files (l_only_update = True)
     , kpmwssync.Sync_Attribute_KPM_Message
         ( prefix        = 'TO AUDI:'
