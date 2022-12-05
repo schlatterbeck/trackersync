@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
-# Copyright (C) 2018-21 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-22 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -108,6 +108,7 @@ class Jira_File_Attachment (tracker_sync.File_Attachment):
     @property
     def content (self):
         if self._content is None:
+            self.log.debug ('Jira send GET: %s' % self.url)
             r = self.session.get (self.url)
             if not r.ok:
                 self.issue.raise_error (r, "Content")
@@ -122,12 +123,16 @@ class Jira_File_Attachment (tracker_sync.File_Attachment):
         u = self.issue.url + '/issue/' + self.issue.id + '/attachments'
         h = {'X-Atlassian-Token': 'nocheck'}
         f = dict (file = (self.name, self.content, self.type))
+        self.log.debug ('Jira send POST (file attachment): %s' % u)
         r = self.issue.session.post (u, files = f, headers = h)
         self.issue.log.debug \
             ("Create attachment: %s %s" % (self.name, self.type))
         if not r.ok:
             self.issue.raise_error (r, 'Create attachment')
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         if len (j) != 1:
             raise ValueError ("Invalid json on file creation: %s" % self.name)
         self.id = j [0]['id']
@@ -151,20 +156,28 @@ class Jira_Backend (autosuper):
         if isinstance (self.id, int) and self.id < 0:
             raise StopIteration ('negative id')
         u = self.url + '/issue/' + str (self.id) + '?fields=attachment'
+        self.log.debug ('Jira send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok:
             self.raise_error (r, "Attachment of %s" % self.id)
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         for a in j ['fields']['attachment']:
             yield a
     # end def _attachment_iter
 
     def _message_iter (self):
         u = self.url + '/issue/' + self.id + '/comment'
+        self.log.debug ('Jira send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok:
             self.raise_error (r, "Message of %s" % self.id)
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         if not j ['comments']:
             assert j ['startAt'] == 0 and j ['total'] == 0
         for a in j ['comments']:
@@ -292,21 +305,25 @@ class Jira_Syncer (tracker_sync.Syncer):
     raise_error = Local_Issue_Class.raise_error
     json_header = { 'content-type': 'application/json' }
 
-    def __init__ (self, remote_name, attributes, opt):
+    def __init__ (self, remote_name, attributes, opt, **kw):
         self.url          = opt.url
         self.session      = requests.Session ()
         self.session.auth = (opt.local_username, opt.local_password)
         self.item_cache   = {}
         # This initializes schema and already needs the session
-        self.__super.__init__ (remote_name, attributes, opt)
+        self.__super.__init__ (remote_name, attributes, opt, **kw)
     # end def __init__
 
     def compute_schema (self):
         u = self.url + '/' + 'field'
+        self.log.debug ('Jira send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Compute Schema")
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         self.schema = {}
         self.schema ['issue'] = {}
         self.schema_namemap = {}
@@ -406,11 +423,17 @@ class Jira_Syncer (tracker_sync.Syncer):
         """ Debug and dryrun is handled by base class create. """
         u = self.url + '/' + cls
         d = dict (fields = kw)
+        self.log.debug ('Jira send POST: %s' % u)
+        for line in json.dumps (d, indent = 4):
+            self.log.debug (line)
         r = self.session.post \
             (u, data = json.dumps (d), headers = self.json_header)
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Create %s" % cls)
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         return j ['key']
     # end def _create
 
@@ -418,10 +441,14 @@ class Jira_Syncer (tracker_sync.Syncer):
         u = self.url + '/' + self.default_class + '/' + str (id) + '/comment'
         c = [ dict (type = 'text', text = msg.content) ]
         b = dict (body = msg.content)
+        self.log.debug ('Jira send POST (message body): %s' % u)
         r = self.session.post (u, json = b, headers = self.json_header)
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Add comment for %s" % id)
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         return j ['id']
     # end def add_comment
 
@@ -561,10 +588,14 @@ class Jira_Syncer (tracker_sync.Syncer):
             u = self.url + '/' + cls + '?key=' + id
         elif cls == 'option':
             u = self.url + '/' + 'customFieldOption' + '/' + id
+        self.log.debug ('Jira send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Getitem %s %s" % (cls, id))
         j = r.json ()
+        self.log.debug ('Jira receive:')
+        for line in r.text.split ('\n'):
+            self.log.debug (line)
         if 'fields' in j:
             d = {}
             for n in j ['fields']:
@@ -630,6 +661,9 @@ class Jira_Syncer (tracker_sync.Syncer):
             Debug and dryrun is handled by base class setitem.
         """
         u = self.url + '/' + cls + '/' + id
+        self.log.debug ('Jira send PUT: %s' % u)
+        for line in json.dumps (kw, indent = 4):
+            self.log.debug (line)
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
         if not r.ok or not 200 <= r.status_code < 300:

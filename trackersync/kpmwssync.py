@@ -27,6 +27,7 @@ import os
 import sys
 import requests
 import logging.config
+import logging
 try:
     from urllib.parse   import urlencode, parse_qs
 except ImportError:
@@ -696,6 +697,12 @@ def main ():
         , help    = "Local tracker, one of %s, default: jira"
                   % ', '.join (local_trackers.keys ())
         )
+    loglevels = set (('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'))
+    cmd.add_argument \
+        ( "--log-level"
+        , help    = "Loglevel for logging backend, default=%(default)s"
+        , default = 'INFO'
+        )
     cmd.add_argument \
         ( "-n", "--no-action"
         , help    = "Dry-run: Don't update any side of sync"
@@ -763,18 +770,26 @@ def main ():
                     "kpmsync writing to KPM."
         )
     opt     = cmd.parse_args ()
-    config  = Config.config
-    cfgpath = Config.path
+    if opt.log_level.upper () not in loglevels:
+        print \
+            ( "Error setting log-level, allowed are: %s"
+            % ','.join (sorted (loglevels))
+            )
+        sys.exit (1)
+    log_level = getattr (logging, opt.log_level.upper ())
+    config    = Config.config
+    cfgpath   = Config.path
     if opt.config:
         cfgpath, config = os.path.split (opt.config)
         config = os.path.splitext (config) [0]
     cfg = Config (path = cfgpath, config = config)
     kpm = KPM_WS \
-        ( cfg     = cfg
-        , verbose = opt.verbose
-        , debug   = opt.debug
-        , lock    = opt.lock_name
-        , timeout = opt.timeout
+        ( cfg       = cfg
+        , verbose   = opt.verbose
+        , debug     = opt.debug
+        , lock      = opt.lock_name
+        , timeout   = opt.timeout
+        , log_level = log_level
         )
     url       = opt.url         or cfg.get ('LOCAL_URL', None)
     lpassword = opt.local_password or cfg.LOCAL_PASSWORD
@@ -788,7 +803,7 @@ def main ():
     if url and cfg.get ('KPM_ATTRIBUTES'):
         try:
             syncer = local_trackers [opt.local_tracker] \
-                ('KPM', cfg.KPM_ATTRIBUTES, opt)
+                ('KPM', cfg.KPM_ATTRIBUTES, opt, log_level = log_level)
         except:
             kpm.log_exception ()
             kpm.log.error ("Exception before starting sync")

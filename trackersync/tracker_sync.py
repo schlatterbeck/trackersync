@@ -1292,7 +1292,7 @@ class Trackersync_Syncer (Log):
     # Change in derived class if necessary
     Local_Issue_Class = Local_Issue
 
-    def __init__ (self, remote_name, attributes, opt):
+    def __init__ (self, remote_name, attributes, opt, **kw):
         self.remote_name     = remote_name
         self.attributes      = attributes
         self.opt             = opt
@@ -1300,7 +1300,8 @@ class Trackersync_Syncer (Log):
         self.newcount        = 0
         self.oldremote       = {}
         self.update_state    = False # for migration of old roundup schema
-        self.__super.__init__ ()
+        self.__super.__init__ (**kw)
+        self.log.info         ('Starting sync')
         self.compute_schema   ()
         self.reinit           ()
     # end def __init__
