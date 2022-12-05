@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # Copyright (C) 2019 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
@@ -29,12 +29,12 @@ import os
 import sys
 import stat
 
-class SSH_Client (autosuper) :
+class SSH_Client (autosuper):
 
     def __init__ \
         (self, host, privkey, remote_dir = '/tmp', local_dir = '/tmp'
         , password = None, port = 22, user = 'root'
-        ) :
+        ):
         self.ssh        = SSHClient ()
         self.host       = host
         self.remote_dir = remote_dir
@@ -57,30 +57,30 @@ class SSH_Client (autosuper) :
         self.sftp.chdir (self.remote_dir)
     # end def __init__
 
-    def get_files (self, * fn) :
-        for f in fn :
+    def get_files (self, * fn):
+        for f in fn:
             dest = os.path.join (self.local_dir, os.path.basename (f))
             self.sftp.get (f, dest)
     # end def get_files
 
-    def list_files (self) :
-        for f in self.sftp.listdir_attr () :
-            if stat.S_ISREG (f.st_mode) :
+    def list_files (self):
+        for f in self.sftp.listdir_attr ():
+            if stat.S_ISREG (f.st_mode):
                 yield (f.filename)
     # end def list_files
 
-    def put_files (self, *fn) :
-        for f in fn :
+    def put_files (self, *fn):
+        for f in fn:
             dest = os.path.join (self.remote_dir, os.path.basename (f))
             self.sftp.put (f, dest)
     # end def put_files
 
-    def close (self) :
+    def close (self):
         self.ssh.save_host_keys (self.known_hosts)
         self.ssh.close ()
     # end def close
 
-    def __getattr__ (self, name) :
+    def __getattr__ (self, name):
         return getattr (self.sftp, name)
     # end def __getattr__
 

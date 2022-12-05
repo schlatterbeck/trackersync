@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # Copyright (C) 2019 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
@@ -42,16 +42,16 @@ from bs4                import BeautifulSoup
 from .ssh               import SSH_Client
 from .engdatv2          import Engdat_Message, Edifact_Message
 
-try :
+try:
     from io import BytesIO
-except ImportError :
+except ImportError:
     import StringIO as BytesIO
 
 from trackersync        import tracker_sync
 #from trackersync        import roundup_sync
 from trackersync        import jira_sync
 
-class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
+class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute):
     """ Sync local messages to Pfiff. We get the messages from Pfiff and
         only append those that either don't exist or have an updated
         timestamp. The sync DB of pfiff keeps the messages and their IDs
@@ -60,12 +60,12 @@ class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
         prefix.
     """
 
-    def __init__ (self, prefix, ** kw) :
+    def __init__ (self, prefix, ** kw):
         self.__super.__init__ (local_name = None, ** kw)
         self.prefix = prefix
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         lmsg = syncer.get_messages (id)
         rmsg = remote_issue.get_messages ()
         lids = dict ((x.id, x) for x in lmsg.values ())
@@ -73,37 +73,37 @@ class Sync_Attribute_Pfiff_Messages (tracker_sync.Sync_Attribute) :
 
         # Remote messages at remote that are no longer existing locally
         pfx = self.prefix
-        for rid in rids :
-            if rid not in lids or not lids [rid].content.startswith (pfx) :
+        for rid in rids:
+            if rid not in lids or not lids [rid].content.startswith (pfx):
                 remote_issue.delete_message (rid)
         # Loop over ids in local and create/update at remote
-        for lid in lids :
-            if not lids [lid].content.startswith (pfx) :
+        for lid in lids:
+            if not lids [lid].content.startswith (pfx):
                 continue
-            if lid not in rids :
+            if lid not in rids:
                 rec = self._mangle_rec (lids [lid])
                 remote_issue.append_message (rec)
-            elif lids [lid].date != rids [lid].date :
+            elif lids [lid].date != rids [lid].date:
                 remote_issue.delete_message (lid)
                 rec = self._mangle_rec (lids [lid])
                 remote_issue.append_message (rec)
     # end def sync
 
-    def _mangle_rec (self, oldrec) :
+    def _mangle_rec (self, oldrec):
         rec = oldrec.copy ()
-        if rec.content.startswith (self.prefix) :
+        if rec.content.startswith (self.prefix):
             rec.content = rec.content [len (self.prefix):].lstrip ()
         return rec
     # end def _mangle_rec
 
 # end class Sync_Attribute_Pfiff_Messages
 
-class Config (Config_File) :
+class Config (Config_File):
 
     config = 'kpm_config'
     path   = '/etc/trackersync'
 
-    def __init__ (self, path = path, config = config) :
+    def __init__ (self, path = path, config = config):
         self.__super.__init__ \
             ( path, config
             , LOCAL_TRACKER    = 'jira'
@@ -138,17 +138,17 @@ class Config (Config_File) :
 
 # end class Config
 
-class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
+class Pfiff_File_Attachment (tracker_sync.File_Attachment):
 
-    def __init__ (self, issue, path, type = 'application/octet-stream', **kw) :
+    def __init__ (self, issue, path, type = 'application/octet-stream', **kw):
         self.path     = path
         self.dummy    = False
         self._content = None
         self.dirty    = False
-        if 'content' in kw :
+        if 'content' in kw:
             self._content = kw ['content']
             del kw ['content']
-        if 'dummy' in kw :
+        if 'dummy' in kw:
             self.dummy = bool (kw ['dummy'])
             del kw ['dummy']
         self.__super.__init__ (issue, type = type, **kw)
@@ -156,77 +156,77 @@ class Pfiff_File_Attachment (tracker_sync.File_Attachment) :
     # end def __init__
 
     @property
-    def content (self) :
-        if self.dummy :
+    def content (self):
+        if self.dummy:
             return None
-        if self._content is None :
+        if self._content is None:
             # ZIP will return a key error if file not found in archive
             # We check if the filename in the ZIP is double encoded in
             # the russion 'cp866' character set.
-            try :
+            try:
                 self._content = self.issue.pfiff.zf.read (self.path)
-            except KeyError :
-                try :
+            except KeyError:
+                try:
                     p = self.path.encode ('utf-8').decode ('cp866')
                     self._content = self.issue.pfiff.zf.read (p)
-                except Exception :
+                except Exception:
                     self.log.error ("File not found in ZIP: %s" % self.path)
                     self._content = None
-            except AttributeError :
+            except AttributeError:
                 # The zf is the zip file, it's None when we're syncing
                 # in the opposite direction.
-                if self.issue.pfiff.zf is not None :
+                if self.issue.pfiff.zf is not None:
                     raise
         return self._content
     # end def content
 
 # end class Pfiff_File_Attachment
 
-class Problem (tracker_sync.Remote_Issue) :
+class Problem (tracker_sync.Remote_Issue):
 
     File_Attachment_Class = Pfiff_File_Attachment
 
-    def __init__ (self, pfiff, record, now = datetime.now ()) :
+    def __init__ (self, pfiff, record, now = datetime.now ()):
         self.pfiff   = pfiff
         self.log     = pfiff.log
         self.debug   = self.pfiff.debug
         self.docinfo = {}
         self.now     = now
         rec = {}
-        for k in record :
+        for k in record:
             v = record [k]
-            if v is not None and v != str ('') :
+            if v is not None and v != str (''):
                 rec [k] = v
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         self.__super.__init__ (rec, {})
     # end def __init__
 
-    def convert_date (self, value) :
+    def convert_date (self, value):
         """ Convert date from roundup date format (that's the format
             used internally by syncer) to local format.
         """
-        if not value :
+        if not value:
             return value
         value = value.split ('+') [0]
         dt = datetime.strptime (value, '%Y-%m-%d.%H:%M:%S.%f')
         return dt.strftime (self.pfiff.date_fmt)
     # end def convert_date
 
-    def file_attachments (self, name = None) :
+    def file_attachments (self, name = None):
         assert self.attachments is not None
         return self.attachments
     # end def file_attachments
 
-    def get_messages (self) :
+    def get_messages (self):
         assert self.issue_comments is not None
         return self.issue_comments
     # end def get_messages
 
-    def append_message (self, m) :
+    def append_message (self, m):
         self.issue_comments [m.id] = m
         self.dirty = True
-        if 'messages' not in self.newvalues :
+        if 'messages' not in self.newvalues:
             self.newvalues ['messages'] = copy (self.record ['messages'])
         self.newvalues ['messages'][m.id] = dict \
             ( id          = m.id
@@ -237,15 +237,15 @@ class Problem (tracker_sync.Remote_Issue) :
             )
     # end def append_message
 
-    def delete_message (self, id) :
+    def delete_message (self, id):
         del self.issue_comments [id]
-        if 'messages' not in self.newvalues :
+        if 'messages' not in self.newvalues:
             self.newvalues ['messages'] = copy (self.record ['messages'])
             del self.newvalues ['messages'][id]
         self.dirty = True
     # end def delete_message
 
-    def update (self, syncer) :
+    def update (self, syncer):
         """ Update remote issue tracker with self.newvalues and
             self.record. Should only be called if self.dirty.
         """
@@ -284,10 +284,10 @@ class Problem (tracker_sync.Remote_Issue) :
 
         messages = self.get_messages ()
         authors  = {}
-        for mid in messages :
+        for mid in messages:
             m = messages [mid]
             authors [m.author_id] = m.author_name
-        for aid in authors :
+        for aid in authors:
             author_name = authors [aid]
             tm  = ElementTree.SubElement (ts, 'TEAM-MEMBER')
             tm.set ('ID', aid)
@@ -353,7 +353,7 @@ class Problem (tracker_sync.Remote_Issue) :
             ( ('resolve_until_release', 'ESTIMATED')
             , ('resolved_in_release',    'DELIVERED')
             )
-        for lbl, cat in lbls :
+        for lbl, cat in lbls:
             ms    = ElementTree.SubElement (mss,   'DELIVERY-MILESTONE')
             sl    = ElementTree.SubElement (ms,    'SHORT-LABEL')
             sl.text = self.get (lbl)
@@ -363,8 +363,8 @@ class Problem (tracker_sync.Remote_Issue) :
             sn.text = self.pfiff.cfg.COMPANY_SHORT
 
         rds = ElementTree.SubElement (issue, 'ISSUE-RELATED-DOCUMENTS')
-        for f in self.attachments :
-            if f.dirty :
+        for f in self.attachments:
+            if f.dirty:
                 rd = ElementTree.SubElement (rds, 'ISSUE-RELATED-DOCUMENT')
                 xd = ElementTree.SubElement (rd,  'XDOC')
                 n  = ElementTree.SubElement (xd,  'LONG-NAME')
@@ -378,20 +378,20 @@ class Problem (tracker_sync.Remote_Issue) :
         env = ElementTree.SubElement (issue, 'ISSUE-ENVIRONMENT')
         eng = ElementTree.SubElement (env,   'ENGINEERING-OBJECTS')
 
-        for k in self.pfiff.rev_engineering :
+        for k in self.pfiff.rev_engineering:
             v = self.get (k)
-            if not v :
+            if not v:
                 continue
             xmlkey = self.pfiff.rev_engineering [k]
             o = ElementTree.SubElement (eng, 'ENGINEERING-OBJECT')
             cat = ElementTree.SubElement (o, 'CATEGORY')
             cat.text = xmlkey
             sl  = ElementTree.SubElement (o, 'SHORT-LABEL')
-            if xmlkey in ('HARDWARE', 'SOFTWARE', 'PARTNUMBER') :
+            if xmlkey in ('HARDWARE', 'SOFTWARE', 'PARTNUMBER'):
                 sl.text = 'ECU'
                 rev = ElementTree.SubElement (o, 'REVISION-LABEL')
                 rev.text = v
-            else :
+            else:
                 sl.text = v
 
         ri  = ElementTree.SubElement (issue, 'RELATED-ISSUES')
@@ -406,7 +406,7 @@ class Problem (tracker_sync.Remote_Issue) :
 
         # Annotations should contain Jira comments
         ans = ElementTree.SubElement (issue, 'ANNOTATIONS')
-        for mid in messages :
+        for mid in messages:
             m   = messages [mid]
             an  = ElementTree.SubElement (ans, 'ANNOTATION')
             lbl = ElementTree.SubElement (an, 'LABEL')
@@ -430,7 +430,7 @@ class Problem (tracker_sync.Remote_Issue) :
 
 # end def Problem
 
-class Pfiff (Log, Lock_Mixin) :
+class Pfiff (Log, Lock_Mixin):
     """ Represents an export from PFIFF with multiple issues in a .zip
         file. There can be multiple .xml files in a .zip *and* multiple
         issues per .xml
@@ -519,7 +519,7 @@ class Pfiff (Log, Lock_Mixin) :
         )
     multiline = set (('problem_description',))
 
-    def __init__ (self, opt, cfg, syncer, now = datetime.now (), tid = '') :
+    def __init__ (self, opt, cfg, syncer, now = datetime.now (), tid = ''):
         self.opt           = opt
         self.cfg           = cfg
         self.debug         = opt.debug
@@ -534,16 +534,16 @@ class Pfiff (Log, Lock_Mixin) :
         self.out_dirty     = False
         self.now           = now
         self.tid           = tid or now.strftime ('%Y-%m-%dT%h:%m:%s')
-        if opt.lock_name :
+        if opt.lock_name:
             self.lockfile = opt.lock_name
         self.__super.__init__ ()
         self.log.info ('Started')
 
-        if opt.output is None :
-            if opt.zipfile :
+        if opt.output is None:
+            if opt.zipfile:
                 zf, ext = os.path.splitext (opt.zipfile)
                 opt.output = zf + '-out' + ext
-            else :
+            else:
                 opt.output = '_out-.zip'
         compression        = zipfile.ZIP_DEFLATED
         self.output        = zipfile.ZipFile (opt.output, "w", compression)
@@ -551,35 +551,35 @@ class Pfiff (Log, Lock_Mixin) :
         # put in a list
         # List of not-yet-synced remote ids
         self.unsynced = {}
-        for rid in syncer.oldsync_iter () :
+        for rid in syncer.oldsync_iter ():
             id = syncer.get_oldvalues (rid)
-            if id is not None :
+            if id is not None:
                 self.unsynced [rid] = copy (syncer.oldremote)
-        if opt.zipfile :
+        if opt.zipfile:
             self.zf = zipfile.ZipFile (opt.zipfile, 'r')
-            for n in self.zf.namelist () :
+            for n in self.zf.namelist ():
                 fn = n
-                if fn.startswith ('./') :
+                if fn.startswith ('./'):
                     fn = fn [2:]
-                if '/' in fn :
+                if '/' in fn:
                     continue
-                if fn.endswith ('.xml') or fn.endswith ('.XML') :
+                if fn.endswith ('.xml') or fn.endswith ('.XML'):
                     self.parse (self.zf.read (n))
         # We also need to sync the issues that didn't come in the .zip
         # file: We could have local changes to these issues.
-        for rid in self.unsynced :
+        for rid in self.unsynced:
             v = self.unsynced [rid]
-            if 'messages' not in v :
+            if 'messages' not in v:
                 v ['messages'] = {}
             p = Problem (self, v, now = self.now)
             p.attachments = []
-            for f in v.get ('files', []) :
+            for f in v.get ('files', []):
                 pa = Pfiff_File_Attachment \
                     (p, id = f, name = f, path = f, dummy = True)
                 p.attachments.append (pa)
             p.issue_comments = {}
             comments = v.get ('messages', {})
-            for c in comments :
+            for c in comments:
                 rec = copy (comments [c])
                 dt  = datetime.strptime (rec ['date'], self.date_fmt)
                 del rec ['date']
@@ -588,7 +588,7 @@ class Pfiff (Log, Lock_Mixin) :
             self.issues.append (p)
     # end def __init__
 
-    def as_rendered_html (self, node) :
+    def as_rendered_html (self, node):
         et = ElementTree.ElementTree (node)
         io = BytesIO ()
         et.write (io)
@@ -596,30 +596,30 @@ class Pfiff (Log, Lock_Mixin) :
         return bs.get_text ('\n')
     # end def as_rendered_html
 
-    def close (self) :
-        if self.zf is not None :
+    def close (self):
+        if self.zf is not None:
             self.zf.close ()
         self.output.close ()
-        if not self.out_dirty :
+        if not self.out_dirty:
             os.unlink (self.opt.output)
         # At this point we free the lock
         self.unlock ()
         self.log.info ("Pfiff: Close")
     # end def close
 
-    def parse (self, xml) :
+    def parse (self, xml):
         self.team_members = {}
         tree = ElementTree.fromstring (xml)
-        if tree.tag != 'MSR-ISSUE' :
+        if tree.tag != 'MSR-ISSUE':
             raise ValueError ("Invalid xml start-tag: %s" % tree.tag)
-        for cd in tree.findall ('.//COMPANY-DATA') :
+        for cd in tree.findall ('.//COMPANY-DATA'):
             ln = cd.find ('LONG-NAME')
             sn = cd.find ('SHORT-NAME')
-            if self.company in ln.text :
+            if self.company in ln.text:
                 self.company_short = sn.text.strip ()
             ts = cd.find ('TEAM-MEMBERS')
-            if ts is not None :
-                for tm in ts :
+            if ts is not None:
+                for tm in ts:
                     assert tm.tag == 'TEAM-MEMBER'
                     id = tm.get ('ID')
                     ln = tm.find ('LONG-NAME').text.strip ()
@@ -631,148 +631,148 @@ class Pfiff (Log, Lock_Mixin) :
         dt = ad.find ('.//DATE')
         self.date = datetime.strptime (dt.text.strip (), self.date_fmt)
         issues = tree.find ('ISSUES')
-        for issue in issues :
+        for issue in issues:
             self.issue = {}
-            for node in issue :
+            for node in issue:
                 self.parse_a_node (node)
             att = []
-            if 'attachments' in self.issue :
+            if 'attachments' in self.issue:
                 att = self.issue ['attachments']
                 del self.issue ['attachments']
                 self.issue ['files'] = {}
             number = self.issue ['problem_number']
-            if 'messages' not in self.issue :
+            if 'messages' not in self.issue:
                 self.issue ['messages'] = {}
             p = Problem (self, self.issue, now = self.now)
             p.attachments = []
             attold   = {}
             comments = {}
-            if number in self.unsynced :
+            if number in self.unsynced:
                 attold   = self.unsynced [number].get ('files', {})
                 comments = self.unsynced [number].get ('messages', {})
             p.issue_comments = {}
-            for cid in comments :
-                if cid not in p.record ['messages'] :
+            for cid in comments:
+                if cid not in p.record ['messages']:
                     p.record ['messages'][cid] = comments [cid]
                 rec = copy (comments [cid])
                 dt  = datetime.strptime (rec ['date'], self.date_fmt)
                 del rec ['date']
                 m = Problem.Message_Class (p, date = dt, ** rec)
                 p.issue_comments [m.id] = m
-            for a in att :
+            for a in att:
                 path, name = a
-                if name in attold :
+                if name in attold:
                     del attold [name]
                 pa = Pfiff_File_Attachment \
                     (p, id = path, name = name, path = path)
                 p.attachments.append (pa)
                 p.record ['files'][name] = True
-            for a in attold :
+            for a in attold:
                 pa = Pfiff_File_Attachment \
                     (p, id = a, name = a, path = a, dummy = True)
                 p.attachments.append (pa)
                 p.record ['files'][a] = True
-            if number in self.unsynced :
+            if number in self.unsynced:
                 del self.unsynced [number]
             self.issues.append (p)
     # end def parse
 
-    def parse_a_node (self, node) :
+    def parse_a_node (self, node):
         self.path.append (node.tag)
         p = '/'.join (self.path)
-        if node.tag == 'COMPANY-ISSUE-INFO' :
+        if node.tag == 'COMPANY-ISSUE-INFO':
             self.parse_company_info (node)
-        elif node.tag == 'DELIVERY-MILESTONE' :
+        elif node.tag == 'DELIVERY-MILESTONE':
             self.parse_milestone (node)
-        elif node.tag == 'RELATED-ISSUES' :
+        elif node.tag == 'RELATED-ISSUES':
             # Currently we don't parse related issues
             self.path.pop ()
             return
-        elif node.tag == 'ENGINEERING-OBJECT' :
+        elif node.tag == 'ENGINEERING-OBJECT':
             self.parse_engineering_object (node)
-        elif node.tag == 'ISSUE-SOLUTION' :
+        elif node.tag == 'ISSUE-SOLUTION':
             self.parse_issue_solution (node)
-        elif node.tag == 'ANNOTATION' :
+        elif node.tag == 'ANNOTATION':
             self.parse_annotation (node)
-        elif node.tag == 'ISSUE-RELATED-DOCUMENT' :
+        elif node.tag == 'ISSUE-RELATED-DOCUMENT':
             n = node.find ('XDOC')
             self.parse_attachment (n)
-        elif node.tag == 'TEAM-MEMBER-REF' :
-            if self.path [-2] == 'COMPANY-ISSUE-INFO' :
+        elif node.tag == 'TEAM-MEMBER-REF':
+            if self.path [-2] == 'COMPANY-ISSUE-INFO':
                 id = node.get ('ID-REF')
                 # Guard for Buggy implementation
-                if id in self.team_members :
+                if id in self.team_members:
                     self.issue ['owner_fp'] = self.team_members [id]
-                else :
+                else:
                     self.issue ['owner_fp'] = id
-        elif p in self.from_xml :
+        elif p in self.from_xml:
             name = self.from_xml [p]
-            if name in self.multiline :
+            if name in self.multiline:
                 txt = self.as_rendered_html (node)
-                if txt :
+                if txt:
                     self.issue [name] = txt
-            elif node.text :
+            elif node.text:
                 self.issue [name] = node.text.strip ()
-        elif len (node) :
-            for n in node :
+        elif len (node):
+            for n in node:
                 self.parse_a_node (n)
         self.path.pop ()
     # end def parse_a_node
 
-    def parse_annotation (self, node) :
+    def parse_annotation (self, node):
         lbl = node.find ('LABEL')
         txt = self.as_rendered_html (node.find ('ANNOTATION-TEXT'))
-        if lbl is not None and lbl.text.strip () != self.company_short :
+        if lbl is not None and lbl.text.strip () != self.company_short:
             return
-        if 'in_analyse_comments' in self.issue :
+        if 'in_analyse_comments' in self.issue:
             self.issue ['in_analyse_comments'] += '\n' + txt
-        else :
+        else:
             self.issue ['in_analyse_comments'] = txt
     # end def parse_annotation
 
-    def parse_attachment (self, node) :
+    def parse_attachment (self, node):
         url = node.find ('URL').text
         fn  = node.find ('LONG-NAME-1').text
-        if url is None :
+        if url is None:
             return
         # Don't know if this can happen, both url = None and fn = None
         # were observed in the wild. So if only the fn is None we
         # reconstruct the filename from the URL.
-        if fn is None :
+        if fn is None:
             fn = url.rsplit ('/', 1) [-1]
         url = url.strip ()
         fn  = fn.strip ()
-        if 'attachments' not in self.issue :
+        if 'attachments' not in self.issue:
             self.issue ['attachments'] = []
         self.issue ['attachments'].append ((url, fn))
     # end def parse_attachment
 
-    def parse_company_info (self, node) :
+    def parse_company_info (self, node):
         ref = node.find ('COMPANY-DATA-REF')
-        if ref.text.strip () != self.company_short :
+        if ref.text.strip () != self.company_short:
             return
-        for n in node :
+        for n in node:
             self.parse_a_node (n)
     # end def parse_company_info
 
-    def parse_engineering_object (self, node) :
+    def parse_engineering_object (self, node):
         cat = node.find ('CATEGORY').text
         lbl = node.find ('SHORT-LABEL').text
         # Looks like these tags can somtimes be empty
-        if not cat or not lbl :
+        if not cat or not lbl:
             return
         cat = cat.strip ()
         lbl = lbl.strip ()
         rev = node.find ('REVISION-LABEL')
-        if cat in ('HARDWARE', 'SOFTWARE', 'PARTNUMBER') :
-            if rev.text is None :
+        if cat in ('HARDWARE', 'SOFTWARE', 'PARTNUMBER'):
+            if rev.text is None:
                 rev = ''
-            else :
+            else:
                 rev = rev.text.strip ()
-            if lbl == 'ECU' :
+            if lbl == 'ECU':
                 lbl = rev
-            else :
-                if lbl not in self.pudis :
+            else:
+                if lbl not in self.pudis:
                     self.pudis [lbl] = self.pudis_no
                     self.pudis_no += 1
                 no = self.pudis [lbl]
@@ -782,42 +782,42 @@ class Pfiff (Log, Lock_Mixin) :
         self.issue [self.engineering [cat]] = lbl
     # end def parse_engineering_object
 
-    def parse_issue_solution (self, node) :
+    def parse_issue_solution (self, node):
         cat = node.find ('CATEGORY').text.strip ()
         dsc = node.find ('ISSUE-SOLUTION-DESC')
         txt = self.as_rendered_html (dsc)
-        if cat == 'PROPOSAL' :
-            if 'action_points' in self.issue :
+        if cat == 'PROPOSAL':
+            if 'action_points' in self.issue:
                 self.issue ['action_points'] += '\n' + txt
-            else :
+            else:
                 self.issue ['action_points'] = txt
-            for doc in node.findall ('.//XDOC') :
+            for doc in node.findall ('.//XDOC'):
                 self.parse_attachment (doc)
     # end def parse_issue_solution
 
-    def parse_milestone (self, node) :
+    def parse_milestone (self, node):
         cat   = node.find ('CATEGORY')
         # Seems the category is (sometimes?) not exported
-        if cat is not None :
+        if cat is not None:
             cat = cat.text.strip ()
-        else :
+        else:
             cat = 'REQUESTED'
         label = node.find ('SHORT-LABEL').text
-        if label is None :
+        if label is None:
             return
         label = label.strip ()
         # Only import requested release label
-        if cat != 'REQUESTED' :
+        if cat != 'REQUESTED':
             return
         self.issue [self.delivery_milestone [cat]] = label
     # end def parse_milestone
 
-    def sync (self, syncer) :
-        for issue in self.issues :
+    def sync (self, syncer):
+        for issue in self.issues:
             id = issue.problem_number
-            try :
+            try:
                 syncer.sync (id, issue)
-            except (Exception) :
+            except (Exception):
                 syncer.log.error ("Error syncing %s" % id)
                 syncer.log_exception ()
                 print ("Error syncing %s" % id)
@@ -825,9 +825,9 @@ class Pfiff (Log, Lock_Mixin) :
         # Todo: implement syncing new local issues
     # end def sync
 
-    def __repr__ (self) :
+    def __repr__ (self):
         r = []
-        for i in self.issues :
+        for i in self.issues:
             r.append ("ISSUE")
             r.append (repr (i))
         return '\n'.join (r)
@@ -839,9 +839,9 @@ class Pfiff (Log, Lock_Mixin) :
 local_trackers = dict (jira = jira_sync.Syncer)
 lastsync_fmt   = '%Y-%m-%dT%H:%M:%S'
 
-class Engdat_Sync (autosuper) :
+class Engdat_Sync (autosuper):
 
-    def __init__ (self, cfg, opt, syncer) :
+    def __init__ (self, cfg, opt, syncer):
         self.cfg    = cfg
         self.opt    = opt
         self.syncer = syncer
@@ -852,24 +852,24 @@ class Engdat_Sync (autosuper) :
         self.log.info ("Engdat sync started")
     # end def __init__
 
-    def engdat_name (self, outnum = None) :
+    def engdat_name (self, outnum = None):
         """ ENGDAT filename without 'ENG' prefix, also used inside engdat
             message.
         """
-        if outnum is None :
+        if outnum is None:
             outnum = self.outnum
         l  = 3 # if changed, change %02d below, sum needs to be 5
         assert outnum <= 99
         en = self.cfg.get ('ENGDAT_FILENAME')
-        if en is None :
+        if en is None:
             en = self.cfg.ENGDAT_PEER_ROUTING
-        if not en or len (en) < l :
+        if not en or len (en) < l:
             raise ValueError ("Short/Missing ENGDAT_FILENAME: %s" % en)
         en = en [:l].upper ()
         return self.now.strftime ('%y%m%d%H%M%S') + "%02d" % outnum + en
     # end def engdat_name
 
-    def rm_engdat (self, fn) :
+    def rm_engdat (self, fn):
         """ Remove all files belonging to an ENGDAT description file
             We get all files with a wildcard in position 23-26 of the given
             filename (sequence number) since this is the end of the ENGDAT
@@ -880,23 +880,23 @@ class Engdat_Sync (autosuper) :
         """
         path, rest = os.path.split (fn)
         pattern = rest [:23] + '*'
-        for f in glob (os.path.join (path, pattern)) :
+        for f in glob (os.path.join (path, pattern)):
             self.log.debug ("Unlink: %s" % f)
             os.unlink (f)
     # end def rm_engdat
 
-    def sync (self) :
+    def sync (self):
         opt = self.opt
         cfg = self.cfg
         # Get date of last sync:
-        try :
-            with open (os.path.join (opt.syncdir, '__lastsync')) as f :
+        try:
+            with open (os.path.join (opt.syncdir, '__lastsync')) as f:
                 dt = f.read ()
-        except IOError :
+        except IOError:
             dt = '2018-01-01T00:00:00'
         lastsync = datetime.strptime (dt.strip (), lastsync_fmt)
         fnmin    = lastsync.strftime ('ENG%y%m%d%H%M%SZZZZZ9')
-        if ':' in cfg.OFTP_INCOMING :
+        if ':' in cfg.OFTP_INCOMING:
             # If we have IPv6 addresses they may contain ':', so use rsplit
             host, dir = cfg.OFTP_INCOMING.rsplit (':', 1)
             ssh = SSH_Client \
@@ -907,22 +907,22 @@ class Engdat_Sync (autosuper) :
                 , remote_dir = dir
                 )
             flist = []
-            for f in ssh.list_files () :
-                if not f.startswith ('ENG') :
+            for f in ssh.list_files ():
+                if not f.startswith ('ENG'):
                     continue
                 # Get only files with timestamp > last sync
-                if f <= fnmin :
+                if f <= fnmin:
                     continue
                 flist.append (f)
             ssh.get_files (*flist)
             ssh.close ()
-        else :
+        else:
             flist = []
-            for f in os.listdir (cfg.OFTP_INCOMING) :
-                if not f.startswith ('ENG') :
+            for f in os.listdir (cfg.OFTP_INCOMING):
+                if not f.startswith ('ENG'):
                     continue
                 # Get only files with timestamp > last sync
-                if f <= fnmin :
+                if f <= fnmin:
                     continue
                 flist.append (f)
                 fn = os.path.join (cfg.OFTP_INCOMING, f)
@@ -930,15 +930,15 @@ class Engdat_Sync (autosuper) :
         # Now loop over tempfiles in LOCAL_TMP, we only use files with
         # sequence number 001 (engdat descriptions) and process these
         self.outnum = 0
-        for fn in sorted (flist) :
-            if not fn.startswith ('ENG') or len (fn) < 26 :
+        for fn in sorted (flist):
+            if not fn.startswith ('ENG') or len (fn) < 26:
                 continue
-            if fn [23:26] != '001' :
+            if fn [23:26] != '001':
                 continue
             self.sync_to_remote (fn)
             self.outnum += 1
         # No incoming files to sync, just export our local changes
-        if not flist :
+        if not flist:
             opt.zipfile = None
             opt.output  = os.path.join \
                 (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name () + '002002')
@@ -947,14 +947,14 @@ class Engdat_Sync (autosuper) :
             pfiff = Pfiff (opt, cfg, self.syncer, now = self.now, tid = n)
             pfiff.sync (self.syncer)
             pfiff.close () # closes .zip file!
-            if pfiff.out_dirty :
+            if pfiff.out_dirty:
                 self.outname = os.path.join \
                     (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name ())
                 self.write_output (3)
         self.log.info ('Finished Sync')
     # end def sync
 
-    def sync_to_remote (self, fn = None) :
+    def sync_to_remote (self, fn = None):
         cfg     = self.cfg
         opt     = self.opt
         npkg    = 2 # our first guess at the number of engdat members
@@ -962,10 +962,10 @@ class Engdat_Sync (autosuper) :
         self.outname = os.path.join \
             (cfg.LOCAL_OUT_TMP, 'ENG' + self.engdat_name ())
         path = os.path.join (cfg.LOCAL_TMP, fn)
-        with open (path) as f :
+        with open (path) as f:
             m = Edifact_Message (bytes = f.read ())
             m.check ()
-        if m.sde.routing.routing != cfg.ENGDAT_PEER_ROUTING :
+        if m.sde.routing.routing != cfg.ENGDAT_PEER_ROUTING:
             self.log.error \
                 ( "Invalid sender routing: %s expected %s"
                 % (m.sde.routing.routing, cfg.ENGDAT_PEER_ROUTING)
@@ -973,7 +973,7 @@ class Engdat_Sync (autosuper) :
             self.rm_engdat (path)
             self.write_lastsync (fn)
             return
-        if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING :
+        if m.rde.routing.routing != cfg.ENGDAT_OWN_ROUTING:
             self.log.error \
                 ( "Invalid receiver routing: %s expected %s"
                 % (m.rde.routing.routing, cfg.ENGDAT_OWN_ROUTING)
@@ -981,15 +981,15 @@ class Engdat_Sync (autosuper) :
             self.rm_engdat (path)
             self.write_lastsync (fn)
             return
-        for efc in m.segment_iter ('EFC') :
+        for efc in m.segment_iter ('EFC'):
             gpat  = fn [:23] + "%03d" % int (efc.file_info.seqno) + '*'
             gpat  = os.path.join (cfg.LOCAL_TMP, gpat)
             efcfn = glob (gpat)
-            if len (efcfn) != 1 :
+            if len (efcfn) != 1:
                 raise ValueError ("Sync-file not found, pattern=%s" % gpat)
             efcfn = efcfn [0]
             fmt = cfg.get ('ENGDAT_FORMAT', None)
-            if fmt and fmt != efc.file_format.file_format :
+            if fmt and fmt != efc.file_format.file_format:
                 self.log.warning \
                     ( 'Invalid file format: "%s" expected "%s", trying anyway'
                     % (efc.file_format.file_format, fmt)
@@ -1003,7 +1003,7 @@ class Engdat_Sync (autosuper) :
             n     = self.engdat_name ()
             pfiff = Pfiff (opt, cfg, self.syncer, now = self.now, tid = n)
             pfiff.sync (self.syncer)
-            if pfiff.out_dirty :
+            if pfiff.out_dirty:
                 npkg += 1
                 pkg  += 1
             pfiff.close ()
@@ -1013,16 +1013,16 @@ class Engdat_Sync (autosuper) :
         self.write_output (npkg)
     # end def sync_to_remote
 
-    def write_output (self, npkg) :
+    def write_output (self, npkg):
         cfg = self.cfg
         opt = self.opt
         # Did we send something? npkg is 1 greater than the number of
         # files in the resulting engdat pkg. If it's 2 we didn't produce
         # any output files and do not send anything.
-        if npkg != 2 :
+        if npkg != 2:
             # Need to rename the files
             pat = self.outname + '*'
-            for fn in glob (pat) :
+            for fn in glob (pat):
                 d, f = os.path.split (fn)
                 fnew = os.path.join \
                     (d, f [:20] + "%03d" % (npkg - 1) + f [23:])
@@ -1054,13 +1054,13 @@ class Engdat_Sync (autosuper) :
                 , ref              = self.engdat_name () [:14]
                 , msgref           = self.engdat_name () [:14]
                 )
-            for k in range (2, npkg) :
+            for k in range (2, npkg):
                 em.append_efc ()
-            with open (self.outname + '%03d%03d' % (npkg - 1, 1), "w") as f :
+            with open (self.outname + '%03d%03d' % (npkg - 1, 1), "w") as f:
                 f.write (em)
             # Now copy the resulting files to the remote OFTP tmp.
             flist = glob (pat)
-            if ':' in cfg.OFTP_OUTGOING :
+            if ':' in cfg.OFTP_OUTGOING:
                 host1, tmp = cfg.OFTP_TMP_OUT.rsplit (':', 1)
                 host, dir = cfg.OFTP_OUTGOING.rsplit (':', 1)
                 assert host1 == host
@@ -1075,7 +1075,7 @@ class Engdat_Sync (autosuper) :
                 ssh.put_files (* flist)
                 dirperm = ssh.stat (dir)
                 uid     = None
-                for f in flist :
+                for f in flist:
                     bn = os.path.basename (f)
                     np = os.path.join (dir, bn)
                     ssh.rename (bn, np)
@@ -1083,7 +1083,7 @@ class Engdat_Sync (autosuper) :
                     # to process them
                     ssh.chmod (np, 0o664)
                     # Get my own uid from created file once
-                    if not uid :
+                    if not uid:
                         perm = ssh.stat (np)
                         uid  = perm.st_uid
                     # We also set the group explicitly to the group of
@@ -1091,39 +1091,39 @@ class Engdat_Sync (autosuper) :
                     # s-bit of the group.
                     ssh.chown (np, uid, dirperm.st_gid)
                 ssh.close ()
-                if not opt.keep_files :
-                    for f in flist :
+                if not opt.keep_files:
+                    for f in flist:
                         os.unlink (f)
-            else :
+            else:
                 # Directly move the files to the *local* OFTP_OUTGOING
                 dirperm = os.stat (cfg.OFTP_OUTGOING)
-                for f in flist :
+                for f in flist:
                     fnew = os.path.join \
                         (cfg.OFTP_OUTGOING, os.path.basename (f))
-                    if opt.keep_files :
+                    if opt.keep_files:
                         shutil.copy (f, fnew)
-                    else :
+                    else:
                         os.rename (f, fnew)
                     os.chmod  (fnew, 0o664)
                     os.chown  (fnew, -1, dirperm.st_gid)
     # end def write_output
 
-    def write_lastsync (self, fn) :
+    def write_lastsync (self, fn):
         """ Determine date from engdat filename and write __lastsync file
         """
         assert fn.startswith ('ENG')
         dt  = datetime.strptime (fn [3:15], '%y%m%d%H%M%S')
         # Two-digit years will wrap back at some point in the future
-        if dt.year < self.now.year - 50 :
+        if dt.year < self.now.year - 50:
             dt = datetime \
                 (dt.year + 100, dt.month, dt.day, dt.hour, dt.minute, dt.second)
-        with open (os.path.join (self.opt.syncdir, '__lastsync'), 'w') as f :
+        with open (os.path.join (self.opt.syncdir, '__lastsync'), 'w') as f:
             f.write (dt.strftime (lastsync_fmt) + '\n')
     # end def write_lastsync
 
 # end class Engdat_Sync
 
-def main () :
+def main ():
     cmd = ArgumentParser ()
     cmd.add_argument \
         ( "-c", "--config"
@@ -1239,7 +1239,7 @@ def main () :
     opt     = cmd.parse_args ()
     config  = Config.config
     cfgpath = Config.path
-    if opt.config :
+    if opt.config:
         cfgpath, config = os.path.split (opt.config)
         config = os.path.splitext (config) [0]
     cfg = Config (path = cfgpath, config = config)
@@ -1253,25 +1253,25 @@ def main () :
     opt.local_tracker  = ltracker
     syncer = None
     pfiff  = None
-    if url :
+    if url:
         syncer = local_trackers [opt.local_tracker] \
             ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt)
-    if opt.schema_only :
+    if opt.schema_only:
         syncer.dump_schema ()
         sys.exit (0)
 
-    if cfg.get ('OFTP_INCOMING', None) and not opt.zipfile :
+    if cfg.get ('OFTP_INCOMING', None) and not opt.zipfile:
         es = Engdat_Sync (cfg, opt, syncer)
         es.sync ()
-    else :
+    else:
         # This is used if we do sync of a single .zip file or no file at all
-        if url :
+        if url:
             pfiff = Pfiff (opt, cfg, syncer)
-        if syncer and pfiff :
+        if syncer and pfiff:
             pfiff.sync (syncer)
             # Zip files need to be closed
             pfiff.close ()
 # end def main
 
-if __name__ == '__main__' :
+if __name__ == '__main__':
     main ()

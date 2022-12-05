@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-18 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
@@ -37,12 +37,12 @@ from trackersync        import roundup_sync
 from trackersync        import tracker_sync
 from trackersync        import jira_sync
 
-class Config (Config_File) :
+class Config (Config_File):
 
     config = 'jira_config'
     path   = '/etc/trackersync'
 
-    def __init__ (self, path = path, config = config) :
+    def __init__ (self, path = path, config = config):
         self.__super.__init__ \
             ( path, config
             , JIRA_URL     = 'http://localhost:8080/rest/api/2'
@@ -52,11 +52,11 @@ class Config (Config_File) :
 
 # end class Config
 
-class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue) :
+class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue):
 
     multilevel = True
 
-    def __init__ (self, jira, record) :
+    def __init__ (self, jira, record):
         self.jira        = jira
         self.session     = jira.session
         self.doc_meta    = {}
@@ -67,28 +67,28 @@ class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue) :
         del self.record ['updated']
     # end def __init__
 
-    def add_message (self, local_msg) :
+    def add_message (self, local_msg):
         """ Add the given local_msg to the current jira issue.
             As indicated in base class, local_msg is a dictionary of
             all message properties with current values.
         """
         d  = dict (body = local_msg ['content'])
         u  = self.jira.url + '/issue/' + self.id + '/comment'
-        h  = { 'content-type' : 'application/json' }
+        h  = { 'content-type': 'application/json' }
         r  = self.session.post (u, data = json.dumps (d), headers = h)
         j  = r.json ()
         return j ['id']
     # end def add_message
 
-    def update (self, syncer) :
-        if syncer.verbose :
+    def update (self, syncer):
+        if syncer.verbose:
             print ("Remote-Update: %s %s" % (self.key, self.newvalues))
-        for k in self.newvalues :
+        for k in self.newvalues:
             v = self.newvalues [k]
-            if isinstance (v, (dict, list)) :
+            if isinstance (v, (dict, list)):
                 raise ValueError ("Update on non-atomic value")
         u = self.jira.url + '/issue/' + self.id
-        h = { 'content-type' : 'application/json' }
+        h = { 'content-type': 'application/json' }
         r = self.session.put \
             (u, headers = h, data = json.dumps (dict (fields = self.newvalues)))
         r.raise_for_status ()
@@ -96,7 +96,7 @@ class Jira_Issue (jira_sync.Jira_Backend, tracker_sync.Remote_Issue) :
 
 # end def Jira_Issue
 
-class Jira (autosuper) :
+class Jira (autosuper):
     """ Interaction with a Jira instance
     """
 
@@ -108,24 +108,24 @@ class Jira (autosuper) :
         , timeout = 30
         , verbose = False
         , debug = False
-        ) :
+        ):
         self.url          = url
         self.verbose      = verbose
         self.debug        = debug
         self.session      = requests.Session ()
         self.session.auth = (username, password)
-        if timeout :
+        if timeout:
             self.session.timeout = timeout
     # end def __init__
 
-    def query (self, jql) :
+    def query (self, jql):
         i = 0
-        while True :
+        while True:
             d = dict (jql = jql, startAt = i, maxResults = 1)
             u = self.url + '/' + 'search'
             r = self.session.get (u, params = d)
             j = r.json ()
-            if not j ['issues'] :
+            if not j ['issues']:
                 assert j ['startAt'] == j ['total']
                 break
             assert len (j ['issues']) == 1
@@ -142,7 +142,7 @@ class Jira (autosuper) :
 
 # end class Jira
 
-def main () :
+def main ():
     import sys
     cmd = OptionParser ()
     cmd.add_option \
@@ -200,7 +200,7 @@ def main () :
     opt, arg = cmd.parse_args ()
     config  = Config.config
     cfgpath = Config.path
-    if opt.config :
+    if opt.config:
         cfgpath, config = os.path.split (opt.config)
         config = os.path.splitext (config) [0]
     cfg = Config (path = cfgpath, config = config)
@@ -220,15 +220,15 @@ def main () :
         , debug   = opt.debug
         )
     q = jql or 'assignee=%s' % assignee
-    if rup_url and cfg.get ('JIRA_ATTRIBUTES') :
+    if rup_url and cfg.get ('JIRA_ATTRIBUTES'):
         trn    = cfg.get ('TRACKER_NAME', 'JIRA')
         syncer = roundup_sync.Syncer (rup_url, trn, cfg.JIRA_ATTRIBUTES, opt)
-    if syncer :
-        for issue in jira.query (q) :
-            if opt.debug :
+    if syncer:
+        for issue in jira.query (q):
+            if opt.debug:
                 print (issue)
             syncer.sync (issue.key, issue)
 # end def main
 
-if __name__ == '__main__' :
+if __name__ == '__main__':
     main ()

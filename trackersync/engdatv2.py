@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2019-20 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2019-22 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -266,33 +266,33 @@ msg4 = \
       b"UNZ+1+ref'"
     )
 
-def brepr (bs) :
+def brepr (bs):
     """ For regression-testing with python2 and python3
     """
     r = repr (bs)
-    if not r.startswith ('b') :
+    if not r.startswith ('b'):
         print ('b' + r)
         return
     print (r)
 # end def brepr
 
-def btuple (bs) :
+def btuple (bs):
     """ For regression-testing with python2 and python3
         Print a tuple of byte values so that it looks like a python 3 repr
     """
-    if sys.version_info [0] >= 3 :
+    if sys.version_info [0] >= 3:
         return tuple (bs)
     t = tuple (bs)
     r = []
-    for k in t :
+    for k in t:
         r.append ('b' + repr (k))
     e = ')'
-    if len (t) == 1 :
+    if len (t) == 1:
         e = ',)'
     print ('(' + ', '.join (r) + e)
 # end def btuple
 
-class UNA (autosuper) :
+class UNA (autosuper):
     """
         An EDIFACT message can start with an una segment.
         This defines the markup characters in use.
@@ -309,49 +309,49 @@ class UNA (autosuper) :
 
     segment_name = 'UNA'
 
-    def __init__ (self, bytes = b"UNA:+.? '") :
+    def __init__ (self, bytes = b"UNA:+.? '"):
         self.from_bytes (bytes)
         self.length = 9
     # end def __init__
 
     @property
-    def component_sep (self) :
+    def component_sep (self):
         return self.una [0].encode ('ASCII')
     # end def component_sep
 
     @property
-    def element_sep (self) :
+    def element_sep (self):
         return self.una [1].encode ('ASCII')
     # end def element_sep
 
     @property
-    def release_char (self) :
+    def release_char (self):
         return self.una [3].encode ('ASCII')
     # end def release_char
 
     @property
-    def segment_terminator (self) :
+    def segment_terminator (self):
         return self.una [-1].encode ('ASCII')
     # end def segment_terminator
 
-    def check (self) :
+    def check (self):
         pass
     # end def check
 
-    def from_bytes (self, bytes) :
+    def from_bytes (self, bytes):
         assert bytes.startswith (b'UNA')
         self.una = bytes [3:].decode ('ASCII')
     # end def from_bytes
 
-    def to_bytes (self) :
+    def to_bytes (self):
         return ('UNA' + self.una).encode ('ASCII')
     # end def to_bytes
 
-    def __length__ (self) :
+    def __length__ (self):
         return self.length
     # end def __length__
 
-    def __str__ (self) :
+    def __str__ (self):
         return 'UNA' + self.una
     # end def __str__
     __unicode__ = __str__
@@ -362,9 +362,9 @@ class UNA (autosuper) :
 # default una
 una = UNA ()
 
-class _Part_Iter (autosuper) :
+class _Part_Iter (autosuper):
 
-    def iterparts (self, bytes, delimiter) :
+    def iterparts (self, bytes, delimiter):
         """ Iterate over parts delimited with delimiter taking
             una.release_char into account
             Test iterparts:
@@ -387,27 +387,27 @@ class _Part_Iter (autosuper) :
         l    = len (bytes)
         offs = 0
         esc  = self.una.release_char
-        while offs < l :
-            try :
+        while offs < l:
+            try:
                 # Initialize to start at offs
                 # Further searches start at found position +1
                 eidx = offs - 2
                 idx  = offs - 1
-                while (idx - eidx) % 2 :
+                while (idx - eidx) % 2:
                     idx = bytes.index (delimiter, idx + 1)
                     eidx = idx
-                    while eidx > 0 and bytes [eidx-1:eidx] == esc :
+                    while eidx > 0 and bytes [eidx-1:eidx] == esc:
                         eidx -= 1
                 yield bytes [offs:idx]
                 offs = idx + 1
-            except ValueError :
+            except ValueError:
                 yield bytes [offs:]
                 break
     # end def iterparts
 
 # end class _Part_Iter
 
-class Edifact_Message (_Part_Iter) :
+class Edifact_Message (_Part_Iter):
     """
         An EDIFACT message can start with an una segment.
         This defines the markup characters in use.
@@ -427,80 +427,80 @@ class Edifact_Message (_Part_Iter) :
     >>> m.check (skip_segment_check = True)
     """
 
-    def __init__ (self, una = una, bytes = None, *segments) :
+    def __init__ (self, una = una, bytes = None, *segments):
         self.una = una
         self.encoding = 'latin-1'
         self.uniq     = ('UNB', 'UNH', 'UNT', 'UNZ', 'MID', 'SDE', 'RDE', 'TOT')
-        for u in self.uniq :
+        for u in self.uniq:
             setattr (self, u.lower (), None)
-        if bytes :
+        if bytes:
             self.from_bytes (bytes)
-        else :
+        else:
             self.segments = list (segments)
     # end def __init__
 
-    def append_segment (self, segment) :
+    def append_segment (self, segment):
         sn = segment.segment_name
-        if sn in self.uniq :
-            if getattr (self, sn.lower ()) is not None :
+        if sn in self.uniq:
+            if getattr (self, sn.lower ()) is not None:
                 raise ValueError ("Duplicate %s segment" % sn)
             setattr (self, sn.lower (), segment)
         self.segments.append (segment)
     # end def append_segment
 
-    def check (self, skip_segment_check = False) :
-        for s in self.segments :
+    def check (self, skip_segment_check = False):
+        for s in self.segments:
             s.check ()
         uniq = self.uniq
-        if skip_segment_check :
+        if skip_segment_check:
             uniq = ('UNB', 'UNH', 'UNT', 'UNZ')
-        for u in uniq :
-            if getattr (self, u.lower ()) is None :
+        for u in uniq:
+            if getattr (self, u.lower ()) is None:
                 raise ValueError ("Missing %s segment" % u)
         unzcr = self.unz.control_ref.control_ref
         unbcr = self.unb.control_ref.control_ref
-        if unzcr != unbcr :
+        if unzcr != unbcr:
             raise ValueError ("Inconsistent UNZ.control_ref vs UNB.control_ref")
         untmsg = self.unt.message_ref.message_ref
         unhmsg = self.unh.message_ref.message_ref
-        if untmsg != unhmsg :
+        if untmsg != unhmsg:
             raise ValueError ("Inconsistent UNT.message_ref vs UNH.message_ref")
     # end def check
 
-    def from_bytes (self, bytes) :
+    def from_bytes (self, bytes):
         self.segments = []
         offs = 0
-        if bytes.startswith (b'UNA') :
+        if bytes.startswith (b'UNA'):
             self.una = UNA (bytes [:9])
             offs = 9
             self.append_segment (self.una)
-        else :
+        else:
             self.una = una
         t = self.una.segment_terminator
-        for b in self.iterparts (bytes [offs:], t) :
+        for b in self.iterparts (bytes [offs:], t):
             name = b [:3].decode ('ASCII')
             cls  = Edifact_Segment
             e    = self.encoding
-            if name in globals () :
+            if name in globals ():
                 cls = globals () [name]
             self.append_segment \
                 (cls (bytes = b + t, una = self.una, encoding = e))
     # end def from_bytes
 
-    def segment_iter (self, segment_name) :
-        for s in self.segments :
-            if s.segment_name == segment_name :
+    def segment_iter (self, segment_name):
+        for s in self.segments:
+            if s.segment_name == segment_name:
                 yield s
     # end def segment_iter
 
-    def to_bytes (self) :
+    def to_bytes (self):
         s = b''.join (p.to_bytes () for p in self.segments)
         return s
     # end def to_bytes
 
-    def __str__ (self) :
+    def __str__ (self):
         r = []
-        for s in self.segments :
+        for s in self.segments:
             r.append (str (s))
         return '\n'.join (r)
     # end def __str__
@@ -509,7 +509,7 @@ class Edifact_Message (_Part_Iter) :
 
 # end class Edifact_Message
 
-class Engdat_Message (Edifact_Message) :
+class Engdat_Message (Edifact_Message):
 
     """ Simple Engdat_Message with sensible defaults
     >>> dt = datetime.strptime ('2018-02-13T16:11:11', '%Y-%m-%dT%H:%M:%S')
@@ -532,7 +532,7 @@ class Engdat_Message (Edifact_Message) :
     >>> em.unh.message_id.sub_function_id = ''
     >>> em.to_bytes () == msg4
     True
-    >>> for s in em.segment_iter ('EFC') :
+    >>> for s in em.segment_iter ('EFC'):
     ...     brepr (s.to_bytes ())
     b"EFC+002:002.zip+NAT:PKZIP-Archive+OTH:Other+trackersync+INF+null'"
     """
@@ -565,11 +565,11 @@ class Engdat_Message (Edifact_Message) :
         , msgref = 'ref'
         , dt = None
         , *args, **kw
-        ) :
+        ):
         self.__super.__init__ (*args, **kw)
         self.seqno = 1
         now = dt
-        if now is None :
+        if now is None:
             now = datetime.now ()
         unb = UNB ()
         unb.interchange_sender.id = sender_id
@@ -594,24 +594,24 @@ class Engdat_Message (Edifact_Message) :
         sde.sender.sender           = sender_id [:20]
         sde.sender.party_name       = sender_name
         sde.tech_contact.party_name = sender_name
-        if sender_addr1 :
+        if sender_addr1:
             sde.sender.addr1       = sender_addr1
             sde.tech_contact.addr1 = sender_addr1
-        if sender_addr2 :
+        if sender_addr2:
             sde.sender.addr2       = sender_addr2
             sde.tech_contact.addr2 = sender_addr2
-        if sender_addr3 :
+        if sender_addr3:
             sde.sender.addr3       = sender_addr3
             sde.tech_contact.addr3 = sender_addr3
-        if sender_addr4 :
+        if sender_addr4:
             sde.sender.addr4       = sender_addr4
             sde.tech_contact.addr4 = sender_addr4
         sde.routing.routing = sender_routing
         sde.contact_details_sender.email = sender_email
-        if sender_country :
+        if sender_country:
             sde.country_contact.country = sender_country
             sde.country_tech.country    = sender_country
-        if sender_dept :
+        if sender_dept:
             sde.contact_details_sender.department1 = sender_dept
             sde.contact_details_tech.department1   = sender_dept
         self.append_segment (sde)
@@ -619,24 +619,24 @@ class Engdat_Message (Edifact_Message) :
         rde.receiver.receiver       = receiver_id [:20]
         rde.receiver.party_name     = receiver_name
         rde.tech_contact.party_name = receiver_name
-        if receiver_addr1 :
+        if receiver_addr1:
             rde.receiver.addr1     = receiver_addr1
             rde.tech_contact.addr1 = receiver_addr1
-        if receiver_addr2 :
+        if receiver_addr2:
             rde.receiver.addr2     = receiver_addr2
             rde.tech_contact.addr2 = receiver_addr2
-        if receiver_addr3 :
+        if receiver_addr3:
             rde.receiver.addr3     = receiver_addr3
             rde.tech_contact.addr3 = receiver_addr3
-        if receiver_addr4 :
+        if receiver_addr4:
             rde.receiver.addr4     = receiver_addr4
             rde.tech_contact.addr4 = receiver_addr4
         rde.routing.routing = receiver_routing
         rde.contact_details_receiver.email = receiver_email
-        if receiver_country :
+        if receiver_country:
             rde.country_contact.country = receiver_country
             rde.country_tech.country    = receiver_country
-        if receiver_dept :
+        if receiver_dept:
             rde.contact_details_receiver.department1 = receiver_dept
             rde.contact_details_tech.department1     = receiver_dept
         self.append_segment (rde)
@@ -653,7 +653,7 @@ class Engdat_Message (Edifact_Message) :
         self.append_segment (unz)
     # end def __init__
 
-    def append_efc (self) :
+    def append_efc (self):
         # We add one .zip file, if something different is needed this
         # has to be change in the user of this class. Some of these
         # values should probably be in the defaults.
@@ -670,8 +670,8 @@ class Engdat_Message (Edifact_Message) :
         efc.file_status.code = 'INF'
         efc.engineering_department.department = 'null'
 
-        for n, s in enumerate (reversed (self.segments)) :
-            if s.segment_name == 'TOT' :
+        for n, s in enumerate (reversed (self.segments)):
+            if s.segment_name == 'TOT':
                 break
         self.segments.insert (-(n + 1), efc)
         self.tot.quantity.quantity = str (self.seqno)
@@ -681,7 +681,7 @@ class Engdat_Message (Edifact_Message) :
 
 # end class Engdat_Message
 
-class Edifact_Element (_Part_Iter) :
+class Edifact_Element (_Part_Iter):
     """ An edifact data element (elements are delimited by the data
         element separator, usually '+')
     """
@@ -696,7 +696,7 @@ class Edifact_Element (_Part_Iter) :
         , bytes     = None
         , parent    = None
         , idx       = None
-        ) :
+        ):
         self.encoding   = encoding
         self.una        = una
         self.components = []
@@ -704,76 +704,76 @@ class Edifact_Element (_Part_Iter) :
         self.segment    = None
         self.parent     = parent
         self.structure  = None
-        if parent is not None and idx is not None :
+        if parent is not None and idx is not None:
             structure = getattr (parent, 'structure', None)
-            if structure :
+            if structure:
                 self.structure = structure [idx]
-        if self.structure :
-            for k, s in enumerate (self.structure [1]) :
+        if self.structure:
+            for k, s in enumerate (self.structure [1]):
                 self.by_name [s [0]] = k
-        if bytes :
+        if bytes:
             self.from_bytes (bytes)
-        elif self.structure :
+        elif self.structure:
             # Set default values
-            for k, s in enumerate (self.structure [1]) :
-                if len (s) > 5 :
+            for k, s in enumerate (self.structure [1]):
+                if len (s) > 5:
                     setattr (self, s [0], s [5])
     # end def __init__
 
     @property
-    def element_name (self) :
+    def element_name (self):
         n = "<unnamed>"
-        if self.structure :
+        if self.structure:
             n = self.structure [0][0]
-        if self.parent :
+        if self.parent:
             return '.'.join ((self.parent.segment_name, n))
         return n
     # end def element_name
 
-    def append (self, component_text) :
+    def append (self, component_text):
         """ Append component_text to self.components
         """
         self.components.append (component_text)
     # end def append
 
-    def _check (self, idx) :
+    def _check (self, idx):
         s = self.structure [1][idx]
         (n, m, t, l, u) = s [:5]
         cl = len (self.components)
         # Don't check completely empty element
-        if cl == 0 :
+        if cl == 0:
             return
-        if m == 'm' and cl - 1 < idx :
+        if m == 'm' and cl - 1 < idx:
             raise ValueError \
                 ("Component %s.%s: Missing" % (self.element_name, n))
         comp = None
         ccl  = 0
-        if idx < cl :
+        if idx < cl:
             comp = self.components [idx]
             ccl  = len (comp)
-        if comp and t == 'n' and not comp.isdigit () :
+        if comp and t == 'n' and not comp.isdigit ():
             raise ValueError \
                 ( "Component %s.%s: got non-numeric value %s"
                 % (self.element_name, n, comp)
                 )
-        if comp and t == 'a' and not comp.isalpha () :
+        if comp and t == 'a' and not comp.isalpha ():
             raise ValueError \
                 ( "Component %s.%s: got non-alpha value %s"
                 % (self.element_name, n, comp)
                 )
-        if m == 'm' and ccl == 0 :
+        if m == 'm' and ccl == 0:
             raise ValueError \
                 ( "Component %s.%s: Missing mandatory value"
                 % (self.element_name, n)
                 )
-        if (ccl > 0 or m == 'm') and (ccl > u or ccl < l) :
+        if (ccl > 0 or m == 'm') and (ccl > u or ccl < l):
             raise ValueError \
                 ( "Component %s.%s: Invalid length %s (expect %s-%s)"
                 % (self.element_name, n, ccl, l, u)
                 )
     # end def _check
 
-    def check (self) :
+    def check (self):
         """ Check against structure, example structure entry:
             ('name', 'c', 'an', 0, 5)
             means we have an alphanumeric field which is optional and
@@ -781,36 +781,36 @@ class Edifact_Element (_Part_Iter) :
         """
 
         empty = True
-        if self.structure is not None :
+        if self.structure is not None:
             mandatory = self.structure [0][1] == 'm'
             cl = len (self.components)
-            for k, s in enumerate (self.structure [1]) :
+            for k, s in enumerate (self.structure [1]):
                 self._check (k)
-                if k < cl and self.components [k] :
+                if k < cl and self.components [k]:
                     empty = False
-            if empty and mandatory :
+            if empty and mandatory:
                 print \
                     ( "WARN: Element %s: empty mandatory element"
                     % self.element_name
                     )
     # end def check
 
-    def from_bytes (self, bytes) :
+    def from_bytes (self, bytes):
         offs = 0
         t    = self.una.component_sep
-        for b in self.iterparts (bytes [offs:], t) :
+        for b in self.iterparts (bytes [offs:], t):
             self.append (self.unquote (b).decode (self.encoding))
     # end def from_bytes
 
-    def to_bytes (self) :
+    def to_bytes (self):
         comps = []
-        for c in self.components :
+        for c in self.components:
             comps.append (self.quote (c.encode (self.encoding)))
         r = self.una.component_sep.join (comps).rstrip (self.una.component_sep)
         return r
     # end def to_bytes
 
-    def quote (self, bytes) :
+    def quote (self, bytes):
         """ Add quoting (with release_char)
         >>> x = Edifact_Element (una = una)
         >>> brepr (x.quote (b"+49-40-123-0?'"))
@@ -824,12 +824,12 @@ class Edifact_Element (_Part_Iter) :
             , self.una.element_sep
             , self.una.segment_terminator
             )
-        for k in special :
+        for k in special:
             bytes = bytes.replace (k, self.una.release_char + k)
         return bytes
     # end def quote
 
-    def unquote (self, bytes) :
+    def unquote (self, bytes):
         """ Remove quoting (with release_char)
         >>> x = Edifact_Element (una = una)
         >>> brepr (x.unquote (b'?+49-40-123-0'))
@@ -842,7 +842,7 @@ class Edifact_Element (_Part_Iter) :
         r    = []
         offs = 0
         idx = bytes.find (self.una.release_char, offs)
-        while idx >= 0 :
+        while idx >= 0:
             r.append (bytes [offs:idx])
             r.append (bytes [idx+1:idx+2])
             offs = idx + 2
@@ -851,33 +851,33 @@ class Edifact_Element (_Part_Iter) :
         return b''.join (r)
     # end def unquote
 
-    def __getattr__ (self, name) :
-        try :
+    def __getattr__ (self, name):
+        try:
             idx = self.by_name [name]
-        except KeyError as e :
+        except KeyError as e:
             raise AttributeError (e)
-        if idx > len (self.components) - 1 :
+        if idx > len (self.components) - 1:
             return ''
         return self.components [idx]
     # end def __getattr__
 
-    def __setattr__ (self, name, value) :
-        if name in self.attrs :
+    def __setattr__ (self, name, value):
+        if name in self.attrs:
             self.__super.__setattr__ (name, value)
-        else :
-            try :
+        else:
+            try:
                 idx = self.by_name [name]
-            except KeyError as e :
+            except KeyError as e:
                 raise AttributeError (e)
-            for k in range (len (self.components), idx + 1) :
+            for k in range (len (self.components), idx + 1):
                 self.components.append ('')
             self.components [idx] = value
             self._check (idx)
     # end def __setattr__
 
-    def __str__ (self) :
+    def __str__ (self):
         r = []
-        for c in self.components :
+        for c in self.components:
             r.append (c)
         return '\n'.join (r)
     # end def __str__
@@ -886,30 +886,30 @@ class Edifact_Element (_Part_Iter) :
 
 # end class Edifact_Element
 
-class Edifact_Segment (_Part_Iter) :
+class Edifact_Segment (_Part_Iter):
     """ Implements an EDIFACT segment used in ENGDAT V2
         A segment is prefixed with the (3-letter) record name and
         terminated by the current segment terminator.
     """
 
-    def __init__ (self, encoding = 'latin1', bytes = None, una = una) :
+    def __init__ (self, encoding = 'latin1', bytes = None, una = una):
         self.encoding = encoding
         self.una      = una
         self.elements = []
-        if bytes is not None :
+        if bytes is not None:
             self.from_bytes (bytes)
         self.__super.__init__ ()
     # end def __init__
 
-    def check (self) :
+    def check (self):
         """ Only possible with structure information
         """
         pass
     # end def check
 
-    def to_bytes (self) :
+    def to_bytes (self):
         s = [self.segment_name.encode (self.encoding)]
-        for element in self.elements :
+        for element in self.elements:
             s.append (element.to_bytes ())
         s = self.una.element_sep.join (s)
         s = s.rstrip (self.una.element_sep)
@@ -917,7 +917,7 @@ class Edifact_Segment (_Part_Iter) :
         return s + self.una.segment_terminator
     # end def to_bytes
 
-    def from_bytes (self, bytes) :
+    def from_bytes (self, bytes):
         self.length = len (bytes)
         self.segment_name = bytes [:3].decode (self.encoding)
         assert self.length == 4 or bytes [3:4] == self.una.element_sep
@@ -925,21 +925,21 @@ class Edifact_Segment (_Part_Iter) :
         offs = 4
         t = self.una.element_sep
         e = self.encoding
-        for b in self.iterparts (bytes [offs:-1], t) :
+        for b in self.iterparts (bytes [offs:-1], t):
             l  = len (self.elements)
             el = Edifact_Element \
                 (encoding = e, bytes = b, parent = self, idx = l)
             self.elements.append (el)
     # end def from_bytes
 
-    def __length__ (self) :
+    def __length__ (self):
         return self.length
     # end def __length__
 
-    def __str__ (self) :
+    def __str__ (self):
         r = []
         r.append (self.segment_name)
-        for e in self.elements :
+        for e in self.elements:
             r.append (str (e))
         return '\n'.join (r)
     # end def __str__
@@ -948,43 +948,43 @@ class Edifact_Segment (_Part_Iter) :
 
 # end class Edifact_Segment
 
-class Named_Edifact_Segment (Edifact_Segment) :
+class Named_Edifact_Segment (Edifact_Segment):
 
-    def __init__ (self, *args, **kw) :
+    def __init__ (self, *args, **kw):
         self.segment_name = self.segment_class_name
         self.__super.__init__ (*args, **kw)
         self.by_name = {}
-        for k, (ss, se) in enumerate (self.structure) :
+        for k, (ss, se) in enumerate (self.structure):
             self.by_name [ss [0]] = k
     # end def __init__
 
     @property
-    def segment_class_name (self) :
+    def segment_class_name (self):
         return self.__class__.__name__
     # end def segment_class_name
 
-    def check (self) :
-        for idx, (ss, se) in enumerate (self.structure) :
+    def check (self):
+        for idx, (ss, se) in enumerate (self.structure):
             name, m, n = ss
             el = len (self.elements)
-            if m == 'm' and el - 1 < idx :
+            if m == 'm' and el - 1 < idx:
                 raise ValueError \
                     ( "Segment %s: Missing: %s"
                     % (self.segment_class_name, name)
                     )
-            if idx < el :
+            if idx < el:
                 self.elements [idx].check ()
     # end def check
 
-    def __getattr__ (self, name) :
-        try :
+    def __getattr__ (self, name):
+        try:
             idx = self.by_name [name]
-        except KeyError as e :
+        except KeyError as e:
             raise AttributeError (e)
         el = len (self.elements)
         e  = self.encoding
-        if idx >= el :
-            for i in range (el, idx + 1) :
+        if idx >= el:
+            for i in range (el, idx + 1):
                 el = Edifact_Element \
                     (encoding = e, parent = self, idx = i)
                 self.elements.append (el)
@@ -993,7 +993,7 @@ class Named_Edifact_Segment (Edifact_Segment) :
 
 # end class Named_Edifact_Segment
 
-class UNB (Named_Edifact_Segment) :
+class UNB (Named_Edifact_Segment):
     structure = \
         ( ( ('syntax_identifier', 'm', 1)
           , ( ('syntax_id',       'm', 'a',  4, 4, 'UNOC')
@@ -1057,7 +1057,7 @@ class UNB (Named_Edifact_Segment) :
         )
 # end class UNB
 
-class UNH (Named_Edifact_Segment) :
+class UNH (Named_Edifact_Segment):
     structure = \
         ( ( ('message_ref', 'm', 1)
           , ( ('message_ref',     'm', 'an', 0, 14)
@@ -1108,7 +1108,7 @@ class UNH (Named_Edifact_Segment) :
         )
 # end class UNH
 
-class UNT (Named_Edifact_Segment) :
+class UNT (Named_Edifact_Segment):
     structure = \
         ( ( ('number_of_segments', 'm', 1)
           , ( ('segments',        'm', 'n',  0, 10)
@@ -1124,7 +1124,7 @@ class UNT (Named_Edifact_Segment) :
         )
 # end class UNT
 
-class UNZ (Named_Edifact_Segment) :
+class UNZ (Named_Edifact_Segment):
     structure = \
         ( ( ('interchange_count', 'm', 1)
           , ( ('interchange_count', 'm', 'n',  0, 6)
@@ -1140,7 +1140,7 @@ class UNZ (Named_Edifact_Segment) :
         )
 # end class UNZ
 
-class MID (Named_Edifact_Segment) :
+class MID (Named_Edifact_Segment):
     structure = \
         ( ( ('document_no', 'm', 1)
           , ( ('document_no',       'm', 'an', 0, 17)
@@ -1160,7 +1160,7 @@ class MID (Named_Edifact_Segment) :
         )
 # end class MID
 
-class SDE (Named_Edifact_Segment) :
+class SDE (Named_Edifact_Segment):
     structure = \
         ( ( ('sender', 'm', 1)
           , ( ('sender',            'c', 'an', 0, 20)
@@ -1221,7 +1221,7 @@ class SDE (Named_Edifact_Segment) :
         )
 # end class SDE
 
-class RDE (Named_Edifact_Segment) :
+class RDE (Named_Edifact_Segment):
     structure = \
         ( ( ('receiver', 'm', 1)
           , ( ('receiver',          'c', 'an', 0, 20)
@@ -1282,7 +1282,7 @@ class RDE (Named_Edifact_Segment) :
         )
 # end class RDE
 
-class EFC (Named_Edifact_Segment) :
+class EFC (Named_Edifact_Segment):
     structure = \
         ( ( ('file_info', 'm', 1)
           , ( ('seqno',             'm', 'n',  0, 3)
@@ -1331,7 +1331,7 @@ class EFC (Named_Edifact_Segment) :
         )
 # end class EFC
 
-class TOT (Named_Edifact_Segment) :
+class TOT (Named_Edifact_Segment):
     structure = \
         ( ( ('quantity', 'm', 1)
           , ( ('quantity',          'm', 'n',  0, 15)
@@ -1347,11 +1347,11 @@ class TOT (Named_Edifact_Segment) :
         )
 # end class TOT
 
-if __name__ == '__main__' :
-    if len (sys.argv) > 1 :
-        with open (sys.argv [1]) as f :
+if __name__ == '__main__':
+    if len (sys.argv) > 1:
+        with open (sys.argv [1]) as f:
             m = Edifact_Message (bytes = f.read ().rstrip ())
-    else :
+    else:
         m = Edifact_Message (bytes = sys.stdin.read ())
     m.check ()
     print ("    Sender-ID:", m.unb.interchange_sender.id)
@@ -1364,31 +1364,31 @@ if __name__ == '__main__' :
     print ("  Sender-Code:", m.sde.sender.sender)
     print ("  Sender-Name:", m.sde.sender.party_name)
     print (" Sender-route:", m.sde.routing.routing)
-    for k in range (1, 5) :
+    for k in range (1, 5):
         a = getattr (m.sde.sender, 'addr%s' %k, '')
-        if a :
+        if a:
             print ("      Address:", a)
     print ("      Country:", m.rde.country_contact.country)
-    for k in range (1, 3) :
+    for k in range (1, 3):
         a = getattr (m.sde.contact_details_sender, 'department%s' %k, '')
-        if a :
+        if a:
             print ("   Department:", a)
     print (" Sender-email:", m.sde.contact_details_sender.email)
     print ("Receiver-Code:", m.rde.receiver.receiver)
     print ("Receiver-Name:", m.rde.receiver.party_name)
     print ("    Rcv-route:", m.rde.routing.routing)
-    for k in range (1, 5) :
+    for k in range (1, 5):
         a = getattr (m.rde.receiver, 'addr%s' %k, '')
-        if a :
+        if a:
             print ("      Address:", a)
     print ("      Country:", m.rde.country_contact.country)
-    for k in range (1, 3) :
+    for k in range (1, 3):
         a = getattr (m.rde.contact_details_receiver, 'department%s' %k, '')
-        if a :
+        if a:
             print ("   Department:", a)
     print ("    Rcv-email:", m.rde.contact_details_receiver.email)
-    for p in m.segments :
-        if p.segment_name == 'EFC' :
+    for p in m.segments:
+        if p.segment_name == 'EFC':
             efc = p
             break
     print ("   File-seqno:", efc.file_info.seqno)

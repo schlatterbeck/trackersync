@@ -56,7 +56,7 @@ Sync_Attribute_To_Local_Multilink_Default = \
 Sync_Attribute_To_Local_Multistring = \
     tracker_sync.Sync_Attribute_To_Local_Multistring
 
-def jira_utctime (jiratime) :
+def jira_utctime (jiratime):
     """ Time with numeric timestamp converted to UTC.
         Note that roundup strips trailing decimal places to 0.
         Also note: We've recently added 'date' to the known types when
@@ -84,39 +84,39 @@ def jira_utctime (jiratime) :
     tz = int (tz)
     h  = tz / 100
     m  = tz % 100
-    if '.' not in d :
+    if '.' not in d:
         fmt = fmtnos
     d  = datetime.strptime (d, fmt)
     d  = d + timedelta (hours = -h, minutes = -m)
     return d
 # end def jira_utctime
 
-class Jira_File_Attachment (tracker_sync.File_Attachment) :
+class Jira_File_Attachment (tracker_sync.File_Attachment):
 
-    def __init__ (self, issue, url = None, **kw) :
+    def __init__ (self, issue, url = None, **kw):
         """ Either the url or the content must be given
         """
         self.url      = url
         self.dirty    = False
         self._content = None
-        if 'content' in kw :
+        if 'content' in kw:
             self._content = kw ['content']
             del kw ['content']
         self.__super.__init__ (issue, **kw)
     # end def __init__
 
     @property
-    def content (self) :
-        if self._content is None :
+    def content (self):
+        if self._content is None:
             r = self.session.get (self.url)
-            if not r.ok :
+            if not r.ok:
                 self.issue.raise_error (r, "Content")
             self._content = r.content
         return self._content
     # end def content
 
-    def create (self) :
-        if self._content is None :
+    def create (self):
+        if self._content is None:
             self.issue.log.error ("Create attachment: %s is empty" % self.name)
             return
         u = self.issue.url + '/issue/' + self.issue.id + '/attachments'
@@ -125,57 +125,57 @@ class Jira_File_Attachment (tracker_sync.File_Attachment) :
         r = self.issue.session.post (u, files = f, headers = h)
         self.issue.log.debug \
             ("Create attachment: %s %s" % (self.name, self.type))
-        if not r.ok :
+        if not r.ok:
             self.issue.raise_error (r, 'Create attachment')
         j = r.json ()
-        if len (j) != 1 :
+        if len (j) != 1:
             raise ValueError ("Invalid json on file creation: %s" % self.name)
         self.id = j [0]['id']
     # end def create
 
 # end class Jira_File_Attachment
 
-class Jira_Backend (autosuper) :
+class Jira_Backend (autosuper):
     """ Mixin for common function for Jira used when Jira is the
         local tracker as well as when Jira is the remote tracker
     """
 
-    def __init__ (self, syncer, id, **kw) :
+    def __init__ (self, syncer, id, **kw):
         self.mangle_filenames = True
         self.__super.__init__ (syncer, id, **kw)
-        if getattr (self.opt, 'no_mangle_filenames', None) :
+        if getattr (self.opt, 'no_mangle_filenames', None):
             self.mangle_filenames = False
     # end def __init__
 
-    def _attachment_iter (self) :
-        if isinstance (self.id, int) and self.id < 0 :
+    def _attachment_iter (self):
+        if isinstance (self.id, int) and self.id < 0:
             raise StopIteration ('negative id')
         u = self.url + '/issue/' + str (self.id) + '?fields=attachment'
         r = self.session.get (u)
-        if not r.ok :
+        if not r.ok:
             self.raise_error (r, "Attachment of %s" % self.id)
         j = r.json ()
-        for a in j ['fields']['attachment'] :
+        for a in j ['fields']['attachment']:
             yield a
     # end def _attachment_iter
 
-    def _message_iter (self) :
+    def _message_iter (self):
         u = self.url + '/issue/' + self.id + '/comment'
         r = self.session.get (u)
-        if not r.ok :
+        if not r.ok:
             self.raise_error (r, "Message of %s" % self.id)
         j = r.json ()
-        if not j ['comments'] :
+        if not j ['comments']:
             assert j ['startAt'] == 0 and j ['total'] == 0
-        for a in j ['comments'] :
+        for a in j ['comments']:
             yield a
     # end def _message_iter
 
-    def file_attachments (self, name = None) :
-        if self.attachments is None :
+    def file_attachments (self, name = None):
+        if self.attachments is None:
             self.attachments  = []
             self.file_by_name = {}
-            for a in self._attachment_iter () :
+            for a in self._attachment_iter ():
                 f = Jira_File_Attachment \
                     ( self
                     , id   = a ['id']
@@ -188,21 +188,21 @@ class Jira_Backend (autosuper) :
         return self.attachments
     # end def file_attachments
 
-    def file_exists (self, other_name) :
+    def file_exists (self, other_name):
         """ Take name mangling into account, some Jira instances are set
             up in a way that does not permit non-ascii filenames. So we
             try to find other_name unmangled first, then we try the
             mangled name.
         """
-        if not getattr (self, 'file_by_name', None) :
+        if not getattr (self, 'file_by_name', None):
             self.file_attachments ()
-        if other_name in self.file_by_name :
+        if other_name in self.file_by_name:
             return True
-        if self.mangle_file_name (other_name) in self.file_by_name :
+        if self.mangle_file_name (other_name) in self.file_by_name:
             return True
     # end def file_exists
 
-    def mangle_file_name (self, fn) :
+    def mangle_file_name (self, fn):
         """ Mangle remote file name to something permissible locally.
             Some Jira instances are configured to only allow ascii
             filenames.
@@ -211,10 +211,10 @@ class Jira_Backend (autosuper) :
         return fnb.decode ('ascii')
     # end def mangle_file_name
 
-    def attach_file (self, other_file, name = None) :
+    def attach_file (self, other_file, name = None):
         cls   = Jira_File_Attachment
         fname = other_file.name
-        if self.mangle_filenames :
+        if self.mangle_filenames:
             fname = self.mangle_file_name (other_file.name)
         fcp = tracker_sync.File_Attachment \
             ( other_file.issue
@@ -225,19 +225,19 @@ class Jira_Backend (autosuper) :
             , content = other_file.content
             )
         f = self._attach_file (cls, fcp, name)
-        if f is None :
+        if f is None:
             return
         f.dirty = True
-        if self.attachments is None :
+        if self.attachments is None:
             self.attachments = []
         self.attachments.append (f)
         self.dirty = True
     # end def attach_file
 
-    def get_messages (self) :
-        if self.issue_comments is None :
+    def get_messages (self):
+        if self.issue_comments is None:
             self.issue_comments = {}
-            for m in self._message_iter () :
+            for m in self._message_iter ():
                 msg = self.Message_Class \
                     ( self
                     , id          = m ['id']
@@ -250,7 +250,7 @@ class Jira_Backend (autosuper) :
         return self.issue_comments
     # end def get_messages
 
-    def add_message (self, msg) :
+    def add_message (self, msg):
         """ Add a jira notice and return the id
         """
         self.dirty = True # Needed for syncdb update
@@ -258,31 +258,31 @@ class Jira_Backend (autosuper) :
     # end def add_message
 
     @classmethod
-    def raise_error (cls, r, *args) :
+    def raise_error (cls, r, *args):
         """ Used for errors whenever r (the result of a http method) has
             an error. With args we can specifiy additional things to be
             logged.
         """
         msg = []
-        for k in 'X-Seraph-LoginReason', 'X-Authentication-Denied-Reason' :
-            if k in r.headers and r.headers [k] != 'OK' :
+        for k in 'X-Seraph-LoginReason', 'X-Authentication-Denied-Reason':
+            if k in r.headers and r.headers [k] != 'OK':
                 msg.append (r.headers [k])
         msg = ' '.join (msg)
-        if msg :
+        if msg:
             msg = ': ' + msg
         a = ''
-        if args :
+        if args:
             a = ' ' + ' '.join (str (x) for x in args)
         raise RuntimeError ("HTTP Error %s%s%s" % (r.status_code, msg, a))
     # end def raise_error
 
 # end class Jira_Backend
 
-class Jira_Local_Issue (Jira_Backend, tracker_sync.Local_Issue) :
+class Jira_Local_Issue (Jira_Backend, tracker_sync.Local_Issue):
     pass
 # end class Jira_Local_Issue
 
-class Jira_Syncer (tracker_sync.Syncer) :
+class Jira_Syncer (tracker_sync.Syncer):
     """ Synchronisation Framework
         We get the mapping of remote attributes to jira attributes.
         The type of attribute indicates the action to perform.
@@ -290,9 +290,9 @@ class Jira_Syncer (tracker_sync.Syncer) :
     Local_Issue_Class = Jira_Local_Issue
     File_Attachment_Class = Jira_File_Attachment
     raise_error = Local_Issue_Class.raise_error
-    json_header = { 'content-type' : 'application/json' }
+    json_header = { 'content-type': 'application/json' }
 
-    def __init__ (self, remote_name, attributes, opt) :
+    def __init__ (self, remote_name, attributes, opt):
         self.url          = opt.url
         self.session      = requests.Session ()
         self.session.auth = (opt.local_username, opt.local_password)
@@ -301,10 +301,10 @@ class Jira_Syncer (tracker_sync.Syncer) :
         self.__super.__init__ (remote_name, attributes, opt)
     # end def __init__
 
-    def compute_schema (self) :
+    def compute_schema (self):
         u = self.url + '/' + 'field'
         r = self.session.get (u)
-        if not r.ok or not 200 <= r.status_code < 300 :
+        if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Compute Schema")
         j = r.json ()
         self.schema = {}
@@ -313,39 +313,39 @@ class Jira_Syncer (tracker_sync.Syncer) :
         s = self.schema ['issue']
         schema_classes = set ()
         self.multilinks = set ()
-        for k in j :
+        for k in j:
             name = k ['id']
-            if 'name' in k :
+            if 'name' in k:
                 self.schema_namemap [k ['name']] = name
-            if 'schema' not in k :
+            if 'schema' not in k:
                 type = 'string'
-            else :
+            else:
                 type = k ['schema']['type']
-            if type == 'array' :
+            if type == 'array':
                 # Seems custom fields do not have an 'items' key
                 # FIXME: This may still need some investigation if we
                 # need such a field in the future
                 t = k ['schema'].get ('items')
-                if not t :
+                if not t:
                     assert 'custom' in k ['schema']
                     type = 'custom'
-                elif t == 'string' :
+                elif t == 'string':
                     type = 'stringlist'
-                else :
+                else:
                     type = ('Multilink', t)
                     # The default schema entry, see below for special cases
-                    if t not in self.schema :
+                    if t not in self.schema:
                         schema_classes.add (t)
                         self.multilinks.add (t)
-            elif type == 'datetime' :
+            elif type == 'datetime':
                 type = 'date'
-            elif type == 'date' :
+            elif type == 'date':
                 type = 'date'
-            elif type not in ('string', 'number') :
+            elif type not in ('string', 'number'):
                 t    = type
                 type = ('Link', type)
                 # The default schema entry, see below for special cases
-                if t not in self.schema :
+                if t not in self.schema:
                     schema_classes.add (t)
             s [name] = type
         # The default class 'issue' contains property 'id' which is not
@@ -356,8 +356,8 @@ class Jira_Syncer (tracker_sync.Syncer) :
         # Some day find out if we can discover the schema via REST
         # These are custom schema options
         self.schema ['option'] = dict (id = 'string', value = 'string')
-        for name in schema_classes :
-            if name not in self.schema :
+        for name in schema_classes:
+            if name not in self.schema:
                 self.schema [name] = dict \
                     (id = 'string', name = 'string', key = 'string')
         self.schema ['user']['displayName'] = 'string'
@@ -374,84 +374,84 @@ class Jira_Syncer (tracker_sync.Syncer) :
         self.multilink_keyattr     = {}
         cm = self.getitem \
             ('issue', 'createmeta?expand=projects.issuetypes.fields')
-        for project in cm ['projects'] :
+        for project in cm ['projects']:
             pkey = project ['key']
             ml = self.multilinks_by_project [pkey] = {}
-            for type in project ['issuetypes'] :
-                for fieldname in type ['fields'] :
+            for type in project ['issuetypes']:
+                for fieldname in type ['fields']:
                     entry = type ['fields'][fieldname]
                     m = entry ['schema'].get ('items')
-                    if m in self.multilinks :
-                        if not entry.get ('allowedValues') :
+                    if m in self.multilinks:
+                        if not entry.get ('allowedValues'):
                             continue
                         assert entry ['schema']['type'] == 'array'
                         assert 'set' in entry ['operations']
                         ml [m] = {}
-                        for av in entry ['allowedValues'] :
-                            for k in ('key', 'name', 'value') :
-                                if k in av :
+                        for av in entry ['allowedValues']:
+                            for k in ('key', 'name', 'value'):
+                                if k in av:
                                     break
-                            else :
+                            else:
                                 raise KeyError ('No key attr found: %s' % av)
-                            if m in self.multilink_keyattr :
+                            if m in self.multilink_keyattr:
                                 assert self.multilink_keyattr [m] == k
-                            else :
+                            else:
                                 self.multilink_keyattr [m] = k
                             vn = av [k]
                             ml [m][vn] = dict \
                                 ((k, av [k]) for k in av if k != 'self')
     # end def compute_schema
 
-    def _create (self, cls, ** kw) :
+    def _create (self, cls, ** kw):
         """ Debug and dryrun is handled by base class create. """
         u = self.url + '/' + cls
         d = dict (fields = kw)
         r = self.session.post \
             (u, data = json.dumps (d), headers = self.json_header)
-        if not r.ok or not 200 <= r.status_code < 300 :
+        if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Create %s" % cls)
         j = r.json ()
         return j ['key']
     # end def _create
 
-    def add_comment (self, id, msg) :
+    def add_comment (self, id, msg):
         u = self.url + '/' + self.default_class + '/' + str (id) + '/comment'
         c = [ dict (type = 'text', text = msg.content) ]
         b = dict (body = msg.content)
         r = self.session.post (u, json = b, headers = self.json_header)
-        if not r.ok or not 200 <= r.status_code < 300 :
+        if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Add comment for %s" % id)
         j = r.json ()
         return j ['id']
     # end def add_comment
 
-    def dump_schema (self) :
+    def dump_schema (self):
         self.__super.dump_schema ()
         print ('NAMES:')
-        for n in self.schema_namemap :
+        for n in self.schema_namemap:
             print ("%s: %s" % (n, self.schema_namemap [n]))
-        for p in self.multilinks_by_project :
+        for p in self.multilinks_by_project:
             print ("PROJECT: %s" % p)
-            for m in self.multilinks_by_project [p] :
+            for m in self.multilinks_by_project [p]:
                 print ("MULTILINK: %s" % m)
                 ml = self.multilinks_by_project [p][m]
-                for k in ml :
+                for k in ml:
                     print ("    %s: %s" % (k, ml [k]))
     # end def dump_schema
 
-    def filter (self, classname, searchdict) :
+    def filter (self, classname, searchdict):
         raise NotImplementedError
     # end def filter
 
-    def format_multilink (self, attrname, values, fancy = False) :
+    def format_multilink (self, attrname, values, fancy = False):
         """ The components property is special, it is of the form:
-            {'components' :
-                [{'set' : [{'name' : 'somename'}, {'name': 'someothername'}]}]
+            {'components':
+                [{'set': [{'name': 'somename'}, {'name': 'someothername'}]}]
             }
             and it can take add/remove events like
-            {'components' :
-                [ {'add' : {'name' : 'somename'}}
-                , {'remove' :{'name': 'someothername'}]}
+            {'components':
+                [ {'add': {'name': 'somename'}}
+                , {'remove':{'name': 'someothername'}]}
                 , ...
                 ]
             }
@@ -462,132 +462,132 @@ class Jira_Syncer (tracker_sync.Syncer) :
             Maybe a version issue of the Jira API.
             So we use the old schema:
         """
-        if isinstance (values, str) :
+        if isinstance (values, str):
             values = [values]
         new = []
         # See above for documented format with fancy set
-        if fancy :
+        if fancy:
             c   = []
             new.append (dict (set = c))
-            for v in values :
-                c.append ({attrname : v})
-        else :
-            for v in values :
-                new.append ({attrname : v})
+            for v in values:
+                c.append ({attrname: v})
+        else:
+            for v in values:
+                new.append ({attrname: v})
         return new
 
-    def fix_attributes (self, classname, attrs, create = False) :
+    def fix_attributes (self, classname, attrs, create = False):
         """ Fix transitive attributes.
             In case of links, we can use the name or the id (and
             sometimes a key) in jira. But this has to be passed as a
             dictionary, e.g. the value is something like
-            {'name' : 'name-of-entity'}
+            {'name': 'name-of-entity'}
             We distinguish creation and update (transformation might be
             different) via the create flag.
             For Multilinks see format_multilink above.
         """
         pkey = self.get (self.current_id, 'project.key')
         new  = dict ()
-        for k in attrs :
+        for k in attrs:
             lst = k.split ('.')
             l   = len (lst)
             assert l <= 2
-            if l == 2 :
+            if l == 2:
                 # Special case: We may reference link values with the
                 # name instead of the id in jira's REST api
                 prop, attrname = lst
-                if attrname in ('name', 'id', 'key', 'value') :
-                    #if prop == 'components' :
+                if attrname in ('name', 'id', 'key', 'value'):
+                    #if prop == 'components':
                     #    continue
-                    if self.schema [classname][prop][0] == 'Multilink' :
+                    if self.schema [classname][prop][0] == 'Multilink':
                         cls = self.schema [classname][prop][1]
                         mbp = self.multilinks_by_project [pkey].get (cls)
                         mlk = self.multilink_keyattr.get (cls)
-                        if mbp and mlk :
-                            if attrname != mlk :
+                        if mbp and mlk:
+                            if attrname != mlk:
                                 raise ValueError \
                                     ('Configured attribute "%s" of "%s" '
                                      'should be "%s".'
                                     % (attrname, prop, mlk)
                                     )
                             d = {}
-                            #if cls == 'component' :
+                            #if cls == 'component':
                             #    d ['fancy'] = True
                             new [prop] = self.format_multilink \
                                 (mlk, attrs [k], **d)
-                        else :
+                        else:
                             raise ValueError \
                                 ( 'Autodetect for multilink %s.%s failed'
                                 % propname, attrname
                                 )
-                    else :
-                        if prop not in new :
-                            new [prop] = {attrname : attrs [k]}
-                        else :
+                    else:
+                        if prop not in new:
+                            new [prop] = {attrname: attrs [k]}
+                        else:
                             new [prop][attrname] = attrs [k]
-                else :
+                else:
                     raise AttributeError ("Unknown jira Link: %s" % k)
-            else :
+            else:
                 new [k] = attrs [k]
-        if not create :
+        if not create:
             return dict (fields = new)
         return new
     # end def fix_attributes
 
-    def from_date (self, date) :
+    def from_date (self, date):
         d = jira_utctime (date)
         return ustr (d.strftime ("%Y-%m-%d.%H:%M:%S") + '.000+0000')
     # end def from_date
 
-    def get_name_translation (self, classname, name) :
+    def get_name_translation (self, classname, name):
         """ Map user-given name to jira backend name
         """
-        if classname == self.default_class :
+        if classname == self.default_class:
             return self.schema_namemap.get (name, name)
         return name
     # end def get_name_translation
 
-    def getitem (self, cls, id, *attr) :
+    def getitem (self, cls, id, *attr):
         """ Get all or given list of attributes of an item of the given cls.
             This must not be used for attributes of the issue which we
             are currently syncing. The sync framework keeps a cache of
             to-be-updated attributes, this would bypass the cache.
             This returns a dict with a map from attr name to value.
         """
-        if (cls, id) in self.item_cache :
+        if (cls, id) in self.item_cache:
             return self.item_cache [(cls, id)]
         u = self.url + '/' + cls + '/' + id
-        if cls == 'user' :
+        if cls == 'user':
             u = self.url + '/' + cls + '?key=' + id
-        elif cls == 'option' :
+        elif cls == 'option':
             u = self.url + '/' + 'customFieldOption' + '/' + id
         r = self.session.get (u)
-        if not r.ok or not 200 <= r.status_code < 300 :
+        if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Getitem %s %s" % (cls, id))
         j = r.json ()
-        if 'fields' in j :
+        if 'fields' in j:
             d = {}
-            for n in j ['fields'] :
+            for n in j ['fields']:
                 v = j ['fields'][n]
-                if isinstance (v, dict) and ('id' in v or 'key' in v) :
-                    if 'id' in v :
+                if isinstance (v, dict) and ('id' in v or 'key' in v):
+                    if 'id' in v:
                         d [n] = v ['id']
-                    else :
+                    else:
                         d [n] = v ['key']
-                elif isinstance (v, list) and v and isinstance (v [0], dict) :
+                elif isinstance (v, list) and v and isinstance (v [0], dict):
                     d [n] = []
-                    for item in v :
+                    for item in v:
                         assert 'id' in item or 'key' in item
-                        if 'id' in item :
+                        if 'id' in item:
                             d [n].append (item ['id'])
-                        else :
+                        else:
                             d [n].append (item ['key'])
-                else :
+                else:
                     d [n] = v
                 # id and key are not in fields but in the upper-level object
-                if 'id' in j :
+                if 'id' in j:
                     d ['id'] = j ['id']
-                if 'key' in j :
+                if 'key' in j:
                     d ['key'] = j ['key']
             self.item_cache [(cls, id)] = d
             return d
@@ -595,36 +595,36 @@ class Jira_Syncer (tracker_sync.Syncer) :
         return j
     # end def getitem
 
-    def lookup (self, cls, key) :
+    def lookup (self, cls, key):
         """ Should work like getitem in jira
         """
         # Note: This needs the project.key in the current issue
-        if cls in self.multilink_keyattr :
+        if cls in self.multilink_keyattr:
             mkey = self.multilink_keyattr [cls]
-            if self.current_id == -1 :
-                for pkey in self.multilinks_by_project :
-                    try :
+            if self.current_id == -1:
+                for pkey in self.multilinks_by_project:
+                    try:
                         return self.multilinks_by_project [pkey][cls][key][mkey]
-                    except KeyError :
+                    except KeyError:
                         pass
                 raise KeyError (key)
-            else :
+            else:
                 pkey = self.get (self.current_id, 'project.key')
                 return self.multilinks_by_project [pkey][cls][key][mkey]
-        try :
+        try:
             j = self.getitem (cls, key)
-        except RuntimeError as err :
+        except RuntimeError as err:
             m = getattr (err, 'message', None)
-            if m :
+            if m:
                 raise KeyError (err.message)
-            else :
+            else:
                 raise KeyError (key)
-        if 'key' in j :
+        if 'key' in j:
             return j ['key']
         return j ['id']
     # end def lookup
 
-    def _setitem (self, cls, id, ** kw) :
+    def _setitem (self, cls, id, ** kw):
         """ Set attributes of an item of the given cls,
             attributes are 'key = value' pairs.
             Debug and dryrun is handled by base class setitem.
@@ -632,11 +632,11 @@ class Jira_Syncer (tracker_sync.Syncer) :
         u = self.url + '/' + cls + '/' + id
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
-        if not r.ok or not 200 <= r.status_code < 300 :
+        if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, 'setitem', 'id=%s' % id, kw)
     # end def _setitem
 
-    def sync_new_local_issues (self, new_remote_issue) :
+    def sync_new_local_issues (self, new_remote_issue):
         """ Determine *local* issues which are not yet synced to the
             remote. Currently we don't sync any new issues from local
             tracker to remote.
@@ -644,14 +644,14 @@ class Jira_Syncer (tracker_sync.Syncer) :
         pass
     # end def sync_new_local_issues
 
-    def update_aux_classes (self, id, r_id, r_issue, classdict) :
+    def update_aux_classes (self, id, r_id, r_issue, classdict):
         self.__super.update_aux_classes (id, r_id, r_issue, classdict)
-        if self.dry_run :
+        if self.dry_run:
             return
         # May be None
-        if self.localissues [id].attachments :
-            for f in self.localissues [id].attachments :
-                if f.dirty :
+        if self.localissues [id].attachments:
+            for f in self.localissues [id].attachments:
+                if f.dirty:
                     f.create ()
     # end def update_aux_classes
 

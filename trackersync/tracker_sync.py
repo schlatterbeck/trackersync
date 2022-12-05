@@ -1,5 +1,5 @@
-#!/usr/bin/python
-# Copyright (C) 2018-21 Dr. Ralf Schlatterbeck Open Source Consulting.
+#!/usr/bin/python3
+# Copyright (C) 2018-22 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -35,7 +35,7 @@ from   rsclib.pycompat  import string_types
 
 PY2 = sys.version_info [0] == 2
 
-class File_Attachment (autosuper) :
+class File_Attachment (autosuper):
     """ Model a local or remote file attachment.
         This has to be subclassed in both, the local and the remote
         backend. The constructor isn't called by the framework code but
@@ -59,19 +59,19 @@ class File_Attachment (autosuper) :
         not try to attach it.
     """
 
-    def __init__ (self, issue, **kw) :
+    def __init__ (self, issue, **kw):
         self.issue   = issue
         self.id      = kw.get ('id', None)
         self.dummy   = False
         # Some attributes may be @property and unsettable
-        for k in 'name', 'type', 'content' :
-            try :
+        for k in 'name', 'type', 'content':
+            try:
                 setattr (self, k, kw.get (k, None))
-            except AttributeError :
+            except AttributeError:
                 pass
     # end def __init__
 
-    def create (self) :
+    def create (self):
         """ Create this file in the backend.
             Note that self.id may be created on creation.
         """
@@ -80,7 +80,7 @@ class File_Attachment (autosuper) :
 
 # end class File_Attachment
 
-class Message (autosuper) :
+class Message (autosuper):
     """ Model a local or remote message or comment.
         This has to be subclassed in both, the local and the remote
         backend. The constructor isn't called by the framework code but
@@ -100,31 +100,31 @@ class Message (autosuper) :
 
     properties = ('id', 'author_id', 'author_name', 'date', 'content')
 
-    def __init__ (self, issue, **kw) :
+    def __init__ (self, issue, **kw):
         self.issue   = issue
         self.id      = kw.get ('id', None)
         # Some attributes may be @property and unsettable
-        for k in self.properties :
-            if k in kw :
-                try :
+        for k in self.properties:
+            if k in kw:
+                try:
                     setattr (self, k, kw.get (k, None))
-                except AttributeError :
+                except AttributeError:
                     pass
-        if getattr (self, 'date', None) :
+        if getattr (self, 'date', None):
             # Don't store dates with microseconds for comparison
             # This is not supported by most backend formats
-            if self.date.microsecond :
+            if self.date.microsecond:
                 self.date = self.date.replace (microsecond = 0)
     # end def __init__
 
-    def copy (self) :
+    def copy (self):
         props = dict ((p, getattr (self, p)) for p in self.properties)
         return self.__class__ (self.issue, ** props)
     # end def copy
 
 # end class Message
 
-class Backend_Common (Log) :
+class Backend_Common (Log):
     """ Common methods of Syncer and Remote_Issue
     """
 
@@ -134,16 +134,16 @@ class Backend_Common (Log) :
     File_Attachment_Class = File_Attachment
     Message_Class         = Message
 
-    def __init__ (self, *args, **kw) :
+    def __init__ (self, *args, **kw):
         self.attachments    = None
         self.issue_comments = None
         self.__super.__init__ (*args, **kw)
         # Use syncer.log if available
-        if getattr (self, 'syncer', None) :
+        if getattr (self, 'syncer', None):
             self.log = self.syncer.log
     # end def __init__
 
-    def _attach_file (self, cls, other_file, name) :
+    def _attach_file (self, cls, other_file, name):
         """ Attach file to this issue from other_file
             Note that caller of this method must deal with it returning
             None which happens whenever the file is not available for
@@ -152,7 +152,7 @@ class Backend_Common (Log) :
             The given name is the name of the local attribute in the
             local database.
         """
-        if other_file.dummy :
+        if other_file.dummy:
             self.log.error \
                 ( "Re-attach dummy file %s: deleted in local tracker?"
                 % other_file.name
@@ -167,7 +167,7 @@ class Backend_Common (Log) :
         return f
     # end def _attach_file
 
-    def attach_file (self, other_file, name = None) :
+    def attach_file (self, other_file, name = None):
         """ Create new file from other side file.
             The name is the name of the attribute in the issue.
             Note that depending on the backend we might not be able to
@@ -183,7 +183,7 @@ class Backend_Common (Log) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def attach_file
 
-    def file_attachments (self, name = None) :
+    def file_attachments (self, name = None):
         """ Returns a list of File_Attachment_Class objects that belong
             to this issue. The name is the name of the attribute in the
             issue. The name may be hardcoded for many backends.
@@ -193,23 +193,23 @@ class Backend_Common (Log) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def file_attachments
 
-    def file_exists (self, other_name) :
+    def file_exists (self, other_name):
         """ Sometimes name mangling must happen. This allows the
             derived class to check if the file with the given
             other_name already exists. Called by Sync_Attribute_Files.
             Default is no mangling.
         """
-        if getattr (self, self.file_by_name, None) :
+        if getattr (self, self.file_by_name, None):
             return other_name in self.file_by_name
-        elif not self.file_attachments :
+        elif not self.file_attachments:
             return False
-        else :
+        else:
             self.file_by_name = dict \
                 ((x.name, x) for x in self.file_attachments)
         return other_name in self.file_by_name
     # end def file_exists
 
-    def get_messages (self) :
+    def get_messages (self):
         """ Returns the dictionary of messages/comments for this issue
             Messages are in a dict by message ID. This allows easier
             deletion of messages.
@@ -217,7 +217,7 @@ class Backend_Common (Log) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def
 
-    def append_message (self, m) :
+    def append_message (self, m):
         """ Append given message m to local messages.
             Note that the message m is a remote message and will
             probably have no local ID.
@@ -225,7 +225,7 @@ class Backend_Common (Log) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def append_message
 
-    def delete_message (self, id) :
+    def delete_message (self, id):
         """ Delete the message with the given ID
         """
         raise NotImplementedError ("Needs to be implemented in child class")
@@ -233,7 +233,7 @@ class Backend_Common (Log) :
 
 # end def Backend_Common
 
-class Remote_Issue (Backend_Common) :
+class Remote_Issue (Backend_Common):
     """ This models a remote issue.
         The default (if sync_attributes is an empty dict) to synchronize
         *all* attributes for which a Sync_Attribute (see below) is
@@ -248,7 +248,7 @@ class Remote_Issue (Backend_Common) :
 
     multilevel = None
 
-    def __init__ (self, record, sync_attributes = {}) :
+    def __init__ (self, record, sync_attributes = {}):
         self.record     = record
         self.newvalues  = {}
         self.dirty      = False
@@ -256,57 +256,57 @@ class Remote_Issue (Backend_Common) :
         self.__super.__init__ ()
     # end def __init__
 
-    def __getattr__ (self, name) :
-        try :
+    def __getattr__ (self, name):
+        try:
             return self [name]
-        except KeyError as exc :
+        except KeyError as exc:
             raise AttributeError (exc)
     # end def __getattr__
 
-    def __getitem__ (self, name) :
-        if name is None :
+    def __getitem__ (self, name):
+        if name is None:
             raise KeyError (name)
-        if self.multilevel :
+        if self.multilevel:
             names = name.split ('.')
             nitem = self.newvalues
             item  = self.record
-            for n in names :
-                if nitem is not None :
-                    if n in nitem :
+            for n in names:
+                if nitem is not None:
+                    if n in nitem:
                         nitem = nitem [n]
-                    else :
+                    else:
                         nitem = None
-                if item is not None :
-                    if n in item :
+                if item is not None:
+                    if n in item:
                         item = item [n]
-                    else :
+                    else:
                         item = None
-                if not item and not nitem :
+                if not item and not nitem:
                     raise KeyError ("Not found: %s" % name)
-            if nitem is not None :
+            if nitem is not None:
                 return nitem
             return item
-        if name in self.newvalues :
+        if name in self.newvalues:
             return self.newvalues [name]
         return self.record [name]
     # end def __getitem__
 
-    def __unicode__ (self) :
+    def __unicode__ (self):
         r = []
-        for k in sorted (self.record) :
+        for k in sorted (self.record):
             v = self.record [k]
             r.append ("%(k)s: >%(v)s<" % locals ())
         return '\n'.join (r)
     # end def __unicode__
-    if PY2 :
-        def __str__ (self) :
+    if PY2:
+        def __str__ (self):
             return unicode (self).encode ('utf-8')
         # end def __str__
-    else :
+    else:
         __str__ = __unicode__
     __repr__ = __str__
 
-    def add_message (self, msg) :
+    def add_message (self, msg):
         """ Add the given local message msg to this remote issue.
             The local message is a dictionary with the message
             properties as keys and the values of the given message.
@@ -318,21 +318,21 @@ class Remote_Issue (Backend_Common) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def add_message
 
-    def as_json (self, ** kw) :
+    def as_json (self, ** kw):
         """ Only return non-empty values in json dump.
             Optionally update the dumped data with some settings in kw.
         """
         d = {}
-        for k in self.record :
+        for k in self.record:
             v = self.record [k]
-            if v :
+            if v:
                 d [k] = v
         d.update (self.newvalues)
         d.update (kw)
         return json.dumps (d, sort_keys = True, indent = 4)
     # end def as_json
 
-    def check_sync_callback (self, syncer, id) :
+    def check_sync_callback (self, syncer, id):
         """ Override a no-sync decision. If this returns False, a sync
             for this issue is performed, even if other no-sync checks of
             a Sync_Attribute_Check fail.
@@ -340,7 +340,7 @@ class Remote_Issue (Backend_Common) :
         return True
     # end def check_sync_callback
 
-    def document_fixer (self, namedict) :
+    def document_fixer (self, namedict):
         """ Allow the remote issue to correct document names, i.e.,
             extract only the relevant document id part according the the
             naming convention of the remote issue. This is needed
@@ -352,7 +352,7 @@ class Remote_Issue (Backend_Common) :
         return namedict
     # end def document_fixer
 
-    def create (self) :
+    def create (self):
         """ Create new remote issue from data here. This is called by
             the sync framework *after* all attributes have been set by
             the sync. Similar to update but creating a new remote issue.
@@ -360,57 +360,57 @@ class Remote_Issue (Backend_Common) :
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def create
 
-    def equal (self, lv, rv) :
+    def equal (self, lv, rv):
         """ Comparison method for remote and local value.
             By default we only make newlines equivalent for both issues
             (if they're both of string type). But some backends need to
             take encoding issues (utf-8 vs latin-1) into account.
         """
-        if isinstance (lv, string_types) and isinstance (rv, string_types) :
+        if isinstance (lv, string_types) and isinstance (rv, string_types):
             lv = lv.replace ('\r\n', '\n')
             rv = rv.replace ('\r\n', '\n')
         return lv == rv
     # end def equal
 
-    def get (self, name, default = None) :
-        try :
+    def get (self, name, default = None):
+        try:
             return self [name]
-        except KeyError :
+        except KeyError:
             return default
     # end def get
 
-    def set (self, name, value, type) :
+    def set (self, name, value, type):
         """ Set the given attribute to value
             Note that type is one of 'string', 'date', 'number', 'bool'
             We call conversion methods accordingly if existing.
         """
         conv = None
-        if type :
+        if type:
             conv = getattr (self, 'convert_%s' % type, None)
-        if conv :
+        if conv:
             value = conv (value)
-        if self.multilevel :
+        if self.multilevel:
             names = name.split ('.')
             item  = self.newvalues
             # Copy over the current value to ease later update
-            if self.record.get (names [0]) and names [0] not in item :
+            if self.record.get (names [0]) and names [0] not in item:
                 item [names [0]] = deepcopy (self [names [0]])
-            for n in names [:-1] :
-                if n not in item :
+            for n in names [:-1]:
+                if n not in item:
                     self.dirty = True
                     item [n] = {}
                 item = item [n]
-            if item.get (names [-1], None) != value :
+            if item.get (names [-1], None) != value:
                 self.dirty = True
             item [names [-1]] = value
-        else :
-            if self.newvalues.get (name, None) != value :
+        else:
+            if self.newvalues.get (name, None) != value:
                 self.dirty = True
             self.newvalues [name] = value
     # end def set
     __setitem__ = set
 
-    def strip_prefix (self, propname, prefix) :
+    def strip_prefix (self, propname, prefix):
         """ Strip a prefix from a given property.
             This must sometimes be done when the remote system returns a
             prefix where it should not: When setting the remote to "x"
@@ -423,19 +423,19 @@ class Remote_Issue (Backend_Common) :
             properties (self.multilevel set) of the remote system.
         """
         v = self.get (propname)
-        if self.multilevel :
+        if self.multilevel:
             raise NotImplementedError \
                 ("Multilevel not implemented for strip_prefix")
         if  (   propname in self.record
             and propname not in self.newvalues
             and v.startswith (prefix) 
-            ) :
+            ):
             l = len (prefix)
             v = v [l:]
             self.record [propname] = v
     # end def strip_prefix
 
-    def update (self, syncer) :
+    def update (self, syncer):
         """ Update remote issue tracker with self.newvalues.
             This is expected to *not* update the syncdb anymore!
         """
@@ -444,7 +444,7 @@ class Remote_Issue (Backend_Common) :
 
 # end class Remote_Issue
 
-class Sync_Attribute (autosuper) :
+class Sync_Attribute (autosuper):
     """ Sync a property from/to a remote tracker.
         If only_update is specified, the sync is run only in the update
         phase (when the remote issue is already existing).
@@ -495,7 +495,7 @@ class Sync_Attribute (autosuper) :
         , l_only_update  = False
         , allowed_chars  = None
         , local_unset    = None
-        ) :
+        ):
         self.name           = local_name
         self.remote_name    = remote_name
         self.only_update    = only_update
@@ -512,36 +512,36 @@ class Sync_Attribute (autosuper) :
         self.allowed_chars  = allowed_chars
         # only used for Sync_Attribute_To_Local_Default:
         self.local_unset    = local_unset
-        if not self.imap and self.map :
+        if not self.imap and self.map:
             self.imap = dict ((v, k) for k, v in  map.items ())
-        if not self.map and self.imap :
+        if not self.map and self.imap:
             self.map  = dict ((v, k) for k, v in imap.items ())
     # end def __init__
 
-    def no_sync_necessary (self, lv, rv, remote_issue) :
+    def no_sync_necessary (self, lv, rv, remote_issue):
         l_def = getattr (self, 'l_default', None)
         r_def = getattr (self, 'r_default', None)
-        if self.map :
+        if self.map:
             # Both maps need to disagree for non-equal -- this prevents
             # ping-pong updates in case the mappings are not fully
             # consistent
             # For multistring properties we need to map each item in the
             # list, the items are already prefix-mapped, so we don't
             # need to compare both mappings.
-            if isinstance (lv, list) :
+            if isinstance (lv, list):
                 assert isinstance (rv, list)
                 tmplv = lv
                 tmprv = rv
-                if self.prefix :
+                if self.prefix:
                     tmplv = [l for l in lv if l.startswith (self.prefix)]
                     tmprv = [r for r in rv if r.startswith (self.prefix)]
                 equal = tmplv == tmprv
-            else :
+            else:
                 equal = \
                     (  self.map.get  (lv, l_def) == rv
                     or self.imap.get (rv, None)  == lv
                     )
-        else :
+        else:
             equal = remote_issue.equal (lv, rv)
         return  (   equal
                 and (   not (lv is None and rv is None)
@@ -550,7 +550,7 @@ class Sync_Attribute (autosuper) :
                 )
     # end def no_sync_necessary
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         """ Needs to be implemented in child class.
             Note that a sync method may return a value != None in which
             case the sync for this Issue is not done. Useful for checks
@@ -559,15 +559,15 @@ class Sync_Attribute (autosuper) :
         pass
     # end def sync
 
-    def type (self, syncer) :
-        if self.name is None :
+    def type (self, syncer):
+        if self.name is None:
             return None
         return syncer.get_transitive_schema (self.name)
     # end def type
 
 # end class Sync_Attribute
 
-class Sync_Attribute_Check (Sync_Attribute) :
+class Sync_Attribute_Check (Sync_Attribute):
     """ A boolean local attribute used to check if the issue should
         be synced to the remote side. If a remote_name exists, the value
         of it is used to set the local attribute if 'update' is True.
@@ -597,33 +597,33 @@ class Sync_Attribute_Check (Sync_Attribute) :
         , update      = True
         , value       = None
         , ** kw
-        ) :
+        ):
         self.invert    = invert
         self.update    = update
         self.value     = value
         self.__super.__init__ (local_name, remote_name, ** kw)
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         synccheck = remote_issue.check_sync_callback (syncer, id)
         lv = syncer.get (id, self.name)
-        if self.value :
+        if self.value:
             stop = lv != self.value
-        else :
+        else:
             stop = not lv
-        if self.invert :
+        if self.invert:
             stop = not stop
         # Stop sync if following condition is true:
-        if stop and (isinstance (id, type ('')) or id > 0) and synccheck :
+        if stop and (isinstance (id, type ('')) or id > 0) and synccheck:
             return True
-        if self.update and lv is None :
+        if self.update and lv is None:
             rv = remote_issue.get (self.remote_name, self.r_default)
             syncer.set (id, self.name, rv)
     # end def sync
 
 # end class Sync_Attribute_Check
 
-class Sync_Attribute_Check_Remote (Sync_Attribute) :
+class Sync_Attribute_Check_Remote (Sync_Attribute):
     """ A boolean remote attribute used to check if the issue should
         be synced. Note that no sync is done, only the check of this
         attribute is performed. The local_name should be None.
@@ -646,29 +646,29 @@ class Sync_Attribute_Check_Remote (Sync_Attribute) :
         , invert      = False
         , value       = None
         , ** kw
-        ) :
+        ):
         self.invert    = invert
         self.value     = value
         self.__super.__init__ (local_name, remote_name, ** kw)
         assert self.remote_name is not None
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         rv = remote_issue.get (self.remote_name, None)
 
-        if self.value :
+        if self.value:
             stop = rv != self.value
-        else :
+        else:
             stop = not rv
-        if self.invert :
+        if self.invert:
             stop = not stop
-        if stop :
+        if stop:
             return True
     # end def sync
 
 # end class Sync_Attribute_Check_Remote
 
-class Sync_Attribute_Files (Sync_Attribute) :
+class Sync_Attribute_Files (Sync_Attribute):
     """ A Sync attribute that sync the files attached to a remote issue
         to the local issue.
         If the optional prefix is given, files with a name starting with
@@ -682,33 +682,33 @@ class Sync_Attribute_Files (Sync_Attribute) :
         synced.
     """
 
-    def __init__ (self, prefix = None, local_name = 'files', ** kw) :
+    def __init__ (self, prefix = None, local_name = 'files', ** kw):
         self.prefix = prefix
         self.__super.__init__ (local_name = local_name, ** kw)
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
-        if self.l_only_update and syncer.get_existing_id (id) is None :
+    def sync (self, syncer, id, remote_issue):
+        if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         lfiles = syncer.file_attachments (id, self.name)
         rfiles = remote_issue.file_attachments (self.remote_name)
         lnames = dict ((x.name, x) for x in lfiles)
         rnames = dict ((x.name, x) for x in rfiles)
 
-        for n in rnames :
-            if not syncer.file_exists (id, n) :
+        for n in rnames:
+            if not syncer.file_exists (id, n):
                 syncer.attach_file (id, rnames [n], self.name)
 
-        if self.prefix is not None and not self.remote_dry_run :
+        if self.prefix is not None and not self.remote_dry_run:
             exists = remote_issue.file_exists
-            for n in lnames :
-                if n.startswith (self.prefix) and not exists (n) :
+            for n in lnames:
+                if n.startswith (self.prefix) and not exists (n):
                     remote_issue.attach_file (lnames [n], self.remote_name)
     # end def sync
 
 # end class Sync_Attribute_Files
 
-class Sync_Attribute_To_Local (Sync_Attribute) :
+class Sync_Attribute_To_Local (Sync_Attribute):
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update
         the local attribute if the value has changed.
@@ -716,58 +716,58 @@ class Sync_Attribute_To_Local (Sync_Attribute) :
         are None and we have an r_default, it is applied.
     """
 
-    def sync (self, syncer, id, remote_issue) :
-        if self.l_only_update and syncer.get_existing_id (id) is None :
+    def sync (self, syncer, id, remote_issue):
+        if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         rv = remote_issue.get (self.remote_name, None)
-        if isinstance (rv, string_types) :
-            if self.allowed_chars :
+        if isinstance (rv, string_types):
+            if self.allowed_chars:
                 new_rv = []
-                for c in rv :
-                    if c in self.allowed_chars :
+                for c in rv:
+                    if c in self.allowed_chars:
                         new_rv.append (c)
-                    else :
+                    else:
                         new_rv.append ('_')
                 rv = ''.join (new_rv)
-            if self.local_prefix :
+            if self.local_prefix:
                 rv = self.local_prefix + rv
         lv = syncer.get (id, self.name)
-        if self.no_sync_necessary (lv, rv, remote_issue) :
+        if self.no_sync_necessary (lv, rv, remote_issue):
             return
-        if self.imap :
+        if self.imap:
             rv = self.imap.get (rv, self.r_default)
-        elif rv is None and self.r_default :
+        elif rv is None and self.r_default:
             rv = self.r_default
         syncer.set (id, self.name, rv)
     # end def sync
 
 # end class Sync_Attribute_To_Local
 
-class Sync_Attribute_To_Local_Default (Sync_Attribute) :
+class Sync_Attribute_To_Local_Default (Sync_Attribute):
     """ A default, only set if the current value is not set.
         Very useful for required attributes on creation.
         This is set from the remote attribute and in case this is also
         not set, a default can be specified in the constructor.
     """
 
-    def sync (self, syncer, id, remote_issue) :
-        if self.l_only_update and syncer.get_existing_id (id) is None :
+    def sync (self, syncer, id, remote_issue):
+        if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         v = remote_issue.get (self.remote_name)
-        if self.imap :
+        if self.imap:
             v = self.imap.get (v, self.r_default)
-        elif v is None and self.r_default :
+        elif v is None and self.r_default:
             v = self.r_default
-        if isinstance (v, string_types) and self.local_prefix :
+        if isinstance (v, string_types) and self.local_prefix:
             v = local_prefix + v
         rv = syncer.get (id, self.name)
-        if rv is None or self.local_unset and rv == self.local_unset :
+        if rv is None or self.local_unset and rv == self.local_unset:
             syncer.set (id, self.name, v)
     # end def sync
 
 # end class Sync_Attribute_To_Local_Default
 
-class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
+class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
     """ A Sync attribute consisting of several read-only attributes in
         the remote tracker.
         We simply take the values in the remote tracker and update
@@ -789,7 +789,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
         , l_only_update  = False
         , name_map       = {}
         , content_map    = {}
-        ) :
+        ):
         self.name          = local_name
         self.remote_names  = remote_names
         self.remote_name   = ', '.join (remote_names) # for debug messages
@@ -806,35 +806,35 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute) :
         self.content_map   = content_map
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
-        if self.l_only_update and syncer.get_existing_id (id) is None :
+    def sync (self, syncer, id, remote_issue):
+        if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         v = []
-        for n, k in enumerate (self.remote_names) :
+        for n, k in enumerate (self.remote_names):
             val = remote_issue.get (k, None)
-            if not val :
+            if not val:
                 continue
-            if self.add_prefix :
-                if self.field_prefix :
+            if self.add_prefix:
+                if self.field_prefix:
                     v.append (self.field_prefix)
                 v.append (self.name_map.get (k, k))
-                if self.field_postfix :
+                if self.field_postfix:
                     v.append (self.field_postfix)
-            if k in self.content_map :
+            if k in self.content_map:
                 val = self.content_map [k].get (val, val)
             v.append (val)
-            if n != len (self.remote_names) - 1 :
+            if n != len (self.remote_names) - 1:
                 v.append (self.delimiter)
         rv = ''.join (v)
         lv = syncer.get (id, self.name)
-        if self.no_sync_necessary (lv, rv, remote_issue) :
+        if self.no_sync_necessary (lv, rv, remote_issue):
             return
         syncer.set (id, self.name, rv)
     # end def sync
 
 # end class Sync_Attribute_To_Local_Concatenate
 
-class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
+class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
     """ A Sync attribute that is read-only in the remote tracker.
         We simply take the value in the remote tracker and update
         the local attribute if the value has changed. The only
@@ -858,7 +858,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
         , use_r_default = False
         , l_only_update = False
         , l_only_create = False
-        ) :
+        ):
         self.__super.__init__ \
             ( local_name
             , remote_name
@@ -876,30 +876,30 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
         self.do_only_default = False
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
-        if syncer.get_existing_id (id) is None :
-            if self.l_only_update :
+    def sync (self, syncer, id, remote_issue):
+        if syncer.get_existing_id (id) is None:
+            if self.l_only_update:
                 return
-        else :
-            if self.l_only_create :
+        else:
+            if self.l_only_create:
                 return
         rv = remote_issue.get (self.remote_name, None)
-        if rv is None and self.r_default :
+        if rv is None and self.r_default:
             rv = self.r_default
         lnk, attr = self.name.split ('.', 1)
         cl = syncer.get_classname (syncer.default_class, lnk)
-        try :
+        try:
             rv = [syncer.lookup (cl, rv)]
-        except KeyError :
-            if not self.use_r_default or self.r_default is None :
+        except KeyError:
+            if not self.use_r_default or self.r_default is None:
                 raise
             rv = [syncer.lookup (cl, self.r_default)]
         lv = syncer.get (id, self.name)
-        if self.do_only_default and lv is not None :
+        if self.do_only_default and lv is not None:
             return
-        if not isinstance (lv, list) :
+        if not isinstance (lv, list):
             lv = [lv]
-        if self.no_sync_necessary (lv, rv, remote_issue) :
+        if self.no_sync_necessary (lv, rv, remote_issue):
             return
         syncer.set (id, self.name, rv)
     # end def sync
@@ -907,16 +907,16 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute) :
 # end class Sync_Attribute_To_Local_Multilink
 
 class Sync_Attribute_To_Local_Multilink_Default \
-    (Sync_Attribute_To_Local_Multilink) :
+    (Sync_Attribute_To_Local_Multilink):
 
-    def __init__ (self, local_name, ** kw) :
+    def __init__ (self, local_name, ** kw):
         self.__super.__init__ (local_name, ** kw)
         self.do_only_default = True
     # end def __init__
 
 # end class Sync_Attribute_To_Local_Multilink_Default
 
-class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
+class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
     """ A variant that synchronizes a single attribute at the remote
         side to a Multi-String value locally. It uses a prefix and
         removes all local strings with this prefix before it stores the
@@ -937,7 +937,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
         , prefix        = None
         , l_only_update = False
         , allowed_chars = None
-        ) :
+        ):
         self.__super.__init__ \
             ( local_name
             , remote_name
@@ -952,42 +952,42 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
             , allowed_chars = allowed_chars
             )
         self.prefix = prefix
-        if not prefix :
+        if not prefix:
             raise ValueError ("The prefix is required")
         self.do_only_default = False
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
-        if self.l_only_update and syncer.get_existing_id (id) is None :
+    def sync (self, syncer, id, remote_issue):
+        if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         rval = remote_issue.get (self.remote_name, None)
-        if self.imap :
+        if self.imap:
             rval = self.imap.get (rval, self.r_default)
-        elif rval is None and self.r_default :
+        elif rval is None and self.r_default:
             rval = self.r_default
         # Can't sync None values to local
-        if rval is None :
+        if rval is None:
             return
-        if isinstance (rval, string_types) and self.allowed_chars :
+        if isinstance (rval, string_types) and self.allowed_chars:
                 new_rv = []
-                for c in rval :
-                    if c in self.allowed_chars :
+                for c in rval:
+                    if c in self.allowed_chars:
                         new_rv.append (c)
-                    else :
+                    else:
                         new_rv.append ('_')
                 rval = ''.join (new_rv)
         lv = syncer.get (id, self.name)
-        if isinstance (lv, list) :
+        if isinstance (lv, list):
             lv = list (sorted (lv))
             rv = [k for k in lv if not k.startswith (self.prefix)]
-        else :
+        else:
             assert not rv
             rv = []
         rv.append (self.prefix + rval)
         rv = list (sorted (rv))
-        if self.no_sync_necessary (lv, rv, remote_issue) :
+        if self.no_sync_necessary (lv, rv, remote_issue):
             return
-        if self.do_only_default and lv is not None :
+        if self.do_only_default and lv is not None:
             return
         syncer.set (id, self.name, rv)
     # end def sync
@@ -995,16 +995,16 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local) :
 # end class Sync_Attribute_To_Local_Multistring
 
 class Sync_Attribute_To_Local_Multistring_Default \
-    (Sync_Attribute_To_Local_Multistring) :
+    (Sync_Attribute_To_Local_Multistring):
 
-    def __init__ (self, local_name, ** kw) :
+    def __init__ (self, local_name, ** kw):
         self.__super.__init__ (local_name, ** kw)
         self.do_only_default = True
     # end def __init__
 
 # end class Sync_Attribute_To_Local_Multistring_Default
 
-class Sync_Attribute_To_Remote (Sync_Attribute) :
+class Sync_Attribute_To_Remote (Sync_Attribute):
     """ Unconditionally synchronize a local attribute to the remote
         tracker. Typical use-case is to set the local tracker issue
         number in the remote tracker if the remote tracker also supports
@@ -1017,39 +1017,39 @@ class Sync_Attribute_To_Remote (Sync_Attribute) :
         if the local value is None *and* the remote value is None.
     """
 
-    def _sync (self, syncer, id, remote_issue) :
+    def _sync (self, syncer, id, remote_issue):
         # Never sync something to remote if local issue not yet created.
         # Default values of local issue are assigned during creation, so
         # we can't sync these to the remote site during this sync (they
         # would get empty values).
-        if syncer.get_existing_id (id) is None :
+        if syncer.get_existing_id (id) is None:
             return None, None, True
         rv = remote_issue.get (self.remote_name, None)
         lv = syncer.get (id, self.name)
         nosync = self.no_sync_necessary (lv, rv, remote_issue)
-        if self.imap :
-            if self.join_multilink and isinstance (rv, list) :
+        if self.imap:
+            if self.join_multilink and isinstance (rv, list):
                 rv = [self.imap.get (x, None) for x in rv]
-            else :
+            else:
                 rv = self.imap.get (rv, None)
-        if self.join_multilink and isinstance (rv, list) :
+        if self.join_multilink and isinstance (rv, list):
             rv = self.separator.join (rv)
-        if self.map :
+        if self.map:
             lv = self.map.get (lv, self.l_default)
-        if lv is None and rv is None and self.l_default is not None :
+        if lv is None and rv is None and self.l_default is not None:
             lv = self.l_default
         return lv, rv, nosync
     # end def _sync
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
-        if not nosync :
+        if not nosync:
             remote_issue.set (self.remote_name, lv, self.type (syncer))
     # end def sync
 
 # end class Sync_Attribute_To_Remote
 
-class Sync_Attribute_Multi_To_Remote (Sync_Attribute) :
+class Sync_Attribute_Multi_To_Remote (Sync_Attribute):
     """ Unconditionally synchronize a set of local attribute to the
         remote tracker. Similar to Sync_Attribute_To_Remote but with
         multiple local attributes. A map *has* to be specified, it is
@@ -1061,72 +1061,72 @@ class Sync_Attribute_Multi_To_Remote (Sync_Attribute) :
         value from the value-space of remote values!
     """
 
-    def __init__ (self, local_names, map, **kw) :
+    def __init__ (self, local_names, map, **kw):
         self.local_names = local_names
         self.__super.__init__ (local_names [0], **kw)
         # 'map' is initialized to None by super call
         self.map         = map
     # end def __init__
 
-    def _check_pattern (self, lv, lvpattern) :
+    def _check_pattern (self, lv, lvpattern):
         """ Match local value (tuple) against pattern, pattern may
             contain the value None for wildcard. Return True if
             matching, False otherwise
         """
         assert len (lv) == len (lvpattern)
-        for v, p in zip (lv, lvpattern) :
-            if p is not None and v != p :
+        for v, p in zip (lv, lvpattern):
+            if p is not None and v != p:
                 return False
         return True
     # end def _check_pattern
 
-    def _sync (self, syncer, id, remote_issue) :
+    def _sync (self, syncer, id, remote_issue):
         # Never sync something to remote if local issue not yet created.
         # Default values of local issue are assigned during creation, so
         # we can't sync these to the remote site during this sync (they
         # would get empty values).
-        if syncer.get_existing_id (id) is None :
+        if syncer.get_existing_id (id) is None:
             return None, None, True
         rv = remote_issue.get (self.remote_name, None)
         x  = syncer.get (id, 'resolution.name')
         lv = tuple (syncer.get (id, n) for n in self.local_names)
-        for lvpattern, rr in self.map :
-            if self._check_pattern (lv, lvpattern) :
+        for lvpattern, rr in self.map:
+            if self._check_pattern (lv, lvpattern):
                 lv = rr
                 break
-        else :
+        else:
             raise ValueError ("Not found: %s" % lv)
         # Note that l_default must be an already-mapped value here, i.e.
         # from the value-space of the remote values.
-        if lv is None and rv is None and self.l_default is not None :
+        if lv is None and rv is None and self.l_default is not None:
             lv = self.l_default
         nosync = (lv == rv)
         return lv, rv, nosync
     # end def _sync
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
-        if not nosync :
+        if not nosync:
             remote_issue.set (self.remote_name, lv, self.type (syncer))
     # end def sync
 
 # end class Sync_Attribute_Multi_To_Remote
 
-class Sync_Attribute_To_Remote_If_Dirty (Sync_Attribute_To_Remote) :
+class Sync_Attribute_To_Remote_If_Dirty (Sync_Attribute_To_Remote):
     """ Like Sync_Attribute_To_Remote but only if the remote issue has
         already changes. Used for timestamps or current owner attributes
         that must be synced to the remote site but only if something
         relevant changed.
     """
 
-    def sync (self, syncer, id, remote_issue) :
-        if remote_issue.dirty :
+    def sync (self, syncer, id, remote_issue):
+        if remote_issue.dirty:
             self.__super.sync (syncer, id, remote_issue)
     # end def sync
 
 # end class Sync_Attribute_To_Remote_If_Dirty
 
-class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
+class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote):
     """ A default, only set if the current value is not set.
         Very useful for required attributes on creation.
         This is set from the local attribute and in case this is also
@@ -1135,7 +1135,7 @@ class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
         remote attribute is empty.
     """
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
         # Note that rv != remote_issue.get in case we do have self.imap
         # in that case we need to check if the *original* attribute
@@ -1144,16 +1144,16 @@ class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote) :
             and not rv
             and not remote_issue.get (self.remote_name, None)
             and lv
-            ) :
+            ):
             type = None
-            if self.name :
+            if self.name:
                 type = self.type (syncer)
             remote_issue.set (self.remote_name, lv, type)
     # end def sync
 
 # end class Sync_Attribute_To_Remote_Default
 
-class Sync_Attribute_Two_Way (Sync_Attribute) :
+class Sync_Attribute_Two_Way (Sync_Attribute):
     """ Two-way sync: We first check if the remote changed since last
         sync. If it did, we update the local tracker -- even if it might
         have changed too. If the remote has not changed we check if we
@@ -1172,41 +1172,41 @@ class Sync_Attribute_Two_Way (Sync_Attribute) :
         values do not match (or a map maps them to equal values).
     """
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         rv      = remote_issue.get (self.remote_name, None)
         lv      = syncer.get (id, self.name)
         nosync  = self.no_sync_necessary (lv, rv, remote_issue)
         old     = syncer.oldremote.get (self.remote_name, None)
         changed = old != rv
-        if self.map :
+        if self.map:
             lv = self.map.get (lv, self.l_default)
-        if self.imap :
+        if self.imap:
             rv = self.imap.get (rv, self.r_default)
-        if nosync :
+        if nosync:
             return
-        if rv is None and lv is None :
-            if self.l_default is not None :
+        if rv is None and lv is None:
+            if self.l_default is not None:
                 lv = self.l_default # this is synced *to* remote
-            if self.r_default is not None :
+            if self.r_default is not None:
                 rv = self.r_default # this is synced *to* local
         # check if remote changed since last sync;
         # Update remote issue if we have r_default and rv is not set
         if  (  (changed and (rv or not self.r_default))
             or (syncer.remote_change and rv is not None)
-            ) :
-            if rv is None :
+            ):
+            if rv is None:
                 print ("WARN: Would set issue%s %s to None" % (id, self.name))
-            else :
+            else:
                 syncer.set (id, self.name, rv)
-        else :
+        else:
             remote_issue.set (self.remote_name, lv, self.type (syncer))
     # end def sync
 
 # end class Sync_Attribute_Two_Way
 
-class Local_Issue (Backend_Common, autosuper) :
+class Local_Issue (Backend_Common, autosuper):
 
-    def __init__ (self, syncer, id, opt, **kw) :
+    def __init__ (self, syncer, id, opt, **kw):
         self.syncer        = syncer
         self.newvalues     = {}
         self.oldvalues     = {}
@@ -1217,61 +1217,61 @@ class Local_Issue (Backend_Common, autosuper) :
         self.__super.__init__ (**kw)
     # end def __init__
 
-    def __getattr__ (self, name) :
+    def __getattr__ (self, name):
         return getattr (self.syncer, name)
     # end def __getattr__
 
-    def get (self, name) :
+    def get (self, name):
         name = self.syncer.get_name_translation (self.default_class, name)
-        if name is None :
+        if name is None:
             return None
-        if name in self.newvalues :
+        if name in self.newvalues:
             return self.newvalues [name]
-        if name not in self.oldvalues :
+        if name not in self.oldvalues:
             classname, path = self.split_name (name)
             sid = self.syncer.get_existing_id (self.id)
-            if name.startswith ('/') and sid :
-                d = {self.default_class : self.id}
+            if name.startswith ('/') and sid:
+                d = {self.default_class: self.id}
                 # Probably only relevant for roundup:
-                if 'ext_tracker' in self.schema [classname] :
+                if 'ext_tracker' in self.schema [classname]:
                     d ['ext_tracker'] = self.tracker
                 itms = self.filter (classname, d)
                 assert len (itms) <= 1
-                if itms :
+                if itms:
                     sid = itms [0]
-                else :
+                else:
                     sid = None
             self.oldvalues [name] = self.get_transitive_item \
                 (classname, path, sid)
         return self.oldvalues [name]
     # end def get
 
-    def set (self, attrname, value) :
+    def set (self, attrname, value):
         name = self.syncer.get_name_translation (self.default_class, attrname)
         self.newvalues [name] = value
         self.dirty = True
     # end def set
 
-    def split_newvalues (self) :
+    def split_newvalues (self):
         """ Split self.newvalues into attributes belonging to issue and
             attributes belonging to ext_tracker_state. After this
             transformation we have all attributes that are in the
             default_class schema under default_class hierarchy in the
             dictionary.
         """
-        classes = { self.default_class : {} }
-        if 'ext_tracker_state' in self.schema :
+        classes = { self.default_class: {} }
+        if 'ext_tracker_state' in self.schema:
             classes ['ext_tracker_state'] = {}
-        for k in self.newvalues :
-            if k.startswith ('/') :
+        for k in self.newvalues:
+            if k.startswith ('/'):
                 # FIXME: Check if rest is composite
                 classname, rest = k.strip ('/').split ('/', 1)
-                if classname not in classes :
+                if classname not in classes:
                     classes [classname] = {}
                 classes [classname][rest] = self.newvalues [k]
-            elif k in self.ext_names :
+            elif k in self.ext_names:
                 classes ['ext_tracker_state'][k] = self.newvalues [k]
-            else :
+            else:
                 # FIXME: Check if k is composite
                 classes [self.default_class][k] = self.newvalues [k]
         return classes
@@ -1279,7 +1279,7 @@ class Local_Issue (Backend_Common, autosuper) :
 
 # end class Local_Issue
 
-class Trackersync_Syncer (Log) :
+class Trackersync_Syncer (Log):
     """ Synchronisation Framework
         We get the mapping of remote attributes to local attributes.
         The type of attribute indicates the action to perform.
@@ -1292,7 +1292,7 @@ class Trackersync_Syncer (Log) :
     # Change in derived class if necessary
     Local_Issue_Class = Local_Issue
 
-    def __init__ (self, remote_name, attributes, opt) :
+    def __init__ (self, remote_name, attributes, opt):
         self.remote_name     = remote_name
         self.attributes      = attributes
         self.opt             = opt
@@ -1305,7 +1305,7 @@ class Trackersync_Syncer (Log) :
         self.reinit           ()
     # end def __init__
 
-    def reinit (self) :
+    def reinit (self):
         self.localissues     = {}
         self.newcount        = 0
         self.oldremote       = {}
@@ -1318,11 +1318,11 @@ class Trackersync_Syncer (Log) :
     # end def reinit
 
     # Don't override in derived class, see Local_Issue
-    def attach_file (self, id, file, name) :
+    def attach_file (self, id, file, name):
         return self.localissues [id].attach_file (file, name)
     # end def attach_file
     
-    def compute_schema (self) :
+    def compute_schema (self):
         """ Compute the schema. The schema is a dictionary of
             dictionaries. The top-level dictionary is indexed by class
             name. The inner dictionaries map attributes names to types.
@@ -1336,55 +1336,55 @@ class Trackersync_Syncer (Log) :
         raise NotImplementedError ("Child must implement schema computation")
     # end def compute_schema
 
-    def create (self, cls, ** kw) :
+    def create (self, cls, ** kw):
         """ Create local item with given attributes,
             attributes are 'key = value' pairs.
         """
-        if cls == 'file' :
+        if cls == 'file':
             self.log_debug ("srv.create %s %s" % (cls, kw.get('name', '?')))
-        else :
+        else:
             self.log_debug ("srv.create %s %s" % (cls, kw))
-        if self.dry_run :
+        if self.dry_run:
             return "9999999"
         return self._create (cls, ** kw)
     # end def create
 
-    def dump_schema (self) :
-        for cls in self.schema :
+    def dump_schema (self):
+        for cls in self.schema:
             print (cls)
             props = self.schema [cls]
-            for pn in props :
+            for pn in props:
                 v = props [pn]
                 print ("    %s: %s" % (pn, v))
     # end def dump_schema
 
     # Don't override in derived class, see Local_Issue
-    def file_attachments (self, id, name) :
-        if self.get_existing_id (id) is None :
+    def file_attachments (self, id, name):
+        if self.get_existing_id (id) is None:
             return []
         return self.localissues [id].file_attachments (name)
     # end def file_attachments
 
     # Don't override in derived class, see Local_Issue
-    def file_exists (self, id, name) :
+    def file_exists (self, id, name):
         return self.localissues [id].file_exists (name)
     # end def file_exists
 
     # Don't override in derived class, see Local_Issue
-    def get_messages (self, id) :
-        if self.get_existing_id (id) is None :
+    def get_messages (self, id):
+        if self.get_existing_id (id) is None:
             return {}
         return self.localissues [id].get_messages ()
     # end def get_messages
 
-    def filter (self, classname, searchdict) :
+    def filter (self, classname, searchdict):
         """ Search for all properties in searchdict and return ids of
             found objects.
         """
         raise NotImplementedError
     # end def filter
 
-    def fix_attributes (self, classname, attrs, create=False) :
+    def fix_attributes (self, classname, attrs, create=False):
         """ Fix transitive attributes. Take care of special cases like
             e.g. roundup's 'content' property
             We distinguish creation and update (transformation might be
@@ -1393,7 +1393,7 @@ class Trackersync_Syncer (Log) :
         return attrs
     # end def fix_attributes
 
-    def from_date (self, date) :
+    def from_date (self, date):
         """ Note that we convert date values to a string representation
             of the form %Y-%m-%d.%H:%M:%S where seconds are with 3
             decimal places, e.g.  2015-09-06.13:51:38.840
@@ -1403,28 +1403,28 @@ class Trackersync_Syncer (Log) :
         return date
     # end def from_date
 
-    def get (self, id, name) :
+    def get (self, id, name):
         return self.localissues [id].get (name)
     # end def get
 
-    def get_classname (self, classname, name) :
+    def get_classname (self, classname, name):
         """ Get the classname of a Link or Multilink property """
         se = self.get_schema_entry (classname, name)
         assert isinstance (se, tuple)
         return se [1]
     # end def get_classname
 
-    def get_default (self, classname, name) :
+    def get_default (self, classname, name):
         """ Get default value for a property 'name' of the given class """
         t = self.get_schema_entry (classname, name)
-        if isinstance (t, tuple) and t [0] == 'Multilink' :
+        if isinstance (t, tuple) and t [0] == 'Multilink':
             v = []
-        else :
+        else:
             v = None
         return v
     # end def get_default
 
-    def get_existing_id (self, id) :
+    def get_existing_id (self, id):
         """ An existing id is either a non-empty string that cannot be
             converted to an integer or a positive integer. Non-existing
             ids are negative integers. Note that ids currently must
@@ -1432,22 +1432,22 @@ class Trackersync_Syncer (Log) :
             None allowed and a 0 for an id is also not allowed).
         """
         assert bool (id)
-        try :
-            if int (id) < 0 :
+        try:
+            if int (id) < 0:
                 return None
-        except ValueError :
+        except ValueError:
             return id
         return id
     # end def get_existing_id
 
-    def get_name_translation (self, classname, name) :
+    def get_name_translation (self, classname, name):
         """ We may have user-defined names for properties that need to
             be translated.
         """
         return name
     # end def get_name_translation
 
-    def get_schema_entry (self, classname, name) :
+    def get_schema_entry (self, classname, name):
         """ In some backends, e.g., Jira, we can have symbolic names,
             too.
         """
@@ -1455,11 +1455,11 @@ class Trackersync_Syncer (Log) :
         return self.schema [classname][name]
     # end def get_schema_entry
 
-    def get_sync_filename (self, remoteid) :
+    def get_sync_filename (self, remoteid):
         return os.path.join (self.opt.syncdir, str (remoteid))
     # end def get_sync_filename
 
-    def get_transitive_item (self, classname, path, id) :
+    def get_transitive_item (self, classname, path, id):
         """ Return the value of the given transitive item.
             The path is a dot-separated transitive property.
             We return the value of the property or the default value for
@@ -1471,19 +1471,19 @@ class Trackersync_Syncer (Log) :
         """
         path = self.get_name_translation (classname, path)
         classname, p, id = self.get_transitive_prop (classname, path, id)
-        if id :
-            if isinstance (id, list) :
+        if id:
+            if isinstance (id, list):
                 r = [self.getitem (classname, i, p) [p] for i in id]
                 r = ','.join (r)
-            else :
+            else:
                 r = self.getitem (classname, id, p) [p]
-            if r and self.get_schema_entry (classname, p) == 'date' :
+            if r and self.get_schema_entry (classname, p) == 'date':
                 return self.from_date (r)
             return r
         return self.get_default (classname, p)
     # end def get_transitive_item
 
-    def get_transitive_prop (self, classname, path, id = None) :
+    def get_transitive_prop (self, classname, path, id = None):
         """ We get a transitive property 'path' and return classname and
             property name and optionally the id.
             Note that id may become a list when processing multilinks on
@@ -1491,18 +1491,18 @@ class Trackersync_Syncer (Log) :
         """
         path = self.get_name_translation (classname, path)
         path = path.split ('.')
-        for p in path [:-1] :
+        for p in path [:-1]:
             assert self.get_type (classname, p) in ('Link', 'Multilink')
-            if id :
-                if isinstance (id, list) :
+            if id:
+                if isinstance (id, list):
                     id = [self.getitem (classname, i, p) [p] for i in id]
-                    if id and isinstance (id [0], list) :
+                    if id and isinstance (id [0], list):
                         id = [item for sublist in id for item in sublist]
-                else :
+                else:
                     item = self.getitem (classname, id, p)
-                    if p in item :
+                    if p in item:
                         id = item [p]
-                    else :
+                    else:
                         id = None
                         self.log.warning \
                             ( "get_transitive_prop: getitem %s %s %s: empty"
@@ -1513,7 +1513,7 @@ class Trackersync_Syncer (Log) :
         return classname, p, id
     # end def get_transitive_prop
 
-    def get_transitive_schema (self, name) :
+    def get_transitive_schema (self, name):
         """ Return the schema entry of transitive property 'name'.
         """
         classname, path = self.split_name (name)
@@ -1521,17 +1521,17 @@ class Trackersync_Syncer (Log) :
         return self.get_schema_entry (classname, prop)
     # end def get_transitive_schema
 
-    def get_type (self, classname, name) :
+    def get_type (self, classname, name):
         """ Get type of property 'name', either a scalar or Link or
             Multilink
         """
         t = self.get_schema_entry (classname, name)
-        if isinstance (t, tuple) :
+        if isinstance (t, tuple):
             return t [0]
         return t
     # end def get_type
 
-    def getitem (self, cls, id, *attr) :
+    def getitem (self, cls, id, *attr):
         """ Get all or given list of attributes of an item of the given cls.
             This must not be used for attributes of the issue which we
             are currently syncing. The sync framework keeps a cache of
@@ -1541,44 +1541,44 @@ class Trackersync_Syncer (Log) :
         raise NotImplementedError
     # end def getitem
 
-    def log_debug (self, msg, *args) :
-        if self.debug :
+    def log_debug (self, msg, *args):
+        if self.debug:
             print (msg, *args)
             self.log.debug (msg)
     # end def log_debug
 
-    def log_info (self, msg, *args) :
+    def log_info (self, msg, *args):
         """ Always log info message. Print to stdout only when verbose
             logging is enabled.
         """
-        if self.verbose :
+        if self.verbose:
             print (msg, *args)
         self.log.info (msg)
     # end def log_info
 
-    def log_verbose (self, msg, *args) :
-        if self.verbose :
+    def log_verbose (self, msg, *args):
+        if self.verbose:
             print (msg, *args)
             self.log.info (msg)
     # end def log_verbose
 
-    def lookup (self, cls, key) :
+    def lookup (self, cls, key):
         """ Look up an item of the given class by key (e.g. name)
             and return the ID
         """
         raise NotImplementedError
     # end def lookup
 
-    def set (self, id, attrname, value) :
+    def set (self, id, attrname, value):
         self.localissues [id].set (attrname, value)
     # end def set
 
-    def setitem (self, cls, id, ** kw) :
+    def setitem (self, cls, id, ** kw):
         """ Set attributes of an item of the given cls,
             attributes are 'key = value' pairs.
         """
         self.log_debug ("setitem %s:%s %s" % (cls, id, kw))
-        if not self.dry_run :
+        if not self.dry_run:
             items = dict \
                 ((self.get_name_translation (cls, k), v)
                  for k, v in kw.items ()
@@ -1586,18 +1586,18 @@ class Trackersync_Syncer (Log) :
             return self._setitem (cls, id, ** items)
     # end def setitem
 
-    def split_name (self, name) :
-        if not name :
+    def split_name (self, name):
+        if not name:
             return None
-        if name.startswith ('/') :
+        if name.startswith ('/'):
             classname, path = name.strip ('/').split ('/', 1)
-        else :
+        else:
             classname = self.default_class
             path = name
         return classname, path
     # end split_name
 
-    def sync (self, remote_id, remote_issue) :
+    def sync (self, remote_id, remote_issue):
         """ We try to find issue with the given remote_id and then call
             the sync framework. If no issue with the given remote_id is
             found, a new issue will be created after all attributes have
@@ -1606,7 +1606,7 @@ class Trackersync_Syncer (Log) :
         do_sync = False
         id = self.get_oldvalues (remote_id)
 
-        if id :
+        if id:
             # This used to test for equalness of old.as_json and the
             # json representation of the remote_issue and only then
             # set do_sync -- this is wrong as we might have local
@@ -1616,7 +1616,7 @@ class Trackersync_Syncer (Log) :
             assert id not in self.localissues
             self.localissues [id] = self.Local_Issue_Class \
                 (self, id, opt = self.opt)
-        else :
+        else:
             self.newcount += 1
             id = -self.newcount
             assert id not in self.localissues
@@ -1630,26 +1630,26 @@ class Trackersync_Syncer (Log) :
         # attributes.
         attr = remote_issue.attributes
         # Don't sync a subset of attributes if local issue doesn't exist
-        if self.get_existing_id (id) is None and attr :
+        if self.get_existing_id (id) is None and attr:
             return
         self.id = id
-        for a in self.attributes :
-            if a.only_create :
+        for a in self.attributes:
+            if a.only_create:
                 continue
-            if a.strip_prefix :
+            if a.strip_prefix:
                 remote_issue.strip_prefix (a.remote_name, a.strip_prefix)
-            if not attr or a.remote_name in attr :
+            if not attr or a.remote_name in attr:
                 self.log_debug \
                     ( "sa: id:%s %s %s %s"
                     % (id, a.__class__.__name__, a.name, a.remote_name)
                     )
-                if a.sync (self, id, remote_issue) :
+                if a.sync (self, id, remote_issue):
                     self.log_info ("Not syncing: %s/%s" % (id, remote_id))
                     return
 
         # Note: This already updates the syncdb!
-        if self.get_existing_id (id) is None :
-            if not remote_issue.attributes :
+        if self.get_existing_id (id) is None:
+            if not remote_issue.attributes:
                 self.log_verbose \
                     ("create issue: %s" % self.localissues [id].newvalues)
                 classdict = self.localissues [id].split_newvalues ()
@@ -1667,27 +1667,27 @@ class Trackersync_Syncer (Log) :
                 del self.localissues [id]
                 self.update_aux_classes \
                     (iid, remote_id, remote_issue, classdict)
-        elif self.localissues [id].dirty or remote_issue.dirty :
+        elif self.localissues [id].dirty or remote_issue.dirty:
             self.update_issue (id, remote_id, remote_issue)
-        if remote_issue.dirty :
+        if remote_issue.dirty:
             # This is expected to *not* change the syncdb anymore
-            if not self.dry_run and not self.remote_dry_run :
+            if not self.dry_run and not self.remote_dry_run:
                 self.log_verbose ("Update remote:", remote_issue.newvalues)
                 remote_issue.update (self)
-            else :
+            else:
                 self.log_verbose ("DRYRUN upd remote:", remote_issue.newvalues)
     # end def sync
 
-    def oldsync_iter (self) :
+    def oldsync_iter (self):
         """ Iterate over all remote ids from previous syncs (all remote
             ids in the sync database)
         """
-        for d in os.listdir (self.opt.syncdir) :
-            if not d.startswith ('__') :
+        for d in os.listdir (self.opt.syncdir):
+            if not d.startswith ('__'):
                 yield (d)
     # end def oldsync_iter
 
-    def get_oldvalues (self, remote_id) :
+    def get_oldvalues (self, remote_id):
         """ Get the sync status (e.g., old properties of last sync of
             remote issue). Side-effect: Set self.oldremote, this
             contains the dictionary of property values from last sync.
@@ -1696,25 +1696,25 @@ class Trackersync_Syncer (Log) :
         self.oldremote = {}
         fn = self.get_sync_filename (remote_id)
         j  = None
-        try :
-            with open (fn, 'r') as f :
+        try:
+            with open (fn, 'r') as f:
                 j = f.read ()
-        except EnvironmentError :
+        except EnvironmentError:
             pass
-        if not j :
+        if not j:
             return None
         d  = self.oldremote = json.loads (j)
         id = d ['__local_id__']
-        try :
+        try:
             self.get_transitive_item (self.default_class, 'id', id)
-        except RuntimeError as err :
-            if err.message.startswith ('Error 404') :
+        except RuntimeError as err:
+            if err.message.startswith ('Error 404'):
                 id = None
                 self.oldremote = {}
         return id
     # end def get_oldvalues
 
-    def sync_new_local_issue (self, iid) :
+    def sync_new_local_issue (self, iid):
         """ Sync this new local issue (must never have been synced to
             remote side) to the remote side creating it there.
             Never called if sync_new_local_issues (note the 's') below is
@@ -1724,27 +1724,27 @@ class Trackersync_Syncer (Log) :
         self.localissues [iid] = self.Local_Issue_Class \
             (self, iid, opt = self.opt)
         do_sync = True
-        for a in self.attributes :
-            if a.only_update :
+        for a in self.attributes:
+            if a.only_update:
                 continue
             self.log_debug \
                 ( "sa: id:%s %s %s %s"
                 % (iid, a.__class__.__name__, a.name, a.remote_name)
                 )
-            if a.sync (self, iid, remote_issue) :
+            if a.sync (self, iid, remote_issue):
                 self.log_info ("Not syncing: %s" % iid)
                 do_sync = False
                 break
-        if not do_sync :
+        if not do_sync:
             return
         self.log_verbose ("remote_issue.create", remote_issue.newvalues)
         rid = remote_issue.create ()
-        if not rid :
+        if not rid:
             raise ValueError ("Didn't receive correct remote issue on creation")
         self.update_issue (iid, rid, remote_issue)
     # end def sync_new_local_issue
 
-    def sync_new_local_issues (self, new_remote_issue) :
+    def sync_new_local_issues (self, new_remote_issue):
         """ Loop over all local issues that should be synced to the
             remote side but never were synced so far. This needs some
             marks on local issues to determine which issues to sync (we
@@ -1755,7 +1755,7 @@ class Trackersync_Syncer (Log) :
         pass
     # end def sync_new_local_issues
 
-    def update_aux_classes (self, id, remote_id, remote_issue, classdict) :
+    def update_aux_classes (self, id, remote_id, remote_issue, classdict):
         """ Auxiliary classes, e.g. for KPM an item that links to issue
             and holds additional attributes. 
             All of those must have a Link named 'issue' to the current issue.
@@ -1767,24 +1767,24 @@ class Trackersync_Syncer (Log) :
         self.log_verbose ("updated aux: %s/%s" % (id, remote_id))
     # end def update_aux_classes
 
-    def update_issue (self, id, remote_id, remote_issue) :
+    def update_issue (self, id, remote_id, remote_issue):
         self.log_verbose \
             ("set issue %s: %s" % (id, self.localissues [id].newvalues))
         classdict = self.localissues [id].split_newvalues ()
         attr = self.fix_attributes \
             (self.default_class, classdict [self.default_class])
         self.log_verbose ("Update local (after fixattr):", attr)
-        if self.localissues [id].dirty :
-            if attr :
+        if self.localissues [id].dirty:
+            if attr:
                 self.setitem (self.default_class, id, ** attr)
         del classdict [self.default_class]
         self.update_aux_classes (id, remote_id, remote_issue, classdict)
         self.log_info ("Synced: %s/%s" % (id, remote_id))
     # end def update_issue
 
-    def update_sync_db (self, iid, rid, remote_issue, classdict) :
+    def update_sync_db (self, iid, rid, remote_issue, classdict):
         fn = self.get_sync_filename (rid)
-        with open (fn, "w") as f :
+        with open (fn, "w") as f:
             f.write (remote_issue.as_json (__local_id__ = iid))
     # end def update_sync_db
 

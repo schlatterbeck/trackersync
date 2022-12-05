@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2020-21 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2020-22 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -27,9 +27,9 @@ import os
 import sys
 import requests
 import logging.config
-try :
+try:
     from urllib.parse   import urlencode, parse_qs
-except ImportError :
+except ImportError:
     from urllib         import urlencode
     from urlparse       import parse_qs
 from argparse           import ArgumentParser
@@ -50,31 +50,31 @@ from zeep.helpers       import serialize_object
 from trackersync        import tracker_sync
 from trackersync        import jira_sync
 
-class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute) :
+class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
 
-    def __init__ (self, prefix = None, ** kw) :
+    def __init__ (self, prefix = None, ** kw):
         self.__super.__init__ (local_name = None, ** kw)
         self.prefix = prefix
     # end def __init__
 
-    def sync (self, syncer, id, remote_issue) :
+    def sync (self, syncer, id, remote_issue):
         """ Note that like for all Sync_Attribute classes the remote
             issue is the KPM issue.
         """
-        if self.l_only_update and syncer.get_existing_id (id) is None :
+        if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         lmsg = syncer.get_messages (id)
         # Get previously synced keys
         remote_issue.get_old_message_keys (syncer)
         local_issue = syncer.localissues [id]
         aussagen = []
-        try :
+        try:
             aussagen = remote_issue.Aussagen
-        except AttributeError :
+        except AttributeError:
             pass
-        for k in aussagen :
+        for k in aussagen:
             a = remote_issue.Aussagen [k]
-            if a.get ('foreign_id') :
+            if a.get ('foreign_id'):
                 continue
             message = local_issue.Message_Class \
                 ( local_issue
@@ -88,31 +88,31 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute) :
             a ['foreign_id'] = local_issue.add_message (message)
             assert a ['foreign_id']
             remote_issue.dirty = True
-        if self.prefix :
-            for id in lmsg :
-                if id in remote_issue.msg_by_foreign_id :
+        if self.prefix:
+            for id in lmsg:
+                if id in remote_issue.msg_by_foreign_id:
                     continue
-                if not lmsg [id].content.startswith (self.prefix) :
+                if not lmsg [id].content.startswith (self.prefix):
                     continue
                 msg = self._mangle_rec (lmsg [id])
                 remote_issue.add_message (msg)
     # end def sync
 
-    def _mangle_rec (self, oldrec) :
+    def _mangle_rec (self, oldrec):
         rec = oldrec.copy ()
-        if rec.content.startswith (self.prefix) :
+        if rec.content.startswith (self.prefix):
             rec.content = rec.content [len (self.prefix):].lstrip ()
         return rec
     # end def _mangle_rec
 
 # end class Sync_Attribute_KPM_Message
 
-class Config (Config_File) :
+class Config (Config_File):
 
     config = 'kpm_ws_config'
     path   = '/etc/trackersync'
 
-    def __init__ (self, path = path, config = config) :
+    def __init__ (self, path = path, config = config):
         self.__super.__init__ \
             ( path, config
             , LOCAL_TRACKER = 'jira'
@@ -135,7 +135,7 @@ logging_cfg = dict \
             }
         )
     , loggers = 
-        { 'zeep.transports' : dict
+        { 'zeep.transports': dict
             ( level     = 'INFO'
             , propagate = True
             , handlers  = ['syslog']
@@ -144,59 +144,59 @@ logging_cfg = dict \
     )
 logging.config.dictConfig (logging_cfg)
 
-class KPM_File_Attachment (tracker_sync.File_Attachment) :
+class KPM_File_Attachment (tracker_sync.File_Attachment):
 
-    def __init__ (self, issue, **kw) :
+    def __init__ (self, issue, **kw):
         self.description = self.permission = None
         self._content = self._name = self._type = None
-        for k in 'content', 'name', 'type' :
+        for k in 'content', 'name', 'type':
             setattr (self, '_' + k, kw.get (k, None))
-            if k in kw :
+            if k in kw:
                 del kw [k]
-        for k in 'permission', 'description' :
-            if k in kw :
+        for k in 'permission', 'description':
+            if k in kw:
                 setattr (self, k, kw.get (k))
                 del kw [k]
         self.__super.__init__ (issue, **kw)
     # end def __init__
 
     @property
-    def content (self) :
-        if self._content is None :
+    def content (self):
+        if self._content is None:
             self._get_file ()
         return self._content
     # end def content
 
     @property
-    def name (self) :
-        if self._name is None :
+    def name (self):
+        if self._name is None:
             self._get_file ()
         return self._name
     # end def name
 
     @property
-    def type (self) :
+    def type (self):
         return self._type
     # end def type
 
-    def _get_file (self) :
+    def _get_file (self):
         f = self.issue.kpm.get_file (self)
-        if f is not None :
+        if f is not None:
             self._content = f ['Data']
-            if not self._name :
-                if f ['Suffix'] :
+            if not self._name:
+                if f ['Suffix']:
                     self._name = '.'.join ((f ['Name'], f ['Suffix']))
-                else :
+                else:
                     self._name = f ['Name']
-            if not self.permission :
+            if not self.permission:
                 self.permission = f ['AccessRight']
-            if not self.description :
+            if not self.description:
                 self.description = f ['Description']
     # end def _get_file
 
 # end class KPM_File_Attachment
 
-class Problem (tracker_sync.Remote_Issue) :
+class Problem (tracker_sync.Remote_Issue):
 
     # Allow to access deep datastructures with multilevel keys delimited
     # with '.'
@@ -204,7 +204,7 @@ class Problem (tracker_sync.Remote_Issue) :
 
     File_Attachment_Class = KPM_File_Attachment
 
-    def __init__ (self, kpm, id, rec, canceled = False, raw = False) :
+    def __init__ (self, kpm, id, rec, canceled = False, raw = False):
         self.kpm         = kpm
         self.debug       = self.kpm.debug
         self.canceled    = canceled
@@ -212,20 +212,20 @@ class Problem (tracker_sync.Remote_Issue) :
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         attributes = {}
-        if self.canceled :
+        if self.canceled:
             attributes ['Status'] = True
         self.__super.__init__ (rec, attributes)
         self.id = self.record ['ProblemNumber']
         self.messages = []
     # end def __init__
 
-    def add_message (self, msg) :
+    def add_message (self, msg):
         self.dirty = True
         msgid = self.kpm.add_message (self, msg)
         return msgid
     # end def add_message
 
-    def convert_date (self, value) :
+    def convert_date (self, value):
         """ Convert date from roundup value to KPM WS date
             representation. Used only for KPM 'Datum'. Currently we
             don't care about timezone, KPM document doesn't specify the
@@ -234,19 +234,19 @@ class Problem (tracker_sync.Remote_Issue) :
             This is automagically called by framework for each roundup
             date property.
         """
-        if not value :
+        if not value:
             return value
         dt = datetime.strptime (value, "%Y-%m-%d.%H:%M:%S.%f")
         return dt.strftime ('%Y-%m-%d-%H.%M.%S.%f')
     # end def convert_date
 
-    def file_attachments (self, name = None) :
-        if self.attachments is None :
+    def file_attachments (self, name = None):
+        if self.attachments is None:
             self.attachments = []
-            for d in self.kpm.document_list (self) :
-                if d ['Suffix'] :
+            for d in self.kpm.document_list (self):
+                if d ['Suffix']:
                     name = '.'.join ((d ['Name'], d ['Suffix']))
-                else :
+                else:
                     name = d ['Name']
                 f = KPM_File_Attachment \
                     ( self
@@ -259,53 +259,53 @@ class Problem (tracker_sync.Remote_Issue) :
         return self.attachments
     # end def file_attachments
 
-    def create (self) :
+    def create (self):
         """ Create new remote issue
         """
         raise NotImplementedError ("Creation in KPM not yet implemented")
     # end def create
 
-    def get_old_message_keys (self, syncer) :
+    def get_old_message_keys (self, syncer):
         aussagen = syncer.oldremote.get ('Aussagen', {})
-        for k in aussagen :
+        for k in aussagen:
             d = aussagen [k]
-            if 'foreign_id' in d :
+            if 'foreign_id' in d:
                 self ['Aussagen'][k]['foreign_id'] = d ['foreign_id']
         self.msg_by_foreign_id = {}
         mlist = []
-        try :
+        try:
             mlist = self ['Aussagen']
-        except KeyError :
+        except KeyError:
             pass
-        for k in mlist :
+        for k in mlist:
             m = self ['Aussagen'][k]
             fk = m.get ('foreign_id')
-            if fk :
+            if fk:
                 self.msg_by_foreign_id [fk] = k
     # end def get_old_message_keys
 
-    def sync (self, syncer) :
+    def sync (self, syncer):
         syncer.log.info ('Syncing %s' % self.id)
-        try :
+        try:
             syncer.sync (self.id, self)
-        except Exception :
+        except Exception:
             syncer.log.error ("Error syncing %s" % self.id)
             syncer.log_exception ()
             print ("Error syncing %s" % self.id)
             print_exc ()
     # end def sync
 
-    def update (self, syncer) :
+    def update (self, syncer):
         """ Update remote issue tracker with self.newvalues.
         """
-        if self.dirty :
+        if self.dirty:
             # This check needs update if we ever create issues
             self.kpm.update (self)
     # end def update
 
 # end def Problem
 
-class KPM_Header (autosuper) :
+class KPM_Header (autosuper):
     """ Tools to build the header for the webservice request.
         Note that the stage *should* be given in the constructor.
         Possible parameters are 'Test', 'Production' or 'QualityAssurance'
@@ -321,54 +321,54 @@ class KPM_Header (autosuper) :
     wspath  = '/PP/QM/GroupProblemManagementService/V3'
     wsuri   = ws + wspath
 
-    def __init__ (self, stage = 'Production', brand = None) :
+    def __init__ (self, stage = 'Production', brand = None):
         self.stage  = stage
         self.brand  = brand
     # end def __init__
 
-    def element (self, ns, name, value) :
+    def element (self, ns, name, value):
         e = Element (self.tag (ns, name))
         e.text = str (value)
         return e
     # end def element
 
-    def header (self, rqname) :
+    def header (self, rqname):
         h = [ self.element (self.adr_ns, 'To',        self.wsuri)
             , self.element (self.adr_ns, 'Action',    self.rq (rqname))
             , self.element (self.adr_ns, 'MessageID', self.seqno)
             , self.element (self.vw_ns,  'Stage',     self.stage)
             #, self.element (self.vw_ns,  'Country',   'AT')
             ]
-        if self.brand :
+        if self.brand:
             h.append (self.element (self.vw_ns, 'Brand', self.brand))
         return h
     # end def header
 
     @property
-    def seqno (self) :
+    def seqno (self):
         return 'urn:uuid:' + str (uuid4 ())
     # end def seqno
 
-    def rq (self, rqname) :
+    def rq (self, rqname):
         return self.xmldefs + self.wspath + '/KpmService/' + rqname
     # end def rq
 
-    def tag (self, ns, name) :
+    def tag (self, ns, name):
         return '{%s}%s' % (ns, name)
     # end def tag
 
-    def __str__ (self) :
+    def __str__ (self):
         tree = ElementTree ()
         tree._setroot (Element ('Header'))
         r = tree.getroot ()
-        for e in self.header ('HUHU') :
+        for e in self.header ('HUHU'):
             r.append (e)
         return tostring (tree, pretty_print = True, encoding = 'unicode')
     # end def __str__
 
 # end class KPM_Header
 
-class KPM_WS (Log, Lock_Mixin) :
+class KPM_WS (Log, Lock_Mixin):
     """ Interactions with the KPM web service interface
     """
 
@@ -380,7 +380,7 @@ class KPM_WS (Log, Lock_Mixin) :
         , debug   = False
         , lock    = None
         , ** kw
-        ) :
+        ):
         self.cfg      = cfg
         self.cert     = cfg.KPM_CERTPATH
         self.key      = cfg.KPM_KEYPATH
@@ -390,7 +390,7 @@ class KPM_WS (Log, Lock_Mixin) :
         self.verbose  = verbose
         self.debug    = debug
         self.session  = requests.Session ()
-        if timeout :
+        if timeout:
             self.session.timeout = timeout
         self.session.cert = (self.cert, self.key)
         transport   = Transport \
@@ -402,13 +402,13 @@ class KPM_WS (Log, Lock_Mixin) :
             (UserId = self.cfg.KPM_USERNAME)
         self.adr    = self.fac.Address \
             (OrganisationalUnit = self.cfg.KPM_OU, Plant = self.cfg.KPM_PLANT)
-        if lock :
+        if lock:
             self.lockfile = lock
         self.header = KPM_Header (stage = self.cfg.KPM_STAGE)
         self.__super.__init__ (** kw)
     # end def __init__
 
-    def __iter__ (self) :
+    def __iter__ (self):
         """ Iterate over all relevant 'Problem' records
         """
         self.log.debug ('In __iter__')
@@ -422,9 +422,9 @@ class KPM_WS (Log, Lock_Mixin) :
             , PassiveOverview      = False
             , _soapheaders         = head
             )
-        if self.check_error ('GetMultipleProblemData', info) :
+        if self.check_error ('GetMultipleProblemData', info):
             return
-        for pr in info ['ProblemReference'] :
+        for pr in info ['ProblemReference']:
             id = pr ['ProblemNumber']
             head   = self.header.header ('GetProblemActionsRequest')
             rights = self.client.service.GetProblemActions \
@@ -432,9 +432,9 @@ class KPM_WS (Log, Lock_Mixin) :
                 , ProblemNumber        = id
                 , _soapheaders         = head
                 )
-            if self.check_error ('GetProblemActions', rights) :
+            if self.check_error ('GetProblemActions', rights):
                 continue
-            if 'GET_DEVELOPMENT_PROBLEM_DATA' not in rights ['Action'] :
+            if 'GET_DEVELOPMENT_PROBLEM_DATA' not in rights ['Action']:
                 self.log.info ("No right to get problem data for %s" % id)
                 continue
             head = self.header.header ('GetDevelopmentProblemDataRequest')
@@ -443,7 +443,7 @@ class KPM_WS (Log, Lock_Mixin) :
                 , ProblemNumber        = id
                 , _soapheaders         = head
                 )
-            if self.check_error ('GetDevelopmentProblemData', rec) :
+            if self.check_error ('GetDevelopmentProblemData', rec):
                 continue
             rec = rec ['DevelopmentProblem']
             rec = serialize_object (rec)
@@ -451,17 +451,17 @@ class KPM_WS (Log, Lock_Mixin) :
             self.make_serializable (rec)
             rec ['Aussagen'] = {}
             pss = self.get_process_steps (id)
-            for ps in pss :
+            for ps in pss:
                 pstype = ps ['ProcessStepTypeDescription']
-                if pstype == 'Lieferantenaussage' :
+                if pstype == 'Lieferantenaussage':
                     sr = ps ['SupplierResponse']
                     rec ['SupplierResponse'] = ps ['Text']
                     if sr is not None:
                         rec ['SupplierVersionOk']   = sr ['VersionOk']
                         rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
-                if pstype == 'Analyse abgeschlossen' :
+                if pstype == 'Analyse abgeschlossen':
                     rec ['Analysis'] = ps ['Text']
-                if pstype == 'Aussage' :
+                if pstype == 'Aussage':
                     psid = ps ['ProcessStepId']
                     rec ['Aussagen'][psid] = dict \
                         ( id      = psid
@@ -470,7 +470,7 @@ class KPM_WS (Log, Lock_Mixin) :
                         )
             p = Problem (self, id, rec, raw = raw)
             # If raw elements exist, parsing wasn't fully successful
-            if p.raw :
+            if p.raw:
                 tags = ','.join (x.tag for x in p.raw)
                 self.log.warn \
                     ('KPM-%s has raw elements with tags: %s' % (p.id, tags))
@@ -478,26 +478,26 @@ class KPM_WS (Log, Lock_Mixin) :
             yield (p)
     # end def __iter__
 
-    def check_error (self, rq, msg) :
+    def check_error (self, rq, msg):
         c = 'Communication: '
-        if 'ResponseMessage' not in msg :
+        if 'ResponseMessage' not in msg:
             self.log.error ("%s%s: No ResponseMessage found" % (c, rq))
             return 1
-        if 'MessageText' not in msg ['ResponseMessage'] :
+        if 'MessageText' not in msg ['ResponseMessage']:
             self.log.error ("%s%s: No MessageText found" % (c, rq))
             return 1
         txt = msg ['ResponseMessage']['MessageText']
-        if 'success' not in txt :
+        if 'success' not in txt:
             self.log.error ("%s%s: Error: %s" % (c, rq, txt))
             return 1
         return 0
     # end def check_error
 
-    def add_message (self, problem, msg) :
-        if 'ADD_NOTICE' not in problem.allowed_actions :
+    def add_message (self, problem, msg):
+        if 'ADD_NOTICE' not in problem.allowed_actions:
             self.log.error \
                 ('No permission to add message to %s' % problem.id)
-        else :
+        else:
             head = self.header.header ('AddNoticeRequest')
             r    = self.client.service.AddNotice \
                 ( UserAuthentification = self.auth
@@ -517,23 +517,23 @@ class KPM_WS (Log, Lock_Mixin) :
                 )
     # end def add_message
 
-    def fix_process_step_date (self, timestamp) :
+    def fix_process_step_date (self, timestamp):
         """ Workaround: Seems the ID is in different date format
             The IDs returned with GetProcessStepList are in a different
             format than the ID returned with AddNotice.
         """
-        try :
+        try:
             dt = datetime.strptime (timestamp, "%Y-%m-%d %H:%M:%S.%f")
             return dt.strftime ("%Y-%m-%d-%H.%M.%S.%f")
-        except ValueError :
+        except ValueError:
             pass
         # Make sure it's the right format before returning:
         dt = datetime.strptime (timestamp, "%Y-%m-%d-%H.%M.%S.%f")
         return timestamp
     # end def fix_process_step_date
 
-    def document_list (self, problem) :
-        if 'GET_DOCUMENT_LIST' not in problem.allowed_actions :
+    def document_list (self, problem):
+        if 'GET_DOCUMENT_LIST' not in problem.allowed_actions:
             self.log.error \
                 ('No permission to list documents for %s' % problem.id)
             return []
@@ -543,20 +543,20 @@ class KPM_WS (Log, Lock_Mixin) :
             , ProblemNumber        = problem.id
             , _soapheaders         = head
             )
-        if self.check_error ('GetDocumentList', pl) :
+        if self.check_error ('GetDocumentList', pl):
             return []
         return pl ['DocumentReference']
     # end def document_list
 
-    def get_file (self, doc) :
+    def get_file (self, doc):
         issue = doc.issue
-        if getattr (doc, 'permission', None) != '0' :
+        if getattr (doc, 'permission', None) != '0':
             self.log.error \
                 ( 'No permission on document %s of issue %s'
                 % (doc.id, issue.id)
                 )
             return
-        if 'GET_DOCUMENT' not in issue.allowed_actions :
+        if 'GET_DOCUMENT' not in issue.allowed_actions:
             self.log.error \
                 ('No permission to retrieve document for %s' % issue.id)
             return
@@ -567,12 +567,12 @@ class KPM_WS (Log, Lock_Mixin) :
             , DocumentId           = doc.id
             , _soapheaders         = head
             )
-        if self.check_error ('GetDocument', doc) :
+        if self.check_error ('GetDocument', doc):
             return
         return doc ['Document']
     # end def get_file
 
-    def get_process_steps (self, problem_id) :
+    def get_process_steps (self, problem_id):
         """ Get additional information about problem that is carried
             only in process steps.
         """
@@ -586,16 +586,16 @@ class KPM_WS (Log, Lock_Mixin) :
         # Loop over steps and decide which to retrieve
         latest    = {}
         steplist  = []
-        for ps in info ['ProcessStepItem'] :
+        for ps in info ['ProcessStepItem']:
             assert int (ps ['ProblemNumber']) == int (problem_id)
             pstype = ps ['ProcessStepTypeDescription']
             psid   = ps ['ProcessStepId']
-            for relevant in 'Lieferantenaussage', 'Analyse abgeschlossen' :
-                if pstype == relevant :
+            for relevant in 'Lieferantenaussage', 'Analyse abgeschlossen':
+                if pstype == relevant:
                     # Only keep newest
-                    if relevant not in latest or latest [relevant] < psid :
+                    if relevant not in latest or latest [relevant] < psid:
                         latest [relevant] = psid
-            if pstype == 'Aussage' :
+            if pstype == 'Aussage':
                 steplist.append (psid)
         head = self.header.header ('GetProcessStepsRequest')
         info = self.client.service.GetProcessSteps \
@@ -608,50 +608,50 @@ class KPM_WS (Log, Lock_Mixin) :
         return info ['ProcessStep']
     # end def get_process_steps
 
-    def make_serializable (self, rec) :
+    def make_serializable (self, rec):
         """ This makes the returned data structure serializable (e.g.
             convert date to string) and fixes some problems with the
             data, e.g., the ProblemNumber is numeric which needs to be a
             string.
         """
-        for k in rec.keys () :
-            if k == 'ProblemNumber' :
+        for k in rec.keys ():
+            if k == 'ProblemNumber':
                 rec [k] = str (rec [k])
-            elif k == 'Rating' and rec [k] is not None :
+            elif k == 'Rating' and rec [k] is not None:
                 rec [k] = rec [k].strip ()
-            elif k == '_raw_elements' :
+            elif k == '_raw_elements':
                 del rec [k]
-            elif isinstance (rec [k], type ({})) :
+            elif isinstance (rec [k], type ({})):
                 self.make_serializable (rec [k])
-            elif isinstance (rec [k], (list, deque)) :
+            elif isinstance (rec [k], (list, deque)):
                 r = dict ((n, item) for n, item in enumerate (rec [k]))
                 self.make_serializable (r)
                 rec [k] = list (r [i] for i in sorted (r))
-            elif isinstance (rec [k], date) :
+            elif isinstance (rec [k], date):
                 rec [k] = rec [k].strftime ('%Y-%m-%d')
-            elif isinstance (rec [k], _Element) :
+            elif isinstance (rec [k], _Element):
                 rec [k] = str (rec [k])
     # end def make_serializable
 
-    def update (self, problem) :
+    def update (self, problem):
         response_attrs = set \
             (( 'SupplierStatus', 'SupplierErrorNumber'
             ,  'SupplierVersionOk', 'SupplierResponse'
             ))
         nv = set (problem.newvalues.keys ())
         # Only update if at least one of the attributes is in newvalues
-        if response_attrs & nv :
+        if response_attrs & nv:
             self.update_supplier_response (problem)
     # end def update
 
-    def update_supplier_response (self, problem) :
+    def update_supplier_response (self, problem):
         d = dict \
             ( Status      = problem.SupplierStatus
             , ErrorNumber = problem.SupplierErrorNumber
             )
-        if problem.newvalues.get ('SupplierVersionOk', None) :
+        if problem.newvalues.get ('SupplierVersionOk', None):
             d ['VersionOk'] = problem.newvalues ['SupplierVersionOk']
-        else :
+        else:
             d ['VersionOk'] = None
         sr = self.fac.SupplierResponse (** d)
         h = self.header.header ('AddSupplierResponseRequest')
@@ -662,10 +662,10 @@ class KPM_WS (Log, Lock_Mixin) :
             , _soapheaders         = h
             )
         d ['ResponseText'] = problem.SupplierResponse
-        if 'ADD_SUPPLIER_RESPONSE' not in problem.allowed_actions :
+        if 'ADD_SUPPLIER_RESPONSE' not in problem.allowed_actions:
             self.log.error \
                 ('No permission to set supplier response for %s' % problem.id)
-        else :
+        else:
             r = self.client.service.AddSupplierResponse (** d)
             self.check_error ('AddSupplierResponse', r)
     # end def update_supplier_response
@@ -674,7 +674,7 @@ class KPM_WS (Log, Lock_Mixin) :
 
 local_trackers = dict (jira = jira_sync.Syncer)
 
-def main () :
+def main ():
     cmd = ArgumentParser ()
     cmd.add_argument \
         ( "-c", "--config"
@@ -765,7 +765,7 @@ def main () :
     opt     = cmd.parse_args ()
     config  = Config.config
     cfgpath = Config.path
-    if opt.config :
+    if opt.config:
         cfgpath, config = os.path.split (opt.config)
         config = os.path.splitext (config) [0]
     cfg = Config (path = cfgpath, config = config)
@@ -785,35 +785,35 @@ def main () :
     opt.url            = url
     opt.local_tracker  = ltracker
     syncer = None
-    if url and cfg.get ('KPM_ATTRIBUTES') :
-        try :
+    if url and cfg.get ('KPM_ATTRIBUTES'):
+        try:
             syncer = local_trackers [opt.local_tracker] \
                 ('KPM', cfg.KPM_ATTRIBUTES, opt)
-        except :
+        except:
             kpm.log_exception ()
             kpm.log.error ("Exception before starting sync")
             # Better explicit, twice won't hurt
             kpm.unlock ()
             return 1
-    if opt.schema_only :
+    if opt.schema_only:
         syncer.dump_schema ()
         sys.exit (0)
 
     nproblems = 0
-    try :
-        for problem in kpm :
+    try:
+        for problem in kpm:
             problem.sync (syncer)
             nproblems += 1
-    except :
+    except:
         kpm.log_exception ()
         kpm.log.error \
             ("Exception while syncing, synced %d KPM issues" % nproblems)
         # Normally unlock is registered as an atexit handler.
         # No idea why this is not called when a zeep exception occurs.
         kpm.unlock ()
-    else :
+    else:
         kpm.log.info ("Synced %d KPM issues" % nproblems)
 # end def main
 
-if __name__ == '__main__' :
+if __name__ == '__main__':
     main ()
