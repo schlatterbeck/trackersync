@@ -424,7 +424,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         u = self.url + '/' + cls
         d = dict (fields = kw)
         self.log.debug ('Jira send POST: %s' % u)
-        for line in json.dumps (d, indent = 4):
+        for line in json.dumps (d, indent = 4).split ('\n'):
             self.log.debug (line)
         r = self.session.post \
             (u, data = json.dumps (d), headers = self.json_header)
@@ -662,7 +662,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         """
         u = self.url + '/' + cls + '/' + id
         self.log.debug ('Jira send PUT: %s' % u)
-        for line in json.dumps (kw, indent = 4):
+        for line in json.dumps (kw, indent = 4).split ('\n'):
             self.log.debug (line)
         r = self.session.put \
             (u, headers = self.json_header, data = json.dumps (kw))
