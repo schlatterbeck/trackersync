@@ -683,6 +683,10 @@ def main ():
         , default = '/etc/trackersync/kpm_ws_config.py'
         )
     cmd.add_argument \
+        ( "--check-method"
+        , help    = "Test available methods on given endpoint"
+        )
+    cmd.add_argument \
         ( "-D", "--debug"
         , help    = "Debugging"
         , action  = 'store_true'
@@ -812,6 +816,9 @@ def main ():
             return 1
     if opt.schema_only:
         syncer.dump_schema ()
+        sys.exit (0)
+    if opt.check_method:
+        syncer.check_method (opt.check_method)
         sys.exit (0)
 
     nproblems = 0

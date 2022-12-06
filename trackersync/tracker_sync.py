@@ -1359,6 +1359,13 @@ class Trackersync_Syncer (Log):
                 print ("    %s: %s" % (pn, v))
     # end def dump_schema
 
+    def check_method (self, endpoint):
+        """ Check an API method, for REST this is equivalent to a call
+            of the HTTP Option method on the given endpoint
+        """
+        raise NotImplementedError ('Needs to be implemented in derived class')
+    # end def check_method
+
     # Don't override in derived class, see Local_Issue
     def file_attachments (self, id, name):
         if self.get_existing_id (id) is None:

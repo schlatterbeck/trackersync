@@ -466,6 +466,15 @@ class Jira_Syncer (tracker_sync.Syncer):
                     print ("    %s: %s" % (k, ml [k]))
     # end def dump_schema
 
+    def check_method (self, endpoint):
+        u = self.url + '/' + endpoint
+        self.log.debug ('Jira send OPTIONS: %s' % u)
+        r = self.session.options (u)
+        if not r.ok or not 200 <= r.status_code < 300:
+            self.raise_error (r, "Options method failed")
+        print ('Allowed: %s' % r.headers ['Allow'])
+    # end def check_method
+
     def filter (self, classname, searchdict):
         raise NotImplementedError
     # end def filter
@@ -593,9 +602,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Getitem %s %s" % (cls, id))
         j = r.json ()
-        self.log.debug ('Jira receive:')
-        for line in r.text.split ('\n'):
-            self.log.debug (line)
+        self.log.debug ('Jira receive: (content not logged)')
         if 'fields' in j:
             d = {}
             for n in j ['fields']:
