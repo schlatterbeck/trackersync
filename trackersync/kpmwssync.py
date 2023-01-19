@@ -51,6 +51,11 @@ from zeep.helpers       import serialize_object
 from trackersync        import tracker_sync
 from trackersync        import jira_sync
 
+try:
+    from requests_pkcs12 import Pkcs12Adapter
+except ImportError:
+    Pkcs12Adapter = None
+
 class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
 
     def __init__ (self, prefix = None, ** kw):
@@ -116,10 +121,14 @@ class Config (Config_File):
     def __init__ (self, path = path, config = config):
         self.__super.__init__ \
             ( path, config
-            , LOCAL_TRACKER = 'jira'
-            , KPM_CERTPATH  = '/etc/trackersync/kpm_certificate.pem'
-            , KPM_KEYPATH   = '/etc/trackersync/kpm_certificate.key'
-            , KPM_STAGE     = 'Production'
+            , LOCAL_TRACKER       = 'jira'
+            , KPM_CERTPATH        = '/etc/trackersync/kpm_certificate.pem'
+            , KPM_KEYPATH         = '/etc/trackersync/kpm_certificate.key'
+            , KPM_STAGE           = 'Production'
+            # Override KPM_CERTPATH and KPM_KEYPATH above with a pkcs12
+            # certificate if necessary.
+            , KPM_PKCS12_PATH     = None
+            , KPM_PKCS12_PASSWORD = None
             )
     # end def __init__
 
@@ -393,7 +402,18 @@ class KPM_WS (Log, Lock_Mixin):
         self.session  = requests.Session ()
         if timeout:
             self.session.timeout = timeout
-        self.session.cert = (self.cert, self.key)
+        if cfg.KPM_PKCS12_PATH:
+            if not Pkcs12Adapter:
+                raise RuntimeError \
+                    ("PKCS12 configured but requests_pkcs12 not installed")
+            d = dict (pkcs12_filename = cfg.KPM_PKCS12_PATH)
+            if cfg.KPM_PKCS12_PASSWORD:
+                d.update (pkcs12_password = cfg.KPM_PKCS12_PASSWORD)
+            adapter = Pkcs12Adapter (**d)
+            prefix = cfg.KPM_SITE
+            self.session.mount (prefix, adapter)
+        else:
+            self.session.cert = (self.cert, self.key)
         transport   = Transport \
             (session = self.session, operation_timeout = timeout)
         self.client = Client (self.wsdl, transport = transport)
