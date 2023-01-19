@@ -183,7 +183,13 @@ The following attribute definitions are possible:
   required.
 
 In addition to the synchronized attributes, the URL of the local
-tracker (which includes user name and password), the KPMweb user name
+tracker (which includes user name and password) needs to be specified in
+the configuration file.
+
+KPMweb web service
+++++++++++++++++++
+
+The KPMweb user name
 and password, and the address of the supplier in KPMweb (used as a
 search term) can be specified in the configuration file. These options
 can also be set on the command line. If they are specified in both, the
@@ -193,6 +199,25 @@ The configuration file for the KPMweb synchronisation typically lives in
 ``/etc/trackersync/kpm_config.py`` but can be overridden on the command
 line. The configuration file for the Jira synchronisation backend lives
 in the same directory by default.
+
+For accessing KPM, a client certificate and a key are needed. By default
+these are in PEM format in the directory ``/etc/trackersync``, the
+private key in the file ``kpm_certificate.key`` and the certificate in
+the file ``kpm_certificate.pem``. The config items ``KPM_CERTPATH`` and
+``KPM_KEYPATH`` can be used to change the location and filename of
+certificate and key file.
+
+If you got certificate and key in a PKCS12 bundle, there is now
+experimental support for directly using the ``.pkcs12`` file (without
+having to convert it to PKCS12 format): Set the configuration variable
+``KPM_PKCS12_PATH`` to the location of the file and optionally set
+``KPM_PKCS12_PASSWORD`` to the password of the file if it is password
+protected. This overrides the ``KPM_CERTPATH`` and ``KPM_KEYPATH``
+settings which are not used when a PKCS12 file is in use. For the PKCS12
+support you need to install the ``requests-pkcs12`` python packages
+installed::
+
+    pip install requests-pkcs12
 
 Porsche PFIFF
 +++++++++++++

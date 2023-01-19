@@ -33,6 +33,11 @@ KPM_SITE       = 'https://ws-gateway-cert.volkswagenag.com'
 KPM_WS         = KPM_SITE + '/PP/QM/GroupProblemManagementService/V3'
 KPM_CERTPATH   = '/etc/trackersync/kpm_certificate.pem'
 KPM_KEYPATH    = '/etc/trackersync/kpm_certificate.key'
+# Instead of KPM_CERTPATH and KPM_KEYPATH you can define a pkcs12
+# certificat bundle with KPM_PKCS12_PATH and optionally
+# KPM_PKCS12_PASSWORD, the KPM_CERTPATH and KPM_KEYPATH are ignored in
+# that case. You need requests-pkcs12 installed for this to work, see
+# README.rst for details.
 KPM_WSDL       = '/etc/trackersync/kpm.wsdl'
 KPM_OU         = 'KPM-TEST' # OrganisationalUnit
 KPM_PLANT      = 'Z$'
