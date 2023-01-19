@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2020-22 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2020-23 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -646,10 +646,11 @@ class KPM_WS (Log, Lock_Mixin):
     # end def update
 
     def update_supplier_response (self, problem):
-        d = dict \
-            ( Status      = problem.SupplierStatus
-            , ErrorNumber = problem.SupplierErrorNumber
-            )
+        d = dict (ErrorNumber = problem.SupplierErrorNumber)
+        try:
+            d ['SupplierStatus'] = problem.SupplierStatus
+        except AttributeError:
+            pass
         if problem.newvalues.get ('SupplierVersionOk', None):
             d ['VersionOk'] = problem.newvalues ['SupplierVersionOk']
         else:

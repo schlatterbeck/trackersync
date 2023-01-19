@@ -181,6 +181,9 @@ KPM_ATTRIBUTES = \
             , 'XE' : 'Only once'
             }
         )
+    # This is *mandatory*, a SupplierStatus is required by KPM!
+    # So you will need to take the time to provide a mapping of local
+    # statuses to KPM SupplierStatus.
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'status.name'
         , remote_name  = 'SupplierStatus'
