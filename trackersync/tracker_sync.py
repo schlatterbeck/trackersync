@@ -61,6 +61,7 @@ class File_Attachment (autosuper):
 
     def __init__ (self, issue, **kw):
         self.issue   = issue
+        self.log     = self.issue.log
         self.id      = kw.get ('id', None)
         self.dummy   = False
         # Some attributes may be @property and unsettable
