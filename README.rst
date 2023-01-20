@@ -85,11 +85,12 @@ To configure the synchronisation you can find example configuration
 files in the ``config-example`` subdirectory. Configuration files are in
 python syntax and should end in ``.py``. The attributes to synchronize
 need to be defined. Property definitions typically define the attribute
-name on the remote side and on the local (roundup) side. For roundup,
+name on the remote side and on the local (roundup or jira) side. For
+both, roundup and jira,
 property names can include dots (".") indicating dereferencing an item,
 e.g., "prio.description" would dereference a Link property "prio" and
 return the value of the property "description" of this prio. In addition
-there is a syntax for Link1-properties: These are not stored in the
+there is a syntax in roundup for Link1-properties: These are not stored in the
 roundup-issue itself but link to the roundup issue with a Link property
 named "issue".  The sync framework makes sure that at most one such link
 exists per issue. The syntax for these properties is
@@ -183,16 +184,22 @@ The following attribute definitions are possible:
   required.
 
 In addition to the synchronized attributes, the URL of the local
-tracker (which includes user name and password) needs to be specified in
-the configuration file.
+tracker (which depending on the backend might include user name and
+password) needs to be specified in the configuration file with the
+variable ``LOCAL_URL``. If the username and password are not included in
+that url, they need to be specified with the config items
+``LOCAL_USERNAME`` and ``LOCAL_PASSWORD``. The type of local tracker
+needs to be selected with ``LOCAL_TRACKER``.
 
 KPMweb web service
 ++++++++++++++++++
 
-The KPMweb user name
-and password, and the address of the supplier in KPMweb (used as a
-search term) can be specified in the configuration file. These options
-can also be set on the command line. If they are specified in both, the
+The KPMweb user name and the mailbox address of the supplier in KPMweb
+(used as a search term, also called organisational unit) can be
+specified in the configuration file with the options ``KPM_USERNAME``
+and ``KPM_OU``. In addition the ``KPM_PLANT`` needs to be given, in the
+default config this is a testing-area named ``Z$``.  These options can
+also be set on the command line. If they are specified in both, the
 configuration file and on the command line, the command line wins.
 
 The configuration file for the KPMweb synchronisation typically lives in
@@ -209,13 +216,12 @@ certificate and key file.
 
 If you got certificate and key in a PKCS12 bundle, there is now
 experimental support for directly using the ``.pkcs12`` file (without
-having to convert it to PKCS12 format): Set the configuration variable
+having to convert it to PEM format): Set the configuration variable
 ``KPM_PKCS12_PATH`` to the location of the file and optionally set
 ``KPM_PKCS12_PASSWORD`` to the password of the file if it is password
 protected. This overrides the ``KPM_CERTPATH`` and ``KPM_KEYPATH``
 settings which are not used when a PKCS12 file is in use. For the PKCS12
-support you need to install the ``requests-pkcs12`` python packages
-installed::
+support you need to install the ``requests-pkcs12`` python package::
 
     pip install requests-pkcs12
 
@@ -248,10 +254,16 @@ testing a ``-z`` option exists that can specify a ZIP file as input
 for the sync. An example configuration using ENGDAT can be found in
 ``config-examples/pfiff_jira_config.py``.
 
+My latest information indicates that Porsche may be in the process of
+moving to KPMweb (see above) for tracking newer projects, you may want
+to find out with your Porsche contact if this is the case for your
+project.
+
 Resources
 ---------
 
 Download the source at https://sourceforge.net/projects/trackersync/
+or https://github.com/schlatterbeck/trackersync
 and install using the standard python setup, e.g.::
 
  python setup.py install --prefix=/usr/local
