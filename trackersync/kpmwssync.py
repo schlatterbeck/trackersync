@@ -668,7 +668,7 @@ class KPM_WS (Log, Lock_Mixin):
     def update_supplier_response (self, problem):
         d = dict (ErrorNumber = problem.SupplierErrorNumber)
         try:
-            d ['SupplierStatus'] = problem.SupplierStatus
+            d ['Status'] = problem.SupplierStatus
         except AttributeError:
             pass
         if problem.newvalues.get ('SupplierVersionOk', None):
