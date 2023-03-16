@@ -191,7 +191,11 @@ class KPM_File_Attachment (tracker_sync.File_Attachment):
 
     def _get_file (self):
         f = self.issue.kpm.get_file (self)
-        if f is not None:
+        if f is None:
+            # FIXME: These logs should really be debug logs
+            self.issue.log.info ('get_file returns None')
+        else:
+            self.issue.log.info ('Got file: %s' % f.get ('Name', 'noname'))
             self._content = f ['Data']
             if not self._name:
                 if f ['Suffix']:
@@ -570,6 +574,7 @@ class KPM_WS (Log, Lock_Mixin):
     # end def document_list
 
     def get_file (self, doc):
+        self.log.debug ('Getting file %s' % doc.id)
         issue = doc.issue
         if getattr (doc, 'permission', None) != '0':
             self.log.error \
