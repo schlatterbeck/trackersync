@@ -34,6 +34,8 @@ from   rsclib.autosuper     import autosuper
 from   rsclib.pycompat      import ustr, text_type
 from   trackersync          import tracker_sync
 
+JSONDecodeError = json.decoder.JSONDecodeError
+
 Sync_Attribute                    = tracker_sync.Sync_Attribute
 Sync_Attribute_Check              = tracker_sync.Sync_Attribute_Check
 Sync_Attribute_Check_Remote       = tracker_sync.Sync_Attribute_Check_Remote
@@ -280,9 +282,17 @@ class Jira_Backend (autosuper):
         for k in 'X-Seraph-LoginReason', 'X-Authentication-Denied-Reason':
             if k in r.headers and r.headers [k] != 'OK':
                 msg.append (r.headers [k])
+        try:
+            j = r.json ()
+            if 'errorMessages' in j:
+                msg.extend (j ['errorMessages'])
+            if 'errors' in j and 'comment' in j ['errors']:
+                msg.append (j ['errors']['comment'])
+        except (AttributeError, KeyError, IndexError, JSONDecodeError):
+            pass
         msg = ' '.join (msg)
         if msg:
-            msg = ': ' + msg
+            msg = ': ' + msg + ': '
         a = ''
         if args:
             a = ' ' + ' '.join (str (x) for x in args)
