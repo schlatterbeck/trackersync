@@ -204,13 +204,13 @@ class Backend_Common (Log):
             other_name already exists. Called by Sync_Attribute_Files.
             Default is no mangling.
         """
-        if getattr (self, self.file_by_name, None):
+        if getattr (self, 'file_by_name', None):
             return other_name in self.file_by_name
-        elif not self.file_attachments:
+        elif not self.file_attachments ():
             return False
         else:
             self.file_by_name = dict \
-                ((x.name, x) for x in self.file_attachments)
+                ((x.name, x) for x in self.file_attachments ())
         return other_name in self.file_by_name
     # end def file_exists
 
@@ -704,7 +704,7 @@ class Sync_Attribute_Files (Sync_Attribute):
             if not syncer.file_exists (id, n):
                 syncer.attach_file (id, rnames [n], self.name)
 
-        if self.prefix is not None and not self.remote_dry_run:
+        if self.prefix is not None and not syncer.remote_dry_run:
             exists = remote_issue.file_exists
             for n in lnames:
                 if n.startswith (self.prefix) and not exists (n):
