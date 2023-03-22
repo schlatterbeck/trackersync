@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (C) 2021 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2021-23 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -74,6 +74,8 @@ KPM_ATTRIBUTES = \
         , remote_name  = None
         , r_default    = 'project-key-in-jira'
         )
+    # It might make sense here to use your own type like
+    # 'Customer Defect' just for the sync with KPM.
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name   = 'issuetype.name'
         , remote_name  = None
@@ -101,6 +103,8 @@ KPM_ATTRIBUTES = \
         , prefix        = 'KPM-FB-Status-'
         , l_only_update = True
         )
+    # You probably want to add a default version that you're mostly
+    # working on anyway.
     , jira_sync.Sync_Attribute_To_Local_Multilink_Default
         ( local_name    = 'versions.name'
         , remote_name   = 'ForemostTestPart.Software'
@@ -115,8 +119,20 @@ KPM_ATTRIBUTES = \
           , 'Rating'
           , 'ForemostTestPart.Software'
           , 'ForemostTestPart.Hardware'
+          , 'ForemostGroupProject.Brand'
+          , 'ForemostGroupProject.Project'
+          , 'ForemostTestPart.PartNumber.PreNumber'
+          , 'ForemostTestPart.PartNumber.MiddleGroup'
+          , 'ForemostTestPart.PartNumber.EndNumber'
+          , 'ForemostTestPart.PartNumber.Index'
+          , 'Origin.MainProcess'
+          , 'Origin.SubProcess'
+          , 'Origin.Phase'
+          , 'Origin.PhaseAddition'
           , 'Repeatable'
           , 'Frequency'
+          , 'Keyword'
+          , 'StartOfProductionDate'
           , 'Creator.PersonalContractor.UserName'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName'
           ]
@@ -124,9 +140,19 @@ KPM_ATTRIBUTES = \
         , field_prefix  = '*'
         , field_postfix = ':*\n'
         , name_map      =
-          { 'ForemostTestPart.Software'           : 'Affects SW version'
-          , 'ForemostTestPart.Hardware'           : 'Affects HW version'
-          , 'Creator.PersonalContractor.UserName' : 'Creator'
+          { 'ForemostTestPart.Software'              : 'Affects SW version'
+          , 'ForemostTestPart.Hardware'              : 'Affects HW version'
+          , 'ForemostTestPart.PartNumber.PreNumber'  : 'Part-no'
+          , 'ForemostTestPart.PartNumber.MiddleGroup': None
+          , 'ForemostTestPart.PartNumber.EndNumber'  : None
+          , 'ForemostTestPart.PartNumber.Index'      : None
+          , 'ForemostGroupProject.Brand'             : 'Group Project'
+          , 'ForemostGroupProject.Project'           : None
+          , 'Origin.MainProcess'                     : 'Origin'
+          , 'Origin.SubProcess'                      : None
+          , 'Origin.Phase'                           : None
+          , 'Origin.PhaseAddition'                   : None
+          , 'Creator.PersonalContractor.UserName'    : 'Creator'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName' :
             'Problem responsible'
           }
@@ -143,6 +169,8 @@ KPM_ATTRIBUTES = \
           }
         )
     # "Release Note" field in Jira, some customfield_12009
+    # Note that the l_only_update setting is needed only if the field
+    # is not writeable during creation
     , jira_sync.Sync_Attribute_To_Local_Default
         ( local_name    = 'customfield_12009'
         , remote_name   = None
@@ -154,17 +182,14 @@ KPM_ATTRIBUTES = \
         ( local_name   = 'customfield_12009'
         , remote_name  = 'SupplierResponse'
         )
-    # priority can currently only be set during creation
-    # Seems we have no permission, we get 400 with:
-    # id=... {'fields': {'priority': {'name': 'Minor'}}}
-    # when trying to set Unspecified -> Minor
-    , jira_sync.Sync_Attribute_To_Local_Default
+    # On some trackers the priority field may be writeable only during
+    # creation of the Jira issue. In that case you want to make the
+    # sync type here jira_sync.Sync_Attribute_To_Local_Default.
+    , jira_sync.Sync_Attribute_To_Local
         ( local_name   = 'priority.name'
         , remote_name  = 'Rating'
         , r_default    = 'Minor'
         , l_default    = 'DB'
-        , only_update  = True
-        #, local_unset  = 'Unspecified'
         , imap =
             { '1'  : 'Showstopper' # A
             , '2'  : 'Showstopper' # A
@@ -192,7 +217,10 @@ KPM_ATTRIBUTES = \
         )
     # This is *mandatory*, a SupplierStatus is required by KPM!
     # So you will need to take the time to provide a mapping of local
-    # statuses to KPM SupplierStatus.
+    # statuses to KPM SupplierStatus. This is only an example.
+    # And some projects will require you to sync two-way, see below for
+    # and example configuration that you can enable *instead* of this
+    # one.
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'status.name'
         , remote_name  = 'SupplierStatus'
@@ -218,13 +246,48 @@ KPM_ATTRIBUTES = \
             , 'Exempt from Calibration'    : '5'
             }
         )
+#    If you need to synchronize SupplierStatus two way between KPM and
+#    Jira then enable the following *instead* of the config entry above.
+#    Note that this usually needs mappings in both direction: There are
+#    two processes that change the SupplierStatus in KPM: If an issue is
+#    in the status that signals completion to KPM ('Waiting for
+#    Customer' in this example), the issue may be re-opened in KPM. In
+#    that case a '-' is sent by KPM (which you normally would never have
+#    as something you are mapping local stati *to*). The second case is
+#    that KPM rejects an issue (e.g. assigns it to another supplier), in
+#    that case KPM is sending '6'.
+#    , jira_sync.Sync_Attribute_Two_Way
+#        ( local_name   = 'status.name'
+#        , remote_name  = 'SupplierStatus'
+#        , map =
+#            { 'Created'                    : '0'
+#            , 'Open'                       : '1'
+#            , 'Analyzed'                   : '2'
+#            , 'Pending'                    : '3'
+#            , 'Under Test'                 : '4'
+#            , 'Waiting for Customer'       : '5'
+#            , 'Closed'                     : '5'
+#            , 'Reject'                     : '6'
+#            }
+#        # Inverse map (remote to local attribute)
+#        , imap =
+#            { '0': 'Created'
+#            , '1': 'Open'
+#            , '2': 'Analyzed'
+#            , '3': 'Pending'
+#            , '4': 'Under Test'
+#            , '5': 'Waiting for Customer'
+#            , '6': 'Reject'
+#            , '-': 'Open'
+#            }
+#        )
     , jira_sync.Sync_Attribute_To_Local_Multistring
         ( local_name    = 'labels'
         , remote_name   = 'Rating'
         , prefix        = 'KPM-Priority-'
         , l_only_update = True
         , imap =
-            { '1'  : 'A'
+            { '1'  : 'A1'
             , '2'  : 'A'
             , '3'  : 'A'
             , '4'  : 'B'
@@ -251,4 +314,3 @@ KPM_ATTRIBUTES = \
         , l_only_update = True
         )
     )
-
