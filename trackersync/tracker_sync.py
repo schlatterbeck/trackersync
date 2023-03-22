@@ -786,29 +786,31 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
     def __init__ \
         ( self
         , local_name
-        , remote_names   = None
-        , delimiter      = '\n'
-        , field_prefix   = ''
-        , field_postfix  = ':\n'
-        , add_prefix     = True
-        , l_only_update  = False
-        , name_map       = {}
-        , content_map    = {}
+        , remote_names    = None
+        , delimiter       = '\n'
+        , short_delimiter = ' '
+        , field_prefix    = ''
+        , field_postfix   = ':\n'
+        , add_prefix      = True
+        , l_only_update   = False
+        , name_map        = {}
+        , content_map     = {}
         ):
-        self.name          = local_name
-        self.remote_names  = remote_names
-        self.remote_name   = ', '.join (remote_names) # for debug messages
-        self.only_update   = False # only relevant for to remote sync
-        self.only_create   = False # only relevant for to remote sync
-        self.delimiter     = delimiter
-        self.field_prefix  = field_prefix
-        self.field_postfix = field_postfix
-        self.add_prefix    = add_prefix
-        self.strip_prefix  = False
-        self.l_only_update = l_only_update
+        self.name            = local_name
+        self.remote_names    = remote_names
+        self.remote_name     = ', '.join (remote_names) # for debug messages
+        self.only_update     = False # only relevant for to remote sync
+        self.only_create     = False # only relevant for to remote sync
+        self.delimiter       = delimiter
+        self.short_delimiter = short_delimiter
+        self.field_prefix    = field_prefix
+        self.field_postfix   = field_postfix
+        self.add_prefix      = add_prefix
+        self.strip_prefix    = False
+        self.l_only_update   = l_only_update
         self.map = self.imap = None
-        self.name_map      = name_map
-        self.content_map   = content_map
+        self.name_map        = name_map
+        self.content_map     = content_map
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
@@ -819,17 +821,21 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
             val = remote_issue.get (k, None)
             if not val:
                 continue
-            if self.add_prefix:
-                if self.field_prefix:
-                    v.append (self.field_prefix)
-                v.append (self.name_map.get (k, k))
-                if self.field_postfix:
-                    v.append (self.field_postfix)
+            name = self.name_map.get (k, k)
+            if name is None:
+                v.append (self.short_delimiter)
+            else:
+                if n:
+                    v.append (self.delimiter)
+                if self.add_prefix:
+                    if self.field_prefix:
+                        v.append (self.field_prefix)
+                    v.append (name)
+                    if self.field_postfix:
+                        v.append (self.field_postfix)
             if k in self.content_map:
                 val = self.content_map [k].get (val, val)
             v.append (val)
-            if n != len (self.remote_names) - 1:
-                v.append (self.delimiter)
         rv = ''.join (v)
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv, remote_issue):
