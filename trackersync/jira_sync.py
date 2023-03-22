@@ -289,8 +289,9 @@ class Jira_Backend (autosuper):
             j = r.json ()
             if 'errorMessages' in j:
                 msg.extend (j ['errorMessages'])
-            if 'errors' in j and 'comment' in j ['errors']:
-                msg.append (j ['errors']['comment'])
+            if 'errors' in j and j ['errors']:
+                for k in j ['errors']:
+                    msg.append (': '.join ((k, j ['errors'][k])))
         except (AttributeError, KeyError, IndexError, JSONDecodeError):
             pass
         msg = ' '.join (msg)
