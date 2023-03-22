@@ -22,3 +22,4 @@ cert*
 pypath
 tree.py
 tzeep.py
+.*.swp

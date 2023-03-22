@@ -112,8 +112,12 @@ KPM_ATTRIBUTES = \
         , use_r_default = True
         )
     , jira_sync.Sync_Attribute_To_Local_Concatenate
-        ( local_name    = 'description'
-        , remote_names  =
+        ( local_name      = 'description'
+        , short_delimiter = ' '
+        , delimiter       = '\n\n'
+        , field_prefix    = '*'
+        , field_postfix   = ':*\n'
+        , remote_names    =
           [ 'Description'
           , 'Analysis'
           , 'Rating'
@@ -136,10 +140,9 @@ KPM_ATTRIBUTES = \
           , 'Creator.PersonalContractor.UserName'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName'
           ]
-        , delimiter     = '\n\n'
-        , field_prefix  = '*'
-        , field_postfix = ':*\n'
-        , name_map      =
+        # Mapping a name to 'None' will not produce a headline and will
+        # use the short_delimiter (default: space)
+        , name_map =
           { 'ForemostTestPart.Software'              : 'Affects SW version'
           , 'ForemostTestPart.Hardware'              : 'Affects HW version'
           , 'ForemostTestPart.PartNumber.PreNumber'  : 'Part-no'
@@ -153,6 +156,7 @@ KPM_ATTRIBUTES = \
           , 'Origin.Phase'                           : None
           , 'Origin.PhaseAddition'                   : None
           , 'Creator.PersonalContractor.UserName'    : 'Creator'
+          , 'StartOfProductionDate'                  : 'Start of production'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName' :
             'Problem responsible'
           }
