@@ -1197,6 +1197,8 @@ class Sync_Attribute_Two_Way (Sync_Attribute):
             ):
             if rv is None:
                 print ("WARN: Would set issue%s %s to None" % (id, self.name))
+                syncer.log.warn \
+                    ("Would set issue%s %s to None" % (id, self.name))
             else:
                 syncer.set (id, self.name, rv)
         else:

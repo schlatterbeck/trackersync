@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-# Copyright (C) 2018-22 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-23 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -522,8 +522,9 @@ class Jira_Syncer (tracker_sync.Syncer):
             different) via the create flag.
             For Multilinks see format_multilink above.
         """
-        pkey = self.get (self.current_id, 'project.key')
-        new  = dict ()
+        pkey       = self.get (self.current_id, 'project.key')
+        new        = {}
+        transition = {}
         for k in attrs:
             lst = k.split ('.')
             l   = len (lst)
@@ -556,7 +557,13 @@ class Jira_Syncer (tracker_sync.Syncer):
                                 ( 'Autodetect for multilink %s.%s failed'
                                 % propname, attrname
                                 )
-                    else:
+                    elif prop == 'status':
+                        # Currently only works for status.name or .id
+                        assert attrname in ('name', 'id')
+                        cls = self.schema [classname][prop][1]
+                        assert cls == 'status'
+                        transition [prop] = {attrname: attrs [k]}
+                    else: # Link
                         if prop not in new:
                             new [prop] = {attrname: attrs [k]}
                         else:
@@ -566,7 +573,10 @@ class Jira_Syncer (tracker_sync.Syncer):
             else:
                 new [k] = attrs [k]
         if not create:
-            return dict (fields = new)
+            d = dict (fields = new)
+            if transition:
+                d ['transition'] = transition
+            return d
         return new
     # end def fix_attributes
 
@@ -662,12 +672,57 @@ class Jira_Syncer (tracker_sync.Syncer):
         return j ['id']
     # end def lookup
 
+    def _set_status (self, id, trans):
+        """ Handle state changes, these must be done via transitions
+            And transitions must be submitted as a post
+            trans is of the form { 'status': { 'id/name': val }}
+        """
+        u = self.url + '/issue/' + id
+        assert 'status' in trans
+        trans = trans ['status']
+        keys  = list (trans)
+        assert len (keys) == 1
+        key = keys [0]
+        val = trans [key]
+        assert key in ('id', 'name')
+        r = self.session.get (u + '/transitions')
+        if not r.ok or not 200 <= r.status_code < 300:
+            self.raise_error (r, 'setitem', 'get transitions: %s' % id)
+        j = r.json ()
+        tid = None
+        for t in  j ['transitions']:
+            if t ['to'][key] == val:
+                tid = t ['id']
+                break
+        if tid is None:
+            print ('Status change to "%s" not allowed by Jira' % val)
+            self.log.error \
+                ('Status change to "%s" not allowed by Jira' % val)
+        else:
+            d = dict (transition = dict (id = tid))
+            u = u + '/transitions'
+            r = self.session.post \
+                (u, headers = self.json_header, data = json.dumps (d))
+            if not r.ok or not 200 <= r.status_code < 300:
+                self.raise_error (r, 'setitem', '%s' % id, d)
+    # end def _set_status
+
     def _setitem (self, cls, id, ** kw):
         """ Set attributes of an item of the given cls,
             attributes are 'key = value' pairs.
             Debug and dryrun is handled by base class setitem.
+            Note: This currently handles attribute updates and state
+            changes (via transition) seperately. This may make
+            transitions fail that need an update of some other field
+            together with the state change.
         """
         u = self.url + '/' + cls + '/' + id
+        trans = None
+        if 'transition' in kw:
+            # Status only for issue
+            assert (cls == 'issue')
+            trans = kw ['transition']
+            del kw ['transition']
         self.log.debug ('Jira send PUT: %s' % u)
         for line in json.dumps (kw, indent = 4).split ('\n'):
             self.log.debug (line)
@@ -675,6 +730,8 @@ class Jira_Syncer (tracker_sync.Syncer):
             (u, headers = self.json_header, data = json.dumps (kw))
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, 'setitem', 'id=%s' % id, kw)
+        if trans:
+            self._set_status (id, trans)
     # end def _setitem
 
     def sync_new_local_issues (self, new_remote_issue):
