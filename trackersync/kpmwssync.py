@@ -453,57 +453,9 @@ class KPM_WS (Log, Lock_Mixin):
         if self.check_error ('GetMultipleProblemData', info):
             return
         for pr in info ['ProblemReference']:
-            id = pr ['ProblemNumber']
-            head   = self.header.header ('GetProblemActionsRequest')
-            rights = self.client.service.GetProblemActions \
-                ( UserAuthentification = self.auth
-                , ProblemNumber        = id
-                , _soapheaders         = head
-                )
-            if self.check_error ('GetProblemActions', rights):
-                continue
-            if 'GET_DEVELOPMENT_PROBLEM_DATA' not in rights ['Action']:
-                self.log.info ("No right to get problem data for %s" % id)
-                continue
-            head = self.header.header ('GetDevelopmentProblemDataRequest')
-            rec  = self.client.service.GetDevelopmentProblemData \
-                ( UserAuthentification = self.auth
-                , ProblemNumber        = id
-                , _soapheaders         = head
-                )
-            if self.check_error ('GetDevelopmentProblemData', rec):
-                continue
-            rec = rec ['DevelopmentProblem']
-            rec = serialize_object (rec)
-            raw = rec.get ('_raw_elements', None)
-            self.make_serializable (rec)
-            rec ['Aussagen'] = {}
-            pss = self.get_process_steps (id)
-            for ps in pss:
-                pstype = ps ['ProcessStepTypeDescription']
-                if pstype == 'Lieferantenaussage':
-                    sr = ps ['SupplierResponse']
-                    rec ['SupplierResponse'] = ps ['Text']
-                    if sr is not None:
-                        rec ['SupplierVersionOk']   = sr ['VersionOk']
-                        rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
-                if pstype == 'Analyse abgeschlossen':
-                    rec ['Analysis'] = ps ['Text']
-                if pstype == 'Aussage':
-                    psid = ps ['ProcessStepId']
-                    rec ['Aussagen'][psid] = dict \
-                        ( id      = psid
-                        , date    = ps ['CreationDate']
-                        , content = ps ['Text']
-                        )
-            p = Problem (self, id, rec, raw = raw)
-            # If raw elements exist, parsing wasn't fully successful
-            if p.raw:
-                tags = ','.join (x.tag for x in p.raw)
-                self.log.warn \
-                    ('KPM-%s has raw elements with tags: %s' % (p.id, tags))
-            p.allowed_actions = rights ['Action']
-            yield (p)
+            p = self.get_problem (pr ['ProblemNumber'])
+            if p is not None:
+                yield (p)
     # end def __iter__
 
     def check_error (self, rq, msg):
@@ -600,6 +552,59 @@ class KPM_WS (Log, Lock_Mixin):
             return
         return doc ['Document']
     # end def get_file
+
+    def get_problem (self, id):
+        head   = self.header.header ('GetProblemActionsRequest')
+        rights = self.client.service.GetProblemActions \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = id
+            , _soapheaders         = head
+            )
+        if self.check_error ('GetProblemActions', rights):
+            return
+        if 'GET_DEVELOPMENT_PROBLEM_DATA' not in rights ['Action']:
+            self.log.info ("No right to get problem data for %s" % id)
+            return
+        head = self.header.header ('GetDevelopmentProblemDataRequest')
+        rec  = self.client.service.GetDevelopmentProblemData \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = id
+            , _soapheaders         = head
+            )
+        if self.check_error ('GetDevelopmentProblemData', rec):
+            return
+        rec = rec ['DevelopmentProblem']
+        rec = serialize_object (rec)
+        raw = rec.get ('_raw_elements', None)
+        self.make_serializable (rec)
+        rec ['Aussagen'] = {}
+        pss = self.get_process_steps (id)
+        for ps in pss:
+            pstype = ps ['ProcessStepTypeDescription']
+            if pstype == 'Lieferantenaussage':
+                sr = ps ['SupplierResponse']
+                rec ['SupplierResponse'] = ps ['Text']
+                if sr is not None:
+                    rec ['SupplierVersionOk']   = sr ['VersionOk']
+                    rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
+            if pstype == 'Analyse abgeschlossen':
+                rec ['Analysis'] = ps ['Text']
+            if pstype == 'Aussage':
+                psid = ps ['ProcessStepId']
+                rec ['Aussagen'][psid] = dict \
+                    ( id      = psid
+                    , date    = ps ['CreationDate']
+                    , content = ps ['Text']
+                    )
+        p = Problem (self, id, rec, raw = raw)
+        # If raw elements exist, parsing wasn't fully successful
+        if p.raw:
+            tags = ','.join (x.tag for x in p.raw)
+            self.log.warn \
+                ('KPM-%s has raw elements with tags: %s' % (p.id, tags))
+        p.allowed_actions = rights ['Action']
+        return p
+    # end def get_problem
 
     def get_process_steps (self, problem_id):
         """ Get additional information about problem that is carried
@@ -850,11 +855,26 @@ def main ():
         syncer.check_method (opt.check_method)
         sys.exit (0)
 
+    # First get all *existing* old issues:
+    old_issues = dict.fromkeys (syncer.oldsync_iter ())
     nproblems = 0
     try:
         for problem in kpm:
+            if problem.id in old_issues:
+                del old_issues [problem.id]
             problem.sync (syncer)
             nproblems += 1
+        if old_issues:
+            syncer.log.warn \
+                ('Processing %s issues not found in mailbox' % len (old_issues))
+            for id in old_issues:
+                problem = kpm.get_problem (id)
+                if problem is None:
+                    syncer.log.warn ('KPM issue "%s" not found' % id)
+                else:
+                    syncer.log.warn ('Processing KPM issue "%s"' % id)
+                    problem.sync (syncer)
+                    nproblems += 1
     except:
         kpm.log_exception ()
         kpm.log.error \
