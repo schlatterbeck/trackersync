@@ -211,6 +211,13 @@ class KPM_File_Attachment (tracker_sync.File_Attachment):
                 self.description = f ['Description']
     # end def _get_file
 
+    def create (self):
+        """ Create this file in the backend.
+            Note that self.id may be created on creation.
+        """
+        self.issue.kpm.add_file (self)
+    # end def create
+
 # end class KPM_File_Attachment
 
 class Problem (tracker_sync.Remote_Issue):
@@ -472,6 +479,28 @@ class KPM_WS (Log, Lock_Mixin):
             return 1
         return 0
     # end def check_error
+
+    def add_file (self, doc):
+        issue = doc.issue
+        if 'ADD_DOCUMENT' not in issue.allowed_actions:
+            self.log.error \
+                ('No permission to add document for %s' % issue.id)
+            return
+        head = issue.header.header ('AddDocumentRequest')
+        name, suffix = os.path.splitext (doc.name)
+        ans = issue.client.service.AddDocument \
+            ( UserAuthentification = self.auth
+            , ProblemNumber        = issue.id
+            , Name                 = name
+            , Suffix               = suffix
+            , Type                 = doc.type or 'application/octet-stream'
+            , Data                 = doc.content
+            , _soapheaders         = head
+            )
+        if self.check_error ('AddDocument', ans):
+            return
+        doc.id = ans ['DocumentReference']
+    # end def add_file
 
     def add_message (self, problem, msg):
         if 'ADD_NOTICE' not in problem.allowed_actions:
