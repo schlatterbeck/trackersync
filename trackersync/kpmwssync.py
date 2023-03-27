@@ -249,6 +249,10 @@ class Problem (tracker_sync.Remote_Issue):
         return msgid
     # end def add_message
 
+    def attach_file (self, other, name = None):
+        return self._attach_file (KPM_File_Attachment, other)
+    # end def attach_file
+
     def convert_date (self, value):
         """ Convert date from roundup value to KPM WS date
             representation. Used only for KPM 'Datum'. Currently we
