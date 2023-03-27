@@ -148,7 +148,7 @@ class Backend_Common (Log):
             self.log = self.syncer.log
     # end def __init__
 
-    def _attach_file (self, cls, other_file, name):
+    def _attach_file (self, cls, other_file, name = None):
         """ Attach file to this issue from other_file
             Note that caller of this method must deal with it returning
             None which happens whenever the file is not available for
