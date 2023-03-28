@@ -595,7 +595,8 @@ class KPM_WS (Log, Lock_Mixin):
             )
         if self.check_error ('GetProblemActions', rights):
             return
-        if 'GET_DEVELOPMENT_PROBLEM_DATA' not in rights ['Action']:
+        actions = set (rights ['Action'])
+        if 'GET_DEVELOPMENT_PROBLEM_DATA' not in actions:
             self.log.info ("No right to get problem data for %s" % id)
             return
         head = self.header.header ('GetDevelopmentProblemDataRequest')
@@ -611,7 +612,7 @@ class KPM_WS (Log, Lock_Mixin):
         raw = rec.get ('_raw_elements', None)
         self.make_serializable (rec)
         rec ['Aussagen'] = {}
-        pss = self.get_process_steps (id)
+        pss = self.get_process_steps (id, actions)
         for ps in pss:
             pstype = ps ['ProcessStepTypeDescription']
             if pstype == 'Lieferantenaussage':
@@ -639,10 +640,17 @@ class KPM_WS (Log, Lock_Mixin):
         return p
     # end def get_problem
 
-    def get_process_steps (self, problem_id):
+    def get_process_steps (self, problem_id, actions, relevant = None):
         """ Get additional information about problem that is carried
             only in process steps.
         """
+        if relevant is None:
+            relevant = ('Lieferantenaussage', 'Analyse abgeschlossen')
+        relevant = set (relevant)
+        needed_actions = set (('GET_PROCESS_STEP_LIST', 'GET_PROCESS_STEPS'))
+        if not needed_actions.intersection (actions):
+            self.log.error ('Cannot get steps / step list for %s' % problem_id)
+            return []
         head = self.header.header ('GetProcessStepListRequest')
         info = self.client.service.GetProcessStepList \
             ( UserAuthentification = self.auth
@@ -657,11 +665,11 @@ class KPM_WS (Log, Lock_Mixin):
             assert int (ps ['ProblemNumber']) == int (problem_id)
             pstype = ps ['ProcessStepTypeDescription']
             psid   = ps ['ProcessStepId']
-            for relevant in 'Lieferantenaussage', 'Analyse abgeschlossen':
-                if pstype == relevant:
-                    # Only keep newest
-                    if relevant not in latest or latest [relevant] < psid:
-                        latest [relevant] = psid
+            self.log.debug ("ID %s StepTypeDesc: %s" % (problem_id, pstype))
+            if pstype in relevant:
+                # Only keep newest
+                if pstype not in latest or latest [pstype] < psid:
+                    latest [pstype] = psid
             if pstype == 'Aussage':
                 steplist.append (psid)
         head = self.header.header ('GetProcessStepsRequest')
