@@ -114,7 +114,7 @@ class Jira_File_Attachment (tracker_sync.File_Attachment):
     def content (self):
         if self._content is None:
             self.log.debug ('Jira send GET: %s' % self.url)
-            r = self.session.get (self.url)
+            r = self.issue.session.get (self.url)
             if not r.ok:
                 self.issue.raise_error (r, "Content")
             self._content = r.content
