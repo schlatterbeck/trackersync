@@ -177,13 +177,17 @@ class Backend_Common (Log):
             The name is the name of the attribute in the issue.
             Note that depending on the backend we might not be able to
             use the default constructor.
-            The file is *not* persisted yet, this is done by the write
+            The file is *not* persisted yet, this is done by the create
             method of the generated file.
             Note that some backend my need additionale attributes of a
             file and will therefore re-implement this method and the
             corresponding File_Attachment class.
             Also persisting this is left to the backend.
             Note that backend implementation must honor self.dry_run.
+
+            This usually calls _attach_file above and if the returned
+            file is not None calls the create method on the file object
+            returned by _attach_file.
         """
         raise NotImplementedError ("Needs to be implemented in child class")
     # end def attach_file

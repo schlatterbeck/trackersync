@@ -250,7 +250,11 @@ class Problem (tracker_sync.Remote_Issue):
     # end def add_message
 
     def attach_file (self, other, name = None):
-        return self._attach_file (KPM_File_Attachment, other)
+        self.kpm.log.debug ('Attaching file "%s" to kpm' % other.name)
+        f = self._attach_file (KPM_File_Attachment, other)
+        if f is None:
+            return
+        f.create ()
     # end def attach_file
 
     def convert_date (self, value):
