@@ -591,7 +591,7 @@ class KPM_WS (Log, Lock_Mixin):
         return doc ['Document']
     # end def get_file
 
-    def get_problem (self, id):
+    def get_problem (self, id, old_rec = None):
         head   = self.header.header ('GetProblemActionsRequest')
         rights = self.client.service.GetProblemActions \
             ( UserAuthentification = self.auth
@@ -601,16 +601,17 @@ class KPM_WS (Log, Lock_Mixin):
         if self.check_error ('GetProblemActions', rights):
             return
         actions = set (rights ['Action'])
-        if 'GET_DEVELOPMENT_PROBLEM_DATA' not in actions:
+        if 'GET_DEVELOPMENT_PROBLEM_DATA' in actions:
+            head = self.header.header ('GetDevelopmentProblemDataRequest')
+            rec  = self.client.service.GetDevelopmentProblemData \
+                ( UserAuthentification = self.auth
+                , ProblemNumber        = id
+                , _soapheaders         = head
+                )
+            if self.check_error ('GetDevelopmentProblemData', rec):
+                return
+        elif not old_rec:
             self.log.info ("No right to get problem data for %s" % id)
-            return
-        head = self.header.header ('GetDevelopmentProblemDataRequest')
-        rec  = self.client.service.GetDevelopmentProblemData \
-            ( UserAuthentification = self.auth
-            , ProblemNumber        = id
-            , _soapheaders         = head
-            )
-        if self.check_error ('GetDevelopmentProblemData', rec):
             return
         rec = rec ['DevelopmentProblem']
         rec = serialize_object (rec)
@@ -618,9 +619,12 @@ class KPM_WS (Log, Lock_Mixin):
         self.make_serializable (rec)
         rec ['Aussagen'] = {}
         pss = self.get_process_steps (id, actions)
+        if not pss and old_rec.get ('SupplierResponse'):
+            old_rec ['__readable__'] = False
         for ps in pss:
             pstype = ps ['ProcessStepTypeDescription']
             if pstype == 'Lieferantenaussage':
+                rec ['__readable__'] = True
                 sr = ps ['SupplierResponse']
                 rec ['SupplierResponse'] = ps ['Text']
                 if sr is not None:
@@ -635,13 +639,19 @@ class KPM_WS (Log, Lock_Mixin):
                     , date    = ps ['CreationDate']
                     , content = ps ['Text']
                     )
+        if old_rec:
+            for k in old_rec:
+                if k not in rec:
+                    rec [k] = old_rec [k]
+                elif k == 'Aussagen' and not rec [k]:
+                    rec [k] = old_rec [k].copy ()
         p = Problem (self, id, rec, raw = raw)
         # If raw elements exist, parsing wasn't fully successful
         if p.raw:
             tags = ','.join (x.tag for x in p.raw)
             self.log.warn \
                 ('KPM-%s has raw elements with tags: %s' % (p.id, tags))
-        p.allowed_actions = rights ['Action']
+        p.allowed_actions = actions
         return p
     # end def get_problem
 
@@ -914,13 +924,18 @@ def main ():
             syncer.log.warn \
                 ('Processing %s issues not found in mailbox' % len (old_issues))
             for id in old_issues:
-                problem = kpm.get_problem (id)
-                if problem is None:
-                    syncer.log.warn ('KPM issue "%s" not found' % id)
+                oldid = syncer.get_oldvalues ()
+                if id != oldid:
+                    syncer.log.error \
+                        ('Cannot get old KPM issue %s/%s' % (oldid, id))
                 else:
-                    syncer.log.warn ('Processing KPM issue "%s"' % id)
-                    problem.sync (syncer)
-                    nproblems += 1
+                    problem = kpm.get_problem (id, syncer.oldremote)
+                    if problem is None:
+                        syncer.log.warn ('KPM issue "%s" not found' % id)
+                    else:
+                        syncer.log.warn ('Processing KPM issue "%s"' % id)
+                        problem.sync (syncer)
+                        nproblems += 1
     except:
         kpm.log_exception ()
         kpm.log.error \

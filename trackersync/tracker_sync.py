@@ -504,6 +504,7 @@ class Sync_Attribute (autosuper):
         , l_only_update  = False
         , allowed_chars  = None
         , local_unset    = None
+        , r_unreadable   = None
         ):
         self.name           = local_name
         self.remote_name    = remote_name
@@ -519,6 +520,10 @@ class Sync_Attribute (autosuper):
         self.local_prefix   = local_prefix
         self.l_only_update  = l_only_update
         self.allowed_chars  = allowed_chars
+        # This is used in the variants that read something from the
+        # remote side: We can specify here a value that should be used
+        # if the remote issue is unreadable (e.g. due to permissions)
+        self.r_unreadable   = r_unreadable
         # only used for Sync_Attribute_To_Local_Default:
         self.local_unset    = local_unset
         if not self.imap and self.map:
@@ -729,6 +734,13 @@ class Sync_Attribute_To_Local (Sync_Attribute):
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         rv = remote_issue.get (self.remote_name, None)
+        # Check if there is a configured value we should use when remote
+        # issue is unreadable, determine if remote issue has an
+        # attribute __readable__ which is set to a False boolean value.
+        if  (   self.r_unreadable is not None
+            and not remote_issue.get ('__readable__', True)
+            ):
+            rv = self.r_unreadable
         if isinstance (rv, string_types):
             if self.allowed_chars:
                 new_rv = []
@@ -952,6 +964,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
         , prefix        = None
         , l_only_update = False
         , allowed_chars = None
+        , r_unreadable  = None
         ):
         self.__super.__init__ \
             ( local_name
@@ -965,6 +978,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
             , strip_prefix  = None
             , l_only_update = l_only_update
             , allowed_chars = allowed_chars
+            , r_unreadable  = r_unreadable
             )
         self.prefix = prefix
         if not prefix:
@@ -976,6 +990,13 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         rval = remote_issue.get (self.remote_name, None)
+        # Check if there is a configured value we should use when remote
+        # issue is unreadable, determine if remote issue has an
+        # attribute __readable__ which is set to a False boolean value.
+        if  (   self.r_unreadable is not None
+            and not remote_issue.get ('__readable__', True)
+            ):
+            rval = self.r_unreadable
         if self.imap:
             rval = self.imap.get (rval, self.r_default)
         elif rval is None and self.r_default:
@@ -998,6 +1019,8 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
         else:
             assert not rv
             rv = []
+        if self.prefix and not isinstance (rval, str):
+            rval = str (rval)
         rv.append (self.prefix + rval)
         rv = list (sorted (rv))
         if self.no_sync_necessary (lv, rv, remote_issue):
@@ -1189,6 +1212,13 @@ class Sync_Attribute_Two_Way (Sync_Attribute):
 
     def sync (self, syncer, id, remote_issue):
         rv      = remote_issue.get (self.remote_name, None)
+        # Check if there is a configured value we should use when remote
+        # issue is unreadable, determine if remote issue has an
+        # attribute __readable__ which is set to a False boolean value.
+        if  (   self.r_unreadable is not None
+            and not remote_issue.get ('__readable__', True)
+            ):
+            rv = self.r_unreadable
         lv      = syncer.get (id, self.name)
         nosync  = self.no_sync_necessary (lv, rv, remote_issue)
         old     = syncer.oldremote.get (self.remote_name, None)
