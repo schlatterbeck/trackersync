@@ -490,6 +490,7 @@ class KPM_WS (Log, Lock_Mixin):
 
     def add_file (self, doc):
         issue = doc.issue
+        self.log.debug ('Adding file "%s" to KPM' % doc.name)
         if 'ADD_DOCUMENT' not in issue.allowed_actions:
             self.log.error \
                 ('No permission to add document for %s' % issue.id)
