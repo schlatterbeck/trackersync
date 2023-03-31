@@ -113,7 +113,7 @@ class Jira_File_Attachment (tracker_sync.File_Attachment):
     @property
     def content (self):
         if self._content is None:
-            self.log.debug ('Jira send GET: %s' % self.url)
+            self.log.debug ('Jira content send GET: %s' % self.url)
             r = self.issue.session.get (self.url)
             if not r.ok:
                 self.issue.raise_error (r, "Content")
@@ -161,7 +161,7 @@ class Jira_Backend (autosuper):
         if isinstance (self.id, int) and self.id < 0:
             raise StopIteration ('negative id')
         u = self.url + '/issue/' + str (self.id) + '?fields=attachment'
-        self.log.debug ('Jira send GET: %s' % u)
+        self.log.debug ('Jira attachment send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok:
             self.raise_error (r, "Attachment of %s" % self.id)
@@ -175,7 +175,7 @@ class Jira_Backend (autosuper):
 
     def _message_iter (self):
         u = self.url + '/issue/' + self.id + '/comment'
-        self.log.debug ('Jira send GET: %s' % u)
+        self.log.debug ('Jira message send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok:
             self.raise_error (r, "Message of %s" % self.id)
@@ -330,7 +330,7 @@ class Jira_Syncer (tracker_sync.Syncer):
 
     def compute_schema (self):
         u = self.url + '/' + 'field'
-        self.log.debug ('Jira send GET: %s' % u)
+        self.log.debug ('Jira schema send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Compute Schema")
@@ -621,7 +621,7 @@ class Jira_Syncer (tracker_sync.Syncer):
             u = self.url + '/' + cls + '?key=' + id
         elif cls == 'option':
             u = self.url + '/' + 'customFieldOption' + '/' + id
-        self.log.debug ('Jira send GET: %s' % u)
+        self.log.debug ('Jira getitem send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300:
             self.raise_error (r, "Getitem %s %s" % (cls, id))
