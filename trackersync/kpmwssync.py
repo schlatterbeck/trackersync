@@ -502,7 +502,6 @@ class KPM_WS (Log, Lock_Mixin):
             , ProblemNumber        = issue.id
             , Name                 = name
             , Suffix               = suffix
-            , Type                 = doc.type or 'application/octet-stream'
             , Data                 = doc.content
             , _soapheaders         = head
             )
