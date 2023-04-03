@@ -495,9 +495,9 @@ class KPM_WS (Log, Lock_Mixin):
             self.log.error \
                 ('No permission to add document for %s' % issue.id)
             return
-        head = issue.header.header ('AddDocumentRequest')
+        head = self.header.header ('AddDocumentRequest')
         name, suffix = os.path.splitext (doc.name)
-        ans = issue.client.service.AddDocument \
+        ans = self.client.service.AddDocument \
             ( UserAuthentification = self.auth
             , ProblemNumber        = issue.id
             , Name                 = name
