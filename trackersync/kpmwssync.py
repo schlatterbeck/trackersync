@@ -924,7 +924,7 @@ def main ():
             syncer.log.warn \
                 ('Processing %s issues not found in mailbox' % len (old_issues))
             for id in old_issues:
-                oldid = syncer.get_oldvalues ()
+                oldid = syncer.get_oldvalues (id)
                 if id != oldid:
                     syncer.log.error \
                         ('Cannot get old KPM issue %s/%s' % (oldid, id))
