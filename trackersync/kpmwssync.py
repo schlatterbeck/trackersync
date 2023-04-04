@@ -497,12 +497,19 @@ class KPM_WS (Log, Lock_Mixin):
             return
         head = self.header.header ('AddDocumentRequest')
         name, suffix = os.path.splitext (doc.name)
+        # Max len of suffix is 4 and we don't want leading dots
+        suffix = suffix.lstrip ('.')[:4]
+        doc = self.fac.Document \
+            ( AccessRight          = "0"
+            , Name                 = name
+            , Size                 = len (doc.content)
+            , Suffix               = suffix
+            , Data                 = doc.content
+            )
         ans = self.client.service.AddDocument \
             ( UserAuthentification = self.auth
             , ProblemNumber        = issue.id
-            , Name                 = name
-            , Suffix               = suffix
-            , Data                 = doc.content
+            , Document             = doc
             , _soapheaders         = head
             )
         if self.check_error ('AddDocument', ans):
