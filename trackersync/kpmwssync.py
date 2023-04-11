@@ -607,6 +607,7 @@ class KPM_WS (Log, Lock_Mixin):
         if self.check_error ('GetProblemActions', rights):
             return
         actions = set (rights ['Action'])
+        rec = {}
         if 'GET_DEVELOPMENT_PROBLEM_DATA' in actions:
             head = self.header.header ('GetDevelopmentProblemDataRequest')
             rec  = self.client.service.GetDevelopmentProblemData \
@@ -616,13 +617,13 @@ class KPM_WS (Log, Lock_Mixin):
                 )
             if self.check_error ('GetDevelopmentProblemData', rec):
                 return
+            rec = rec ['DevelopmentProblem']
+            rec = serialize_object (rec)
+            raw = rec.get ('_raw_elements', None)
+            self.make_serializable (rec)
         elif not old_rec:
             self.log.info ("No right to get problem data for %s" % id)
             return
-        rec = rec ['DevelopmentProblem']
-        rec = serialize_object (rec)
-        raw = rec.get ('_raw_elements', None)
-        self.make_serializable (rec)
         rec ['Aussagen'] = {}
         pss = self.get_process_steps (id, actions)
         if not pss and old_rec.get ('SupplierResponse'):
@@ -931,7 +932,7 @@ def main ():
                 ('Processing %s issues not found in mailbox' % len (old_issues))
             for id in old_issues:
                 oldid = syncer.get_oldvalues (id)
-                if id != oldid:
+                if not oldid:
                     syncer.log.error \
                         ('Cannot get old KPM issue %s/%s' % (oldid, id))
                 else:
