@@ -62,9 +62,17 @@ except ImportError:
 
 class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
 
-    def __init__ (self, prefix = None, ** kw):
+    def __init__ \
+        ( self
+        , prefix           = None
+        , local_prefix     = None
+        , kpm_process_step = 'Aussagen'
+        , ** kw
+        ):
         self.__super.__init__ (local_name = None, ** kw)
-        self.prefix = prefix
+        self.prefix           = prefix
+        self.local_prefix     = local_prefix
+        self.kpm_process_step = kpm_process_step
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
@@ -73,17 +81,15 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
         """
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
+        kpm = remote_issue.kpm
+        kpm_attribute = kpm.retrieve_process_steps [self.kpm_process_step]
         lmsg = syncer.get_messages (id)
         # Get previously synced keys
         remote_issue.get_old_message_keys (syncer)
         local_issue = syncer.localissues [id]
-        aussagen = []
-        try:
-            aussagen = remote_issue.Aussagen
-        except AttributeError:
-            pass
-        for k in aussagen:
-            a = remote_issue.Aussagen [k]
+        pssteps = getattr (remote_issue, kpm_attribute, [])
+        for k in pssteps:
+            a = getattr (remote_issue, kpm_attribute) [k]
             if a.get ('foreign_id'):
                 continue
             message = local_issue.Message_Class \
@@ -105,7 +111,7 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
                 if not lmsg [id].content.startswith (self.prefix):
                     continue
                 msg = self._mangle_rec (lmsg [id])
-                remote_issue.add_message (msg)
+                remote_issue.add_message (msg, typ = self.kpm_process_step)
     # end def sync
 
     def _mangle_rec (self, oldrec):
@@ -243,9 +249,9 @@ class Problem (tracker_sync.Remote_Issue):
         self.messages = []
     # end def __init__
 
-    def add_message (self, msg):
+    def add_message (self, msg, typ = 'Aussagen'):
         self.dirty = True
-        msgid = self.kpm.add_message (self, msg)
+        msgid = self.kpm.add_message (self, msg, typ = typ)
         return msgid
     # end def add_message
 
@@ -298,22 +304,25 @@ class Problem (tracker_sync.Remote_Issue):
     # end def create
 
     def get_old_message_keys (self, syncer):
-        aussagen = syncer.oldremote.get ('Aussagen', {})
-        for k in aussagen:
-            d = aussagen [k]
-            if 'foreign_id' in d:
-                self ['Aussagen'][k]['foreign_id'] = d ['foreign_id']
+        for typ in self.kpm.retrieve_process_steps:
+            kpm_attribute = self.kpm.retrieve_process_steps [typ]
+            content = syncer.oldremote.get (kpm_attribute, {})
+            for k in content:
+                d = content [k]
+                if 'foreign_id' in d:
+                    self [kpm_attribute][k]['foreign_id'] = d ['foreign_id']
         self.msg_by_foreign_id = {}
-        mlist = []
-        try:
-            mlist = self ['Aussagen']
-        except KeyError:
-            pass
-        for k in mlist:
-            m = self ['Aussagen'][k]
-            fk = m.get ('foreign_id')
-            if fk:
-                self.msg_by_foreign_id [fk] = k
+        for typ in self.kpm.retrieve_process_steps:
+            kpm_attribute = self.kpm.retrieve_process_steps [typ]
+            try:
+                d = self [kpm_attribute]
+            except KeyError:
+                continue
+            for k in d:
+                m = d [k]
+                fk = m.get ('foreign_id')
+                if fk:
+                    self.msg_by_foreign_id [fk] = k
     # end def get_old_message_keys
 
     def sync (self, syncer):
@@ -403,6 +412,13 @@ class KPM_Header (autosuper):
 class KPM_WS (Log, Lock_Mixin):
     """ Interactions with the KPM web service interface
     """
+    # List of Process steps to fully retrieve
+    retrieve_process_steps = dict \
+        (( ('Aussagen',                       'Aussagen')
+        ,  ('Antwort auf TV, RF, WK, FK, WA', 'Answer_to_Supplier')
+        ,  ('Rückfrage',                      'Supplier_Question')
+        ,  ('Information an Lieferanten',     'Supplier_Info')
+        ))
 
     def __init__ \
         ( self
@@ -517,11 +533,13 @@ class KPM_WS (Log, Lock_Mixin):
         doc.id = ans ['DocumentReference']
     # end def add_file
 
-    def add_message (self, problem, msg):
-        if 'ADD_NOTICE' not in problem.allowed_actions:
-            self.log.error \
-                ('No permission to add message to %s' % problem.id)
-        else:
+    def add_message (self, problem, msg, typ = 'Aussagen'):
+        kpm_attribute = self.retrieve_process_steps [typ]
+        if typ == 'Aussagen':
+            if 'ADD_NOTICE' not in problem.allowed_actions:
+                self.log.error \
+                    ('No permission to add message to %s' % problem.id)
+                return
             head = self.header.header ('AddNoticeRequest')
             r    = self.client.service.AddNotice \
                 ( UserAuthentification = self.auth
@@ -530,15 +548,29 @@ class KPM_WS (Log, Lock_Mixin):
                 , _soapheaders         = head
                 )
             self.check_error ('AddNotice', r)
-            id = r ['ProcessStepId']
-            # Workaround: Seems the ID is in different date format
-            id = self.fix_process_step_date (id)
-            problem.Aussagen [id] = dict \
-                ( id         = id
-                , content    = msg.content
-                , date       = msg.date.strftime ('%Y-%m-%d-%H.%M.%S.%f')
-                , foreign_id = msg.id
+        elif typ == 'Rückfrage':
+            head = self.header.header ('AddSupplierQuestionRequest')
+            r    = self.client.service.AddSupplierQuestion \
+                ( UserAuthentification = self.auth
+                , ProblemNumber        = problem.ProblemNumber
+                , SupplierQuestion     = msg.content
+                , _soapheaders         = head
                 )
+            self.check_error ('AddSupplierQuestion', r)
+        else:
+            raise NotImplementedError \
+                ('ProcessStepTypeDescription "%s" not implemented' % typ)
+        id = r ['ProcessStepId']
+        # Workaround: Seems the ID is in different date format
+        # At least that was the case for 'Aussagen' at some time.
+        id = self.fix_process_step_date (id)
+        d = getattr (problem, kpm_attribute)
+        d [id] = dict \
+            ( id         = id
+            , content    = msg.content
+            , date       = msg.date.strftime ('%Y-%m-%d-%H.%M.%S.%f')
+            , foreign_id = msg.id
+            )
     # end def add_message
 
     def fix_process_step_date (self, timestamp):
@@ -608,6 +640,7 @@ class KPM_WS (Log, Lock_Mixin):
             return
         actions = set (rights ['Action'])
         rec = {}
+        raw = None
         if 'GET_DEVELOPMENT_PROBLEM_DATA' in actions:
             head = self.header.header ('GetDevelopmentProblemDataRequest')
             rec  = self.client.service.GetDevelopmentProblemData \
@@ -624,10 +657,12 @@ class KPM_WS (Log, Lock_Mixin):
         elif not old_rec:
             self.log.info ("No right to get problem data for %s" % id)
             return
-        rec ['Aussagen'] = {}
         pss = self.get_process_steps (id, actions)
         if not pss and old_rec.get ('SupplierResponse'):
             old_rec ['__readable__'] = False
+        for rl in self.retrieve_process_steps:
+            recname = self.retrieve_process_steps [rl]
+            rec [recname] = {}
         for ps in pss:
             pstype = ps ['ProcessStepTypeDescription']
             if pstype == 'Lieferantenaussage':
@@ -639,19 +674,24 @@ class KPM_WS (Log, Lock_Mixin):
                     rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
             if pstype == 'Analyse abgeschlossen':
                 rec ['Analysis'] = ps ['Text']
-            if pstype == 'Aussage':
-                psid = ps ['ProcessStepId']
-                rec ['Aussagen'][psid] = dict \
-                    ( id      = psid
-                    , date    = ps ['CreationDate']
-                    , content = ps ['Text']
-                    )
+            for rl in self.retrieve_process_steps:
+                recname = self.retrieve_process_steps [rl]
+                if pstype == rl:
+                    psid = ps ['ProcessStepId']
+                    rec [recname][psid] = dict \
+                        ( id      = psid
+                        , date    = ps ['CreationDate']
+                        , content = ps ['Text']
+                        )
         if old_rec:
             for k in old_rec:
                 if k not in rec:
                     rec [k] = old_rec [k]
-                elif k == 'Aussagen' and not rec [k]:
-                    rec [k] = old_rec [k].copy ()
+                else:
+                    for rl in self.retrieve_process_steps:
+                        recname = self.retrieve_process_steps [rl]
+                        if k == recname and not rec [k]:
+                            rec [k] = old_rec [k].copy ()
         p = Problem (self, id, rec, raw = raw)
         # If raw elements exist, parsing wasn't fully successful
         if p.raw:
@@ -692,7 +732,7 @@ class KPM_WS (Log, Lock_Mixin):
                 # Only keep newest
                 if pstype not in latest or latest [pstype] < psid:
                     latest [pstype] = psid
-            if pstype == 'Aussage':
+            if pstype in self.retrieve_process_steps:
                 steplist.append (psid)
         head = self.header.header ('GetProcessStepsRequest')
         info = self.client.service.GetProcessSteps \

@@ -290,7 +290,7 @@ class Remote_Issue (Backend_Common):
                         item = item [n]
                     else:
                         item = None
-                if not item and not nitem:
+                if item is None and nitem is None:
                     raise KeyError ("Not found: %s" % name)
             if nitem is not None:
                 return nitem
