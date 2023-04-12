@@ -92,12 +92,15 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
             a = getattr (remote_issue, kpm_attribute) [k]
             if a.get ('foreign_id'):
                 continue
+            content = a ['content']
+            if self.local_prefix:
+                content = self.local_prefix + content
             message = local_issue.Message_Class \
                 ( local_issue
                 , id      = k
                 , date    = datetime.strptime
                     (a ['date'], '%Y-%m-%d-%H.%M.%S.%f')
-                , content = a ['content']
+                , content = content
                 )
             # There may be a problem if later during sync of the same
             # issue an error occurs and we cannot write the sync db.
