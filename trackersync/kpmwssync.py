@@ -421,7 +421,7 @@ class KPM_WS (Log, Lock_Mixin):
     """
     # List of Process steps to fully retrieve
     retrieve_process_steps = dict \
-        (( ('Aussagen',                       'Aussagen')
+        (( ('Aussage',                        'Aussagen')
         ,  ('Antwort auf TV, RF, WK, FK, WA', 'Answer_to_Supplier')
         ,  ('Rückfrage',                      'Supplier_Question')
         ,  ('Information an Lieferanten',     'Supplier_Info')
