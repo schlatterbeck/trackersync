@@ -310,9 +310,13 @@ class Problem (tracker_sync.Remote_Issue):
         for typ in self.kpm.retrieve_process_steps:
             kpm_attribute = self.kpm.retrieve_process_steps [typ]
             content = syncer.oldremote.get (kpm_attribute, {})
+            if kpm_attribute not in self.record:
+                self.record [kpm_attribute] = {}
             for k in content:
                 d = content [k]
                 if 'foreign_id' in d:
+                    if k not in self [kpm_attribute]:
+                        self [kpm_attribute][k] = {}
                     self [kpm_attribute][k]['foreign_id'] = d ['foreign_id']
         self.msg_by_foreign_id = {}
         for typ in self.kpm.retrieve_process_steps:
