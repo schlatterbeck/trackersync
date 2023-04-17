@@ -66,7 +66,7 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
         ( self
         , prefix           = None
         , local_prefix     = None
-        , kpm_process_step = 'Aussagen'
+        , kpm_process_step = 'Aussage'
         , ** kw
         ):
         self.__super.__init__ (local_name = None, ** kw)
@@ -252,7 +252,7 @@ class Problem (tracker_sync.Remote_Issue):
         self.messages = []
     # end def __init__
 
-    def add_message (self, msg, typ = 'Aussagen'):
+    def add_message (self, msg, typ = 'Aussage'):
         self.dirty = True
         msgid = self.kpm.add_message (self, msg, typ = typ)
         return msgid
@@ -540,9 +540,9 @@ class KPM_WS (Log, Lock_Mixin):
         doc.id = ans ['DocumentReference']
     # end def add_file
 
-    def add_message (self, problem, msg, typ = 'Aussagen'):
+    def add_message (self, problem, msg, typ = 'Aussage'):
         kpm_attribute = self.retrieve_process_steps [typ]
-        if typ == 'Aussagen':
+        if typ == 'Aussage':
             if 'ADD_NOTICE' not in problem.allowed_actions:
                 self.log.error \
                     ('No permission to add message to %s' % problem.id)
@@ -569,7 +569,7 @@ class KPM_WS (Log, Lock_Mixin):
                 ('ProcessStepTypeDescription "%s" not implemented' % typ)
         id = r ['ProcessStepId']
         # Workaround: Seems the ID is in different date format
-        # At least that was the case for 'Aussagen' at some time.
+        # At least that was the case for 'Aussage' at some time.
         id = self.fix_process_step_date (id)
         d = getattr (problem, kpm_attribute)
         d [id] = dict \
