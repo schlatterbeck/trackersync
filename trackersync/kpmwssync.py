@@ -819,6 +819,65 @@ class KPM_WS (Log, Lock_Mixin):
 
 local_trackers = dict (jira = jira_sync.Syncer)
 
+def wstest ():
+    cmd = ArgumentParser ()
+    cmd.add_argument \
+        ( "-c", "--config"
+        , help    = "Configuration file"
+        , default = '/etc/trackersync/kpm_ws_config.py'
+        )
+    cmd.add_argument \
+        ( "-D", "--debug"
+        , help    = "Debugging"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_argument \
+        ( "-v", "--verbose"
+        , help    = "Verbose reporting"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_argument \
+        ( "--lock-name"
+        , help    = "Locking-filename -- note that this is "
+                    "dangerous, you should not have two instances of "
+                    "kpmsync writing to KPM."
+        )
+    opt     = cmd.parse_args ()
+    config  = Config.config
+    cfgpath = Config.path
+    if opt.config :
+        cfgpath, config = os.path.split (opt.config)
+        config = os.path.splitext (config) [0]
+    cfg = Config (path = cfgpath, config = config)
+
+    kpm = KPM_WS \
+        ( cfg     = cfg
+        , verbose = opt.verbose
+        , debug   = opt.debug
+        , lock    = opt.lock_name
+        )
+    head = KPM_Header (stage = 'Production')
+    if opt.debug :
+        x = kpm.client.create_message \
+            ( kpm.client.service
+            , 'GetServiceInfo'
+            , UserAuthentification = kpm.auth
+            , _soapheaders = head.header ('GetServiceInfoRequest')
+            )
+        print (tostring (x, pretty_print = True, encoding = 'unicode'))
+    vv = kpm.client.service.GetServiceInfo \
+        ( UserAuthentification = kpm.auth
+        , _soapheaders = head.header ('GetServiceInfoRequest')
+        )
+    print (vv)
+
+    if opt.verbose :
+        for problem in kpm :
+            print (problem)
+# end def wstest
+
 def main ():
     cmd = ArgumentParser ()
     cmd.add_argument \

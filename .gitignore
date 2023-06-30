@@ -6,7 +6,7 @@ build
 config
 JOB-*
 *.csv
-syncdir
+syncdir*
 testdir
 *wsdl*
 *schema*
@@ -23,3 +23,7 @@ pypath
 tree.py
 tzeep.py
 .*.swp
+old*
+dist
+*venv
+*.egg-info

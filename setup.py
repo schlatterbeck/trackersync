@@ -1,6 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: iso-8859-1 -*-
-# Copyright (C) 2015 Dr. Ralf Schlatterbeck Open Source Consulting.
+#!/usr/bin/python3
+# Copyright (C) 2015-23 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -21,22 +20,18 @@
 # 02110-1301 USA
 # ****************************************************************************
 
-try :
+from setuptools import setup
+try:
     from trackersync.Version import VERSION
-except :
+except:
     VERSION = None
-from distutils.core import setup, Extension
 
 description = []
-f = open ('README.rst')
-logo_stripped = False
-for line in f :
-    if not logo_stripped and line.strip () :
-        continue
-    logo_stripped = True
-    description.append (line)
+with open ('README.rst') as f:
+    for line in f:
+        description.append (line)
 
-license     = 'GNU General Public License (GPL)'
+license     = 'MIT License'
 baseurl     = 'http://downloads.sourceforge.net'
 download    = '/'.join ((baseurl, 'project/trackersync/trackersync'))
 
@@ -50,7 +45,15 @@ setup \
     , author_email     = "rsc@runtux.com"
     , packages         = ['trackersync']
     , platforms        = 'Any'
-    , scripts          = ['bin/jirasync', 'bin/kpmwssync', 'bin/pfiffsync']
+    , python_requires  = '>=3.7'
+    , entry_points       = dict
+        ( console_scripts =
+            [ 'jirasync=trackersync.jirasync:main'
+            , 'kpmwssync=trackersync.kpmwssync:main'
+            , 'kpmwstest=trackersync.kpmwssync:wstest'
+            , 'pfiffsync=trackersync.pfiffsync:main'
+            ]
+        )
     , url              = "http://trackersync.sourceforge.net/"
     , download_url     = \
         "%(download)s/%(VERSION)s/trackersync-%(VERSION)s.tar.gz" % locals ()

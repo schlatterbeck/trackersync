@@ -5,7 +5,8 @@ ifeq (,${RELEASETOOLS})
     RELEASETOOLS=../releasetools
 endif
 LASTRELEASE:=$(shell $(RELEASETOOLS)/lastrelease -n --tag-re='[0-9.]+')
-TRACKERSYNC=__init__.py kpmsync.py roundup_sync.py
+TRACKERSYNC=__init__.py engdatv2.py jira_sync.py jirasync.py \
+    kpmwssync.py pfiffsync.py roundup_sync.py ssh.py tracker_sync.py
 
 VERSIONPY=trackersync/Version.py
 VERSION=$(VERSIONPY)
@@ -23,13 +24,10 @@ all: $(VERSION)
 
 $(VERSION): $(SRC)
 
-dist: all
-	python setup.py sdist --formats=gztar,zip
-
 clean:
 	rm -f MANIFEST trackersync/Version.py notes changes default.css    \
 	      README.html README.aux README.dvi README.log README.out \
 	      README.tex announce_pypi
 	rm -rf dist build upload upload_homepage ReleaseNotes.txt
 
-include $(RELEASETOOLS)/Makefile-sf
+include $(RELEASETOOLS)/Makefile-pyrelease
