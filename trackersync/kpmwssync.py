@@ -306,6 +306,22 @@ class Problem (tracker_sync.Remote_Issue):
         raise NotImplementedError ("Creation in KPM not yet implemented")
     # end def create
 
+    def equal (self, lv, rv):
+        """ Comparison method for remote and local value.
+            KPM seems to remove whitespace at end of line.
+            The old KPM also used latin1 encoding, hopefully it is no
+            longer necessary to do a lossy conversion to latin1 for
+            comparing the results.
+        """
+        if isinstance (lv, string_types) and isinstance (rv, string_types):
+            lv = '\n'.join (x.rstrip () for x in lv.split ('\n') if x.rstrip ())
+            rv = '\n'.join (x.rstrip () for x in rv.split ('\n') if x.rstrip ())
+            # KPM seems to sometimes convert non-breaking space \xa0 to space
+            lv = lv.replace ('\xa0', ' ')
+            rv = rv.replace ('\xa0', ' ')
+        return self.__super.equal (lv, rv)
+    # end def equal
+
     def get_old_message_keys (self, syncer):
         for typ in self.kpm.retrieve_process_steps:
             kpm_attribute = self.kpm.retrieve_process_steps [typ]
