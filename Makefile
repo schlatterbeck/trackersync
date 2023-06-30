@@ -25,9 +25,10 @@ all: $(VERSION)
 $(VERSION): $(SRC)
 
 clean:
-	rm -f MANIFEST trackersync/Version.py notes changes default.css    \
-	      README.html README.aux README.dvi README.log README.out \
-	      README.tex announce_pypi
-	rm -rf dist build upload upload_homepage ReleaseNotes.txt
+	rm -f MANIFEST trackersync/Version.py notes changes default.css \
+	    README.html README.aux README.dvi README.log README.out     \
+	    README.tex announce_pypi
+	rm -rf dist build upload upload_homepage ReleaseNotes.txt       \
+            trackersync.egg-info __pycache__
 
 include $(RELEASETOOLS)/Makefile-pyrelease
