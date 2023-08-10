@@ -380,7 +380,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         s = self.schema ['issue']
         self.schema_classes = set ()
         self.multilinks = set ()
-        project_name = getattr (self.opt, 'project_name', None)
+        project_key = getattr (self.opt, 'project_key', None)
         issue_type   = getattr (self.opt, 'issue_type', None)
         for k in j:
             name = k ['id']
@@ -401,23 +401,23 @@ class Jira_Syncer (tracker_sync.Syncer):
         self.multilinks_by_project = {}
         self.multilink_keyattr     = {}
         crurl = 'createmeta?expand=projects.issuetypes.fields'
-        if project_name:
-            crurl += '&projectKeys=%s' % project_name
+        if project_key:
+            crurl += '&projectKeys=%s' % project_key
         if issue_type:
             crurl += '&issuetypeNames=%s' % issue_type
         cm = self.getitem ('issue', crurl)
         for project in cm ['projects']:
-            if project_name and project != project_name:
+            if project_key and project ['key'] != project_key:
                 continue
             pkey = project ['key']
             ml = self.multilinks_by_project [pkey] = {}
             for type in project ['issuetypes']:
-                if issue_type and type != issue_type:
+                if issue_type and type ['name'] != issue_type:
                     continue
                 for fieldname in type ['fields']:
                     entry = type ['fields'][fieldname]
                     # New way of discovering fields
-                    if project_name and issue_type:
+                    if project_key and issue_type:
                         self.parse_schema_entry (fieldname, entry)
                     m = entry ['schema'].get ('items')
                     if m in self.multilinks:
@@ -586,7 +586,7 @@ class Jira_Syncer (tracker_sync.Syncer):
                         else:
                             raise ValueError \
                                 ( 'Autodetect for multilink %s.%s failed'
-                                % propname, attrname
+                                % (prop, attrname)
                                 )
                     elif prop == 'status':
                         # Currently only works for status.name or .id
@@ -691,6 +691,20 @@ class Jira_Syncer (tracker_sync.Syncer):
                 pkey = self.get (self.current_id, 'project.key')
                 return self.multilinks_by_project [pkey][cls][key][mkey]
         try:
+            # This may be specific to the cloud api:
+            # It looks like the server api *can* look this up by name
+            #if self.opt.project_key and cls == 'version':
+            #    pkey = self.opt.project_key
+            #    if not getattr (self, 'versions_by_project', None):
+            #        versions = self.getitem ('project', pkey + '/version')
+            #        self.versions_by_project = {}
+            #        for v in versions ['values']:
+            #            self.versions_by_project [v ['name']] = v ['id']
+            #    # This raises a KeyError if not found, thats fine:
+            #    k = self.versions_by_project [key]
+            #    return self.getitem (cls, k)
+            #else:
+            #    j = self.getitem (cls, key)
             j = self.getitem (cls, key)
         except RuntimeError as err:
             m = getattr (err, 'message', None)

@@ -683,7 +683,7 @@ class KPM_WS (Log, Lock_Mixin):
             self.log.info ("No right to get problem data for %s" % id)
             return
         pss = self.get_process_steps (id, actions)
-        if not pss and old_rec.get ('SupplierResponse'):
+        if not pss and old_rec and old_rec.get ('SupplierResponse'):
             old_rec ['__readable__'] = False
         for rl in self.retrieve_process_steps:
             recname = self.retrieve_process_steps [rl]
@@ -951,8 +951,8 @@ def main ():
         , help    = "Password for local tracker"
         )
     cmd.add_argument \
-        ( "--project-name"
-        , help    = "Project name in local tracker"
+        ( "--project-key"
+        , help    = "Project key in local tracker"
         )
     cmd.add_argument \
         ( "-R", "--remote-change"
@@ -1028,13 +1028,13 @@ def main ():
     lpassword = opt.local_password or cfg.LOCAL_PASSWORD
     lusername = opt.local_username or cfg.LOCAL_USERNAME
     ltracker  = opt.local_tracker  or cfg.LOCAL_TRACKER
-    lproject  = opt.project_name   or cfg.LOCAL_PROJECT
+    lproject  = opt.project_key    or cfg.LOCAL_PROJECT
     lissue    = opt.issue_type     or cfg.LOCAL_ISSUETYPE
     opt.local_password = lpassword
     opt.local_username = lusername
     opt.url            = url
     opt.local_tracker  = ltracker
-    opt.project_name   = lproject
+    opt.project_key    = lproject
     opt.issue_type     = lissue
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES'):

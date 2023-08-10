@@ -1763,7 +1763,10 @@ class Trackersync_Syncer (Log):
         try:
             self.get_transitive_item (self.default_class, 'id', id)
         except RuntimeError as err:
-            if err.message.startswith ('Error 404'):
+            m = getattr (err, 'message', None)
+            if not m:
+                m = err.args [0]
+            if m.startswith ('Error 404'):
                 id = None
                 self.oldremote = {}
         return id
