@@ -142,6 +142,8 @@ class Config (Config_File):
             # certificate if necessary.
             , KPM_PKCS12_PATH     = None
             , KPM_PKCS12_PASSWORD = None
+            , LOCAL_PROJECT       = None
+            , LOCAL_ISSUETYPE     = None
             )
     # end def __init__
 
@@ -912,6 +914,10 @@ def main ():
         , default = False
         )
     cmd.add_argument \
+        ( "--issue-type"
+        , help    = "Issue type of local tracker"
+        )
+    cmd.add_argument \
         ( "-l", "--local-username"
         , help    = "Username for local tracker"
         )
@@ -943,6 +949,10 @@ def main ():
     cmd.add_argument \
         ( "-p", "--local-password"
         , help    = "Password for local tracker"
+        )
+    cmd.add_argument \
+        ( "--project-name"
+        , help    = "Project name in local tracker"
         )
     cmd.add_argument \
         ( "-R", "--remote-change"
@@ -1018,10 +1028,14 @@ def main ():
     lpassword = opt.local_password or cfg.LOCAL_PASSWORD
     lusername = opt.local_username or cfg.LOCAL_USERNAME
     ltracker  = opt.local_tracker  or cfg.LOCAL_TRACKER
+    lproject  = opt.project_name   or cfg.LOCAL_PROJECT
+    lissue    = opt.issue_type     or cfg.LOCAL_ISSUETYPE
     opt.local_password = lpassword
     opt.local_username = lusername
     opt.url            = url
     opt.local_tracker  = ltracker
+    opt.project_name   = lproject
+    opt.issue_type     = lissue
     syncer = None
     if url and cfg.get ('KPM_ATTRIBUTES'):
         try:

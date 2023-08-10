@@ -328,6 +328,42 @@ class Jira_Syncer (tracker_sync.Syncer):
         self.__super.__init__ (remote_name, attributes, opt, **kw)
     # end def __init__
 
+    def parse_schema_entry (self, name, entry):
+        if 'name' in entry:
+            self.schema_namemap [entry ['name']] = name
+        if 'schema' not in entry:
+            type = 'string'
+        else:
+            type = entry ['schema']['type']
+        if type == 'array':
+            # Seems custom fields do not have an 'items' key
+            # FIXME: This may still need some investigation if we
+            # need such a field in the future
+            t = entry ['schema'].get ('items')
+            if not t:
+                assert 'custom' in entry ['schema']
+                type = 'custom'
+            elif t == 'string':
+                type = 'stringlist'
+            else:
+                type = ('Multilink', t)
+                # The default schema entry, see below for special cases
+                if t not in self.schema:
+                    self.schema_classes.add (t)
+                    self.multilinks.add (t)
+        elif type == 'datetime':
+            type = 'date'
+        elif type == 'date':
+            type = 'date'
+        elif type not in ('string', 'number'):
+            t    = type
+            type = ('Link', type)
+            # The default schema entry, see below for special cases
+            if t not in self.schema:
+                self.schema_classes.add (t)
+        self.schema ['issue'][name] = type
+    # end def parse_schema_entry
+
     def compute_schema (self):
         u = self.url + '/' + 'field'
         self.log.debug ('Jira schema send GET: %s' % u)
@@ -342,57 +378,18 @@ class Jira_Syncer (tracker_sync.Syncer):
         self.schema ['issue'] = {}
         self.schema_namemap = {}
         s = self.schema ['issue']
-        schema_classes = set ()
+        self.schema_classes = set ()
         self.multilinks = set ()
+        project_name = getattr (self.opt, 'project_name', None)
+        issue_type   = getattr (self.opt, 'issue_type', None)
         for k in j:
             name = k ['id']
-            if 'name' in k:
-                self.schema_namemap [k ['name']] = name
-            if 'schema' not in k:
-                type = 'string'
-            else:
-                type = k ['schema']['type']
-            if type == 'array':
-                # Seems custom fields do not have an 'items' key
-                # FIXME: This may still need some investigation if we
-                # need such a field in the future
-                t = k ['schema'].get ('items')
-                if not t:
-                    assert 'custom' in k ['schema']
-                    type = 'custom'
-                elif t == 'string':
-                    type = 'stringlist'
-                else:
-                    type = ('Multilink', t)
-                    # The default schema entry, see below for special cases
-                    if t not in self.schema:
-                        schema_classes.add (t)
-                        self.multilinks.add (t)
-            elif type == 'datetime':
-                type = 'date'
-            elif type == 'date':
-                type = 'date'
-            elif type not in ('string', 'number'):
-                t    = type
-                type = ('Link', type)
-                # The default schema entry, see below for special cases
-                if t not in self.schema:
-                    schema_classes.add (t)
-            s [name] = type
+            self.parse_schema_entry (name, k)
         # The default class 'issue' contains property 'id' which is not
         # discovered automagically: id and key are not in fields but in
         # the upper-level object
         s ['id']  = 'string'
         s ['key'] = 'string'
-        # Some day find out if we can discover the schema via REST
-        # These are custom schema options
-        self.schema ['option'] = dict (id = 'string', value = 'string')
-        for name in schema_classes:
-            if name not in self.schema:
-                self.schema [name] = dict \
-                    (id = 'string', name = 'string', key = 'string')
-        self.schema ['user']['displayName'] = 'string'
-        self.default_class = 'issue'
         # Special hack to get all multilink values allowed.
         # Examples: versions, components
         # We query /issue/createmeta?expand=projects.issuetypes.fields
@@ -403,14 +400,25 @@ class Jira_Syncer (tracker_sync.Syncer):
         # We build the multilinks_by_project on the fly here.
         self.multilinks_by_project = {}
         self.multilink_keyattr     = {}
-        cm = self.getitem \
-            ('issue', 'createmeta?expand=projects.issuetypes.fields')
+        crurl = 'createmeta?expand=projects.issuetypes.fields'
+        if project_name:
+            crurl += '&projectKeys=%s' % project_name
+        if issue_type:
+            crurl += '&issuetypeNames=%s' % issue_type
+        cm = self.getitem ('issue', crurl)
         for project in cm ['projects']:
+            if project_name and project != project_name:
+                continue
             pkey = project ['key']
             ml = self.multilinks_by_project [pkey] = {}
             for type in project ['issuetypes']:
+                if issue_type and type != issue_type:
+                    continue
                 for fieldname in type ['fields']:
                     entry = type ['fields'][fieldname]
+                    # New way of discovering fields
+                    if project_name and issue_type:
+                        self.parse_schema_entry (fieldname, entry)
                     m = entry ['schema'].get ('items')
                     if m in self.multilinks:
                         if not entry.get ('allowedValues'):
@@ -431,6 +439,15 @@ class Jira_Syncer (tracker_sync.Syncer):
                             vn = av [k]
                             ml [m][vn] = dict \
                                 ((k, av [k]) for k in av if k != 'self')
+        # Some day find out if we can discover the schema via REST
+        # These are custom schema options
+        self.schema ['option'] = dict (id = 'string', value = 'string')
+        for name in self.schema_classes:
+            if name not in self.schema:
+                self.schema [name] = dict \
+                    (id = 'string', name = 'string', key = 'string')
+        self.schema ['user']['displayName'] = 'string'
+        self.default_class = 'issue'
     # end def compute_schema
 
     def _create (self, cls, ** kw):
