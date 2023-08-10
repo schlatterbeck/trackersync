@@ -256,10 +256,14 @@ class Jira_Backend (autosuper):
         if self.issue_comments is None:
             self.issue_comments = {}
             for m in self._message_iter ():
+                # This differs for server and cloud:
+                authorkey = 'key'
+                if authorkey not in m ['updateAuthor']:
+                    authorkey = 'accountId'
                 msg = self.Message_Class \
                     ( self
                     , id          = m ['id']
-                    , author_id   = m ['updateAuthor']['key']
+                    , author_id   = m ['updateAuthor'][authorkey]
                     , author_name = m ['updateAuthor']['displayName']
                     , date        = jira_utctime (m ['updated'])
                     , content     = m ['body']
