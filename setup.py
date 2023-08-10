@@ -20,26 +20,21 @@
 # 02110-1301 USA
 # ****************************************************************************
 
+import sys
 from setuptools import setup
-try:
-    from trackersync.Version import VERSION
-except:
-    VERSION = None
+sys.path.insert (1, '.')
+from trackersync import __version__
 
-description = []
 with open ('README.rst') as f:
-    for line in f:
-        description.append (line)
+    description = f.read ()
 
 license     = 'MIT License'
-baseurl     = 'http://downloads.sourceforge.net'
-download    = '/'.join ((baseurl, 'project/trackersync/trackersync'))
 
 setup \
     ( name             = "trackersync"
-    , version          = VERSION
+    , version          = __version__
     , description      = "Issue Tracker Synchronisation Tool"
-    , long_description = ''.join (description)
+    , long_description = description
     , license          = license
     , author           = "Ralf Schlatterbeck"
     , author_email     = "rsc@runtux.com"
@@ -54,9 +49,11 @@ setup \
             , 'pfiffsync=trackersync.pfiffsync:main'
             ]
         )
-    , url              = "http://trackersync.sourceforge.net/"
-    , download_url     = \
-        "%(download)s/%(VERSION)s/trackersync-%(VERSION)s.tar.gz" % locals ()
+    , project_urls     = \
+        { 'Homepage':    "https://github.com/schlatterbeck/trackersync"
+        , 'Homepage2':   "https://sourceforge.net/projects/trackersync/"
+        , "Bug Tracker": "https://github.com/schlatterbeck/trackersync/issues"
+        }
     , classifiers      = \
         [ 'Development Status :: 5 - Production/Stable'
         , 'License :: OSI Approved :: ' + license

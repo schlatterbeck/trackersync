@@ -28,7 +28,6 @@ clean:
 	rm -f MANIFEST trackersync/Version.py notes changes default.css \
 	    README.html README.aux README.dvi README.log README.out     \
 	    README.tex announce_pypi
-	rm -rf dist build upload upload_homepage ReleaseNotes.txt       \
-            trackersync.egg-info __pycache__
+	rm -rf trackersync.egg-info trackersync/__pycache__ $(CLEAN)
 
 include $(RELEASETOOLS)/Makefile-pyrelease
