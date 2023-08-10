@@ -41,6 +41,7 @@ setup \
     , packages         = ['trackersync']
     , platforms        = 'Any'
     , python_requires  = '>=3.7'
+    , install_requires = ['rsclib', 'zeep', 'requests', 'requests-pkcs12']
     , entry_points       = dict
         ( console_scripts =
             [ 'jirasync=trackersync.jirasync:main'
