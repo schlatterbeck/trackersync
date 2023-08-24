@@ -1725,12 +1725,13 @@ class Trackersync_Syncer (Log):
         elif self.localissues [id].dirty or remote_issue.dirty:
             self.update_issue (id, remote_id, remote_issue)
         if remote_issue.dirty:
-            # This is expected to *not* change the syncdb anymore
+            # Changes to syncdb are written in finalize_sync_db
             if not self.dry_run and not self.remote_dry_run:
                 self.log_verbose ("Update remote:", remote_issue.newvalues)
                 remote_issue.update (self)
             else:
                 self.log_verbose ("DRYRUN upd remote:", remote_issue.newvalues)
+            self.finalize_sync_db (id, remote_id, remote_issue)
     # end def sync
 
     def oldsync_iter (self):
@@ -1840,11 +1841,19 @@ class Trackersync_Syncer (Log):
         self.log_info ("Synced: %s/%s" % (id, remote_id))
     # end def update_issue
 
-    def update_sync_db (self, iid, rid, remote_issue, classdict):
+    def update_sync_db (self, iid, rid, remote_issue, classdict = None):
+        """ This may be called as update_sync_db and as finalize_sync_db
+            depending on implementation. The finalize_sync_db can update
+            the syncdb with things that were updated in remote_issue
+            *after* the remote issue has been written.
+        """
         fn = self.get_sync_filename (rid)
         with open (fn, "w") as f:
             f.write (remote_issue.as_json (__local_id__ = iid))
     # end def update_sync_db
+    # This may be different in other implementations, it does a last
+    # write of the sync db after remote issues have been sent.
+    finalize_sync_db = update_sync_db
 
 # end class Trackersync_Syncer
 Syncer = Trackersync_Syncer

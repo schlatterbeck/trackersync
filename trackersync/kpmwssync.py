@@ -159,7 +159,7 @@ logging_cfg = dict \
             , 'formatter' : 'verbose'
             }
         )
-    , loggers = 
+    , loggers =
         { 'zeep.transports': dict
             ( level     = 'INFO'
             , propagate = True
@@ -438,12 +438,17 @@ class KPM_WS (Log, Lock_Mixin):
     """ Interactions with the KPM web service interface
     """
     # List of Process steps to fully retrieve
+    # Note: there is a 'SupplierResponse' kept in the sync data.
+    # The one stored here is with '_' in the name.
     retrieve_process_steps = dict \
         (( ('Aussage',                        'Aussagen')
         ,  ('Antwort auf TV, RF, WK, FK, WA', 'Answer_to_Supplier')
         ,  ('Rückfrage',                      'Supplier_Question')
         ,  ('Information an Lieferanten',     'Supplier_Info')
+        ,  ('Lieferantenaussage',             'Supplier_Response')
         ))
+    rev_process_steps = dict \
+        ((v, k) for k, v in retrieve_process_steps.items ())
 
     def __init__ \
         ( self
@@ -586,8 +591,6 @@ class KPM_WS (Log, Lock_Mixin):
             raise NotImplementedError \
                 ('ProcessStepTypeDescription "%s" not implemented' % typ)
         id = r ['ProcessStepId']
-        # Workaround: Seems the ID is in different date format
-        # At least that was the case for 'Aussage' at some time.
         id = self.fix_process_step_date (id)
         d = getattr (problem, kpm_attribute)
         d [id] = dict \
@@ -690,33 +693,53 @@ class KPM_WS (Log, Lock_Mixin):
             rec [recname] = {}
         for ps in pss:
             pstype = ps ['ProcessStepTypeDescription']
-            if pstype == 'Lieferantenaussage':
+            psid   = ps ['ProcessStepId']
+            t_auss = 'Lieferantenaussage'
+            t_anal = 'Analyse abgeschlossen'
+            if pstype == t_auss and self.latest_steps [pstype] == psid:
                 rec ['__readable__'] = True
                 sr = ps ['SupplierResponse']
                 rec ['SupplierResponse'] = ps ['Text']
                 if sr is not None:
                     rec ['SupplierVersionOk']   = sr ['VersionOk']
                     rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
-            if pstype == 'Analyse abgeschlossen':
+            if pstype == t_anal and self.latest_steps [pstype] == psid:
                 rec ['Analysis'] = ps ['Text']
             for rl in self.retrieve_process_steps:
                 recname = self.retrieve_process_steps [rl]
                 if pstype == rl:
-                    psid = ps ['ProcessStepId']
-                    rec [recname][psid] = dict \
+                    rec [recname][psid] = ps_rec = dict \
                         ( id      = psid
                         , date    = ps ['CreationDate']
                         , content = ps ['Text']
                         )
+                    if pstype == 'Lieferantenaussage':
+                        sr = ps ['SupplierResponse']
+                        if sr is not None:
+                            ps_rec ['SupplierVersionOk']   = sr ['VersionOk']
+                            ps_rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
         if old_rec:
             for k in old_rec:
                 if k not in rec:
                     rec [k] = old_rec [k]
-                else:
-                    for rl in self.retrieve_process_steps:
-                        recname = self.retrieve_process_steps [rl]
-                        if k == recname and not rec [k]:
-                            rec [k] = old_rec [k].copy ()
+                elif k in self.rev_process_steps:
+                    # Copy non-existing process steps
+                    # Should really never happen
+                    for pk in old_rec [k]:
+                        if pk not in rec [k]:
+                            rec [k][pk] = old_rec [k][pk].copy ()
+                    # Special case for Supplier_Response:
+                    # We need to copy the last sync date *and content*
+                    # from old_rec
+                    if k == 'Supplier_Response':
+                        # Last key
+                        m = max (rec [k])
+                        o_r = old_rec [k][m]
+                        n_r = rec [k][m]
+                        if m in old_rec [k] and 'last_sync' in old_rec [k]:
+                            n_r ['last_sync'] = o_r ['last_sync']
+                            n_r ['content']   = o_r ['content']
+                            rec ['SupplierResponse'] = o_r ['content']
         p = Problem (self, id, rec, raw = raw)
         # If raw elements exist, parsing wasn't fully successful
         if p.raw:
@@ -746,8 +769,8 @@ class KPM_WS (Log, Lock_Mixin):
             )
         self.check_error ('GetProcessStepList', info)
         # Loop over steps and decide which to retrieve
-        latest    = {}
-        steplist  = []
+        latest   = self.latest_steps = {}
+        steplist = []
         for ps in info ['ProcessStepItem']:
             assert int (ps ['ProblemNumber']) == int (problem_id)
             pstype = ps ['ProcessStepTypeDescription']
@@ -809,13 +832,15 @@ class KPM_WS (Log, Lock_Mixin):
     def update_supplier_response (self, problem):
         d = dict (ErrorNumber = problem.SupplierErrorNumber)
         try:
+            # Special case: KPM will send us '-' to reset to open but will
+            # not accept '-' in return, we cannot distinguish the two as
+            # both are mapped to the same local status
+            if problem.SupplierStatus == '-':
+                problem.SupplierStatus = '1'
             d ['Status'] = problem.SupplierStatus
         except AttributeError:
             pass
-        if problem.newvalues.get ('SupplierVersionOk', None):
-            d ['VersionOk'] = problem.newvalues ['SupplierVersionOk']
-        else:
-            d ['VersionOk'] = None
+        d ['VersionOk'] = problem.newvalues.get ('SupplierVersionOk', None)
         sr = self.fac.SupplierResponse (** d)
         h = self.header.header ('AddSupplierResponseRequest')
         d = dict \
@@ -830,7 +855,25 @@ class KPM_WS (Log, Lock_Mixin):
                 ('No permission to set supplier response for %s' % problem.id)
         else:
             r = self.client.service.AddSupplierResponse (** d)
-            self.check_error ('AddSupplierResponse', r)
+            if self.check_error ('AddSupplierResponse', r):
+                return
+            id = r ['ProcessStepId']
+            id = self.fix_process_step_date (id)
+            d  = getattr (problem, 'Supplier_Response', None)
+            if not d:
+                problem.Supplier_Response = {}
+            ts = datetime.strftime (datetime.utcnow (), '%Y-%m-%d.%H:%M:%S')
+            # We deliberately produce a timestamp *now* in a different
+            # format than the one from KPM.
+            d [id] = dict \
+                ( id         = id
+                , content    = problem.SupplierResponse
+                , date       = id
+                , last_sync  = ts
+                , SupplierErrorNumber = problem.SupplierErrorNumber
+                , SupplierVersionOk   = problem.newvalues.get
+                    ('SupplierVersionOk', None)
+                )
     # end def update_supplier_response
 
 # end class KPM_WS
