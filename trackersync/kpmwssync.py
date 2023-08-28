@@ -260,6 +260,31 @@ class Problem (tracker_sync.Remote_Issue):
         return msgid
     # end def add_message
 
+    def apply_old_values (self, old_rec):
+        rec = self.record
+        for k in old_rec:
+            if k not in rec:
+                rec [k] = old_rec [k]
+            elif k in self.kpm.rev_process_steps:
+                # Copy non-existing process steps
+                # Should really never happen
+                for pk in old_rec [k]:
+                    if pk not in rec [k]:
+                        rec [k][pk] = old_rec [k][pk].copy ()
+                # Special case for Supplier_Response:
+                # We need to copy the last sync date *and content*
+                # from old_rec
+                if k == 'Supplier_Response':
+                    # Last key
+                    m = max (rec [k])
+                    o_r = old_rec [k][m]
+                    n_r = rec [k][m]
+                    if m in old_rec [k] and 'last_sync' in old_rec [k][m]:
+                        n_r ['last_sync'] = o_r ['last_sync']
+                        n_r ['content']   = o_r ['content']
+                        rec ['SupplierResponse'] = o_r ['content']
+    # end def apply_old_values
+
     def attach_file (self, other, name = None):
         self.kpm.log.debug ('Attaching file "%s" to kpm' % other.name)
         f = self._attach_file (KPM_File_Attachment, other)
@@ -718,29 +743,9 @@ class KPM_WS (Log, Lock_Mixin):
                         if sr is not None:
                             ps_rec ['SupplierVersionOk']   = sr ['VersionOk']
                             ps_rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
-        if old_rec:
-            for k in old_rec:
-                if k not in rec:
-                    rec [k] = old_rec [k]
-                elif k in self.rev_process_steps:
-                    # Copy non-existing process steps
-                    # Should really never happen
-                    for pk in old_rec [k]:
-                        if pk not in rec [k]:
-                            rec [k][pk] = old_rec [k][pk].copy ()
-                    # Special case for Supplier_Response:
-                    # We need to copy the last sync date *and content*
-                    # from old_rec
-                    if k == 'Supplier_Response':
-                        # Last key
-                        m = max (rec [k])
-                        o_r = old_rec [k][m]
-                        n_r = rec [k][m]
-                        if m in old_rec [k] and 'last_sync' in old_rec [k]:
-                            n_r ['last_sync'] = o_r ['last_sync']
-                            n_r ['content']   = o_r ['content']
-                            rec ['SupplierResponse'] = o_r ['content']
         p = Problem (self, id, rec, raw = raw)
+        if old_rec:
+            p.apply_old_values (old_rec)
         # If raw elements exist, parsing wasn't fully successful
         if p.raw:
             tags = ','.join (x.tag for x in p.raw)
@@ -849,7 +854,8 @@ class KPM_WS (Log, Lock_Mixin):
             , SupplierResponse     = sr
             , _soapheaders         = h
             )
-        d ['ResponseText'] = problem.SupplierResponse
+        resp = getattr (problem, 'SupplierResponse', '')
+        d ['ResponseText'] = resp
         if 'ADD_SUPPLIER_RESPONSE' not in problem.allowed_actions:
             self.log.error \
                 ('No permission to set supplier response for %s' % problem.id)
@@ -1103,6 +1109,9 @@ def main ():
     try:
         for problem in kpm:
             if problem.id in old_issues:
+                # This fixes issues with KPM losing info:
+                problem.apply_old_values \
+                    (syncer.compute_oldvalues (problem.id))
                 del old_issues [problem.id]
             problem.sync (syncer)
             nproblems += 1

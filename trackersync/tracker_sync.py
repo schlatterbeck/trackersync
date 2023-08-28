@@ -1743,13 +1743,10 @@ class Trackersync_Syncer (Log):
                 yield (d)
     # end def oldsync_iter
 
-    def get_oldvalues (self, remote_id):
+    def compute_oldvalues (self, remote_id):
         """ Get the sync status (e.g., old properties of last sync of
-            remote issue). Side-effect: Set self.oldremote, this
-            contains the dictionary of property values from last sync.
-            This method must return the id of the local issue if found.
+            remote issue).
         """
-        self.oldremote = {}
         fn = self.get_sync_filename (remote_id)
         j  = None
         try:
@@ -1759,7 +1756,21 @@ class Trackersync_Syncer (Log):
             pass
         if not j:
             return None
-        d  = self.oldremote = json.loads (j)
+        d  = json.loads (j)
+        return d
+    # end def compute_oldvalues
+
+    def get_oldvalues (self, remote_id):
+        """ Get the sync status (e.g., old properties of last sync of
+            remote issue). Side-effect: Set self.oldremote, this
+            contains the dictionary of property values from last sync.
+            This method must return the id of the local issue if found.
+        """
+        self.oldremote = {}
+        d = self.compute_oldvalues (remote_id)
+        if d is None:
+            return None
+        self.oldremote = d
         id = d ['__local_id__']
         try:
             self.get_transitive_item (self.default_class, 'id', id)
