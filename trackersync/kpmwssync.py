@@ -277,9 +277,9 @@ class Problem (tracker_sync.Remote_Issue):
                 if k == 'Supplier_Response':
                     # Last key
                     m = max (rec [k])
-                    o_r = old_rec [k][m]
                     n_r = rec [k][m]
                     if m in old_rec [k] and 'last_sync' in old_rec [k][m]:
+                        o_r = old_rec [k][m]
                         n_r ['last_sync'] = o_r ['last_sync']
                         n_r ['content']   = o_r ['content']
                         rec ['SupplierResponse'] = o_r ['content']
