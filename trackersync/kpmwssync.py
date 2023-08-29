@@ -250,7 +250,10 @@ class Problem (tracker_sync.Remote_Issue):
         if self.canceled:
             attributes ['Status'] = True
         self.__super.__init__ (rec, attributes)
-        self.id = self.record ['ProblemNumber']
+        try:
+            self.id = self.record ['ProblemNumber']
+        except (AttributeError, KeyError):
+            self.id = None
         self.messages = []
     # end def __init__
 
@@ -744,10 +747,10 @@ class KPM_WS (Log, Lock_Mixin):
                             ps_rec ['SupplierVersionOk']   = sr ['VersionOk']
                             ps_rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
         p = Problem (self, id, rec, raw = raw)
-        if old_rec:
+        if p.id and old_rec:
             p.apply_old_values (old_rec)
         # If raw elements exist, parsing wasn't fully successful
-        if p.raw:
+        if p.id and p.raw:
             tags = ','.join (x.tag for x in p.raw)
             self.log.warn \
                 ('KPM-%s has raw elements with tags: %s' % (p.id, tags))
@@ -1125,8 +1128,9 @@ def main ():
                         ('Cannot get old KPM issue %s/%s' % (oldid, id))
                 else:
                     problem = kpm.get_problem (id, syncer.oldremote)
-                    if problem is None:
-                        syncer.log.warn ('KPM issue "%s" not found' % id)
+                    if problem is None or problem.id is None:
+                        syncer.log.warn \
+                            ('KPM issue "%s" not found/readable' % id)
                     else:
                         syncer.log.warn ('Processing KPM issue "%s"' % id)
                         problem.sync (syncer)
