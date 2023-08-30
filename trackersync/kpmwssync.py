@@ -286,6 +286,10 @@ class Problem (tracker_sync.Remote_Issue):
                         n_r ['last_sync'] = o_r ['last_sync']
                         n_r ['content']   = o_r ['content']
                         rec ['SupplierResponse'] = o_r ['content']
+                        for k in self.kpm.supp_status_keys:
+                            v = o_r.get ('Supplier' + k, None)
+                            if v:
+                                n_r ['Supplier' + k] = v
     # end def apply_old_values
 
     def attach_file (self, other, name = None):
@@ -477,6 +481,8 @@ class KPM_WS (Log, Lock_Mixin):
         ))
     rev_process_steps = dict \
         ((v, k) for k, v in retrieve_process_steps.items ())
+    # keys in SupplierResponse in ProcessStep of Type 'Lieferantenaussage'
+    supp_status_keys = ('Status', 'ErrorNumber', 'VersionOk', 'DueDate')
 
     def __init__ \
         ( self
@@ -729,8 +735,12 @@ class KPM_WS (Log, Lock_Mixin):
                 sr = ps ['SupplierResponse']
                 rec ['SupplierResponse'] = ps ['Text']
                 if sr is not None:
-                    rec ['SupplierVersionOk']   = sr ['VersionOk']
-                    rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
+                    for k in self.supp_status_keys:
+                        # The SupplierStatus is natively in data
+                        # retrieved via GetDevelopmentProblemData
+                        combined_k = 'Supplier' + k
+                        if combined_k not in rec:
+                            rec [combined_k] = sr [k]
             if pstype == t_anal and self.latest_steps [pstype] == psid:
                 rec ['Analysis'] = ps ['Text']
             for rl in self.retrieve_process_steps:
@@ -744,8 +754,8 @@ class KPM_WS (Log, Lock_Mixin):
                     if pstype == 'Lieferantenaussage':
                         sr = ps ['SupplierResponse']
                         if sr is not None:
-                            ps_rec ['SupplierVersionOk']   = sr ['VersionOk']
-                            ps_rec ['SupplierErrorNumber'] = sr ['ErrorNumber']
+                            for k in self.supp_status_keys:
+                                ps_rec ['Supplier' + k] = sr [k]
         p = Problem (self, id, rec, raw = raw)
         if p.id and old_rec:
             p.apply_old_values (old_rec)
@@ -880,8 +890,10 @@ class KPM_WS (Log, Lock_Mixin):
                 , date       = id
                 , last_sync  = ts
                 , SupplierErrorNumber = problem.SupplierErrorNumber
-                , SupplierVersionOk   = problem.newvalues.get
-                    ('SupplierVersionOk', None)
+                , SupplierVersionOk   = getattr
+                    (problem, 'SupplierVersionOk', None)
+                , SupplierStatus      = getattr
+                    (problem, 'SupplierStatus', None)
                 )
     # end def update_supplier_response
 
