@@ -126,7 +126,7 @@ class Jira_File_Attachment (tracker_sync.File_Attachment):
             self.issue.log.error ("Create attachment: %s is empty" % self.name)
             return
         u = self.issue.url + '/issue/' + self.issue.id + '/attachments'
-        h = {'X-Atlassian-Token': 'nocheck'}
+        h = {'X-Atlassian-Token': 'no-check'}
         f = dict (file = (self.name, self.content, self.type))
         self.log.debug ('Jira send POST (file attachment): %s' % u)
         r = self.issue.session.post (u, files = f, headers = h)
