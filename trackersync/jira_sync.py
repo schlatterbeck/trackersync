@@ -36,6 +36,7 @@ from   datetime             import datetime, timedelta
 from   rsclib.autosuper     import autosuper
 from   rsclib.pycompat      import ustr, text_type
 from   trackersync          import tracker_sync
+from   urllib.parse         import urlencode
 
 JSONDecodeError = json.decoder.JSONDecodeError
 
@@ -323,13 +324,13 @@ class Jira_Syncer (tracker_sync.Syncer):
     raise_error = Local_Issue_Class.raise_error
     json_header = { 'content-type': 'application/json' }
 
-    def __init__ (self, remote_name, attributes, opt, **kw):
+    def __init__ (self, remote_name, attributes, opt, cfg, **kw):
         self.url          = opt.url
         self.session      = requests.Session ()
         self.session.auth = (opt.local_username, opt.local_password)
         self.item_cache   = {}
         # This initializes schema and already needs the session
-        self.__super.__init__ (remote_name, attributes, opt, **kw)
+        self.__super.__init__ (remote_name, attributes, opt, cfg, **kw)
     # end def __init__
 
     def parse_schema_entry (self, name, entry):
@@ -511,7 +512,26 @@ class Jira_Syncer (tracker_sync.Syncer):
     # end def check_method
 
     def filter (self, classname, searchdict):
-        raise NotImplementedError
+        """ For now only filtering for issues is supported
+        """
+        assert classname == 'issue'
+        d = dict (expand = 'schema,names')
+        if self.cfg.LOCAL_ISSUETYPE:
+            d.update (issuetype = self.cfg.LOCAL_ISSUETYPE)
+        if self.cfg.LOCAL_PROJECT:
+            d.update (project = self.cfg.LOCAL_PROJECT)
+        # The following already *is* a dict:
+        if self.cfg.LOCAL_QUERY:
+            d.update (self.cfg.LOCAL_QUERY)
+        d.update (searchdict)
+        u = self.url + '/search?' + urlencode (d)
+        self.log.debug ('Jira getitem send GET: %s' % u)
+        r = self.session.get (u)
+        if not r.ok or not 200 <= r.status_code < 300:
+            self.raise_error (r, "Filter %s %s" % (cls, id))
+        j = r.json ()
+        self.log.debug ('Jira receive: (content not logged)')
+        return j ['issues']
     # end def filter
 
     def format_multilink (self, attrname, values, fancy = False):
@@ -788,7 +808,23 @@ class Jira_Syncer (tracker_sync.Syncer):
             remote. Currently we don't sync any new issues from local
             tracker to remote.
         """
-        pass
+        # Method for generating new remote issue, typically gets an
+        # empty dictionary as parameter
+        self.new_remote_issue = new_remote_issue
+        for issue in self.filter ('issue', {}):
+            iid = issue ['key']
+            if iid in self.localissues:
+                print ('Found: %s' % iid)
+                continue
+            print ('syncing %s' % iid)
+            self.localissues [iid] = self.Local_Issue_Class \
+                (self, iid, opt = self.opt)
+            # Update oldvalues with fields we already have
+            for n in issue ['fields']:
+                if n in ('id', 'self'):
+                    continue
+                self.localissues [iid].oldvalues [n] = issue ['fields'][n]
+            self.sync_new_local_issue (iid)
     # end def sync_new_local_issues
 
     def update_aux_classes (self, id, r_id, r_issue, classdict):

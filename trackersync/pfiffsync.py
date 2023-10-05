@@ -1259,7 +1259,7 @@ def main ():
     pfiff  = None
     if url:
         syncer = local_trackers [opt.local_tracker] \
-            ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt)
+            ('PFIFF', cfg.PFIFF_ATTRIBUTES, opt, cfg)
     if opt.schema_only:
         syncer.dump_schema ()
         sys.exit (0)

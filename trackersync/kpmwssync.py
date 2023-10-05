@@ -144,6 +144,11 @@ class Config (Config_File):
             , KPM_PKCS12_PASSWORD = None
             , LOCAL_PROJECT       = None
             , LOCAL_ISSUETYPE     = None
+            # This is used when creating new remote issues for limiting
+            # the issues found by the local search, it should contain
+            # query parameters for a query URL for the local tracker
+            # used (e.g. jira).
+            , LOCAL_QUERY         = {}
             )
     # end def __init__
 
@@ -239,11 +244,14 @@ class Problem (tracker_sync.Remote_Issue):
 
     File_Attachment_Class = KPM_File_Attachment
 
-    def __init__ (self, kpm, id, rec, canceled = False, raw = False):
+    def __init__ (self, kpm, rec, canceled = False, raw = False):
         self.kpm         = kpm
         self.debug       = self.kpm.debug
         self.canceled    = canceled
         self.raw         = raw
+        # No actions allowed on new remote issue
+        if not rec:
+            self.allowed_actions = set ()
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         attributes = {}
@@ -756,7 +764,7 @@ class KPM_WS (Log, Lock_Mixin):
                         if sr is not None:
                             for k in self.supp_status_keys:
                                 ps_rec ['Supplier' + k] = sr [k]
-        p = Problem (self, id, rec, raw = raw)
+        p = Problem (self, rec, raw = raw)
         if p.id and old_rec:
             p.apply_old_values (old_rec)
         # If raw elements exist, parsing wasn't fully successful
@@ -1104,7 +1112,7 @@ def main ():
     if url and cfg.get ('KPM_ATTRIBUTES'):
         try:
             syncer = local_trackers [opt.local_tracker] \
-                ('KPM', cfg.KPM_ATTRIBUTES, opt, log_level = log_level)
+                ('KPM', cfg.KPM_ATTRIBUTES, opt, cfg, log_level = log_level)
         except:
             kpm.log_exception ()
             kpm.log.error ("Exception before starting sync")
@@ -1147,6 +1155,7 @@ def main ():
                         syncer.log.warn ('Processing KPM issue "%s"' % id)
                         problem.sync (syncer)
                         nproblems += 1
+        syncer.sync_new_local_issues (lambda x: Problem (kpm, x))
     except:
         kpm.log_exception ()
         kpm.log.error \

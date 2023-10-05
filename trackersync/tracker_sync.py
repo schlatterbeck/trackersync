@@ -486,6 +486,9 @@ class Sync_Attribute (autosuper):
         characters with '_'. Note that currently this transformation is
         only done for the To_Local variants of Sync_Attributes.
     """
+    # If to_local is True no sync is done if the issue originates
+    # locally (i.e. it is not yet created on the remote side)
+    to_local = False
 
     def __init__ \
         ( self
@@ -652,6 +655,7 @@ class Sync_Attribute_Check_Remote (Sync_Attribute):
         performed.
         Note that we don't currently support a map / imap.
     """
+    to_local = True
 
     def __init__ \
         ( self
@@ -729,6 +733,7 @@ class Sync_Attribute_To_Local (Sync_Attribute):
         Things get more complicated if we have defaults, if both values
         are None and we have an r_default, it is applied.
     """
+    to_local = True
 
     def sync (self, syncer, id, remote_issue):
         if self.l_only_update and syncer.get_existing_id (id) is None:
@@ -770,6 +775,7 @@ class Sync_Attribute_To_Local_Default (Sync_Attribute):
         This is set from the remote attribute and in case this is also
         not set, a default can be specified in the constructor.
     """
+    to_local = True
 
     def sync (self, syncer, id, remote_issue):
         if self.l_only_update and syncer.get_existing_id (id) is None:
@@ -798,6 +804,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
         name of the fields are prepended to each section, this can be
         turned off by setting add_prefix to False.
     """
+    to_local = True
 
     def __init__ \
         ( self
@@ -872,6 +879,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
         If use_r_default is True, a lookup of the item in the Multilink
         will use the given r_default.
     """
+    to_local = True
 
     def __init__ \
         ( self
@@ -1339,10 +1347,11 @@ class Trackersync_Syncer (Log):
     # Change in derived class if necessary
     Local_Issue_Class = Local_Issue
 
-    def __init__ (self, remote_name, attributes, opt, **kw):
+    def __init__ (self, remote_name, attributes, opt, cfg, **kw):
         self.remote_name     = remote_name
         self.attributes      = attributes
         self.opt             = opt
+        self.cfg             = cfg
         self.localissues     = {} # By id
         self.newcount        = 0
         self.oldremote       = {}
@@ -1791,11 +1800,12 @@ class Trackersync_Syncer (Log):
             the default method doing nothing.
         """
         remote_issue = self.new_remote_issue ({})
-        self.localissues [iid] = self.Local_Issue_Class \
-            (self, iid, opt = self.opt)
+        if iid not in self.localissues:
+            self.localissues [iid] = self.Local_Issue_Class \
+                (self, iid, opt = self.opt)
         do_sync = True
         for a in self.attributes:
-            if a.only_update:
+            if a.only_update or a.to_local:
                 continue
             self.log_debug \
                 ( "sa: id:%s %s %s %s"
