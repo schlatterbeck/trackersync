@@ -79,6 +79,8 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
         """ Note that like for all Sync_Attribute classes the remote
             issue is the KPM issue.
         """
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         kpm = remote_issue.kpm
@@ -1156,6 +1158,7 @@ def main ():
                         syncer.log.warn \
                             ('KPM issue "%s" not found/readable' % id)
                     else:
+                        problem.is_assigned = False
                         syncer.log.warn ('Processing KPM issue "%s"' % id)
                         problem.sync (syncer)
                         nproblems += 1

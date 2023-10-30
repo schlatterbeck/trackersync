@@ -255,7 +255,10 @@ class Remote_Issue (Backend_Common):
         new issue in the local tracker if the remote issue is not found.
     """
 
-    multilevel = None
+    multilevel  = None
+    # Some backends can decide if an issue is assigned to the supplier
+    # e.g. in KPM the issue may be in our mailbox or not.
+    is_assigned = True
 
     def __init__ (self, record, sync_attributes = {}):
         self.record     = record
@@ -508,6 +511,7 @@ class Sync_Attribute (autosuper):
         , allowed_chars  = None
         , local_unset    = None
         , r_unreadable   = None
+        , only_assigned  = False
         ):
         self.name           = local_name
         self.remote_name    = remote_name
@@ -529,6 +533,8 @@ class Sync_Attribute (autosuper):
         self.r_unreadable   = r_unreadable
         # only used for Sync_Attribute_To_Local_Default:
         self.local_unset    = local_unset
+        # Only run this sync attribute if the remote issue is assigned to us
+        self.only_assigned  = only_assigned
         if not self.imap and self.map:
             self.imap = dict ((v, k) for k, v in  map.items ())
         if not self.map and self.imap:
@@ -706,6 +712,8 @@ class Sync_Attribute_Files (Sync_Attribute):
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         lfiles = syncer.file_attachments (id, self.name)
@@ -736,6 +744,8 @@ class Sync_Attribute_To_Local (Sync_Attribute):
     to_local = True
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         rv = remote_issue.get (self.remote_name, None)
@@ -778,6 +788,8 @@ class Sync_Attribute_To_Local_Default (Sync_Attribute):
     to_local = True
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         v = remote_issue.get (self.remote_name)
@@ -818,6 +830,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
         , l_only_update   = False
         , name_map        = {}
         , content_map     = {}
+        , only_assigned   = False
         ):
         self.name            = local_name
         self.remote_names    = remote_names
@@ -834,9 +847,12 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
         self.map = self.imap = None
         self.name_map        = name_map
         self.content_map     = content_map
+        self.only_assigned   = only_assigned
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         v = []
@@ -893,6 +909,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
         , use_r_default = False
         , l_only_update = False
         , l_only_create = False
+        , only_assigned = False
         ):
         self.__super.__init__ \
             ( local_name
@@ -905,6 +922,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
             , imap
             , strip_prefix
             , l_only_update = l_only_update
+            , only_assigned = only_assigned
             )
         self.l_only_create   = l_only_create
         self.use_r_default   = use_r_default
@@ -912,6 +930,8 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if syncer.get_existing_id (id) is None:
             if self.l_only_update:
                 return
@@ -973,6 +993,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
         , l_only_update = False
         , allowed_chars = None
         , r_unreadable  = None
+        , only_assigned = False
         ):
         self.__super.__init__ \
             ( local_name
@@ -987,6 +1008,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
             , l_only_update = l_only_update
             , allowed_chars = allowed_chars
             , r_unreadable  = r_unreadable
+            , only_assigned = only_assigned
             )
         self.prefix = prefix
         if not prefix:
@@ -995,6 +1017,8 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         rval = remote_issue.get (self.remote_name, None)
@@ -1088,6 +1112,8 @@ class Sync_Attribute_To_Remote (Sync_Attribute):
     # end def _sync
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
         if not nosync:
             remote_issue.set (self.remote_name, lv, self.type (syncer))
@@ -1151,6 +1177,8 @@ class Sync_Attribute_Multi_To_Remote (Sync_Attribute):
     # end def _sync
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
         if not nosync:
             remote_issue.set (self.remote_name, lv, self.type (syncer))
@@ -1166,6 +1194,8 @@ class Sync_Attribute_To_Remote_If_Dirty (Sync_Attribute_To_Remote):
     """
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if remote_issue.dirty:
             self.__super.sync (syncer, id, remote_issue)
     # end def sync
@@ -1182,6 +1212,8 @@ class Sync_Attribute_To_Remote_Default (Sync_Attribute_To_Remote):
     """
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         lv, rv, nosync = self._sync (syncer, id, remote_issue)
         # Note that rv != remote_issue.get in case we do have self.imap
         # in that case we need to check if the *original* attribute
@@ -1219,6 +1251,8 @@ class Sync_Attribute_Two_Way (Sync_Attribute):
     """
 
     def sync (self, syncer, id, remote_issue):
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         rv      = remote_issue.get (self.remote_name, None)
         # Check if there is a configured value we should use when remote
         # issue is unreadable, determine if remote issue has an
