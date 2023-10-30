@@ -252,6 +252,10 @@ class Problem (tracker_sync.Remote_Issue):
         # No actions allowed on new remote issue
         if not rec:
             self.allowed_actions = set ()
+            # Initialize some hierarchical data structures for new issue
+            rec ['Coordinator'] = {}
+            rec ['Coordinator']['Contractor'] = {}
+            rec ['Coordinator']['Contractor']['Address'] = {}
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         attributes = {}
