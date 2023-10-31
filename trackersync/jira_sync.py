@@ -805,8 +805,7 @@ class Jira_Syncer (tracker_sync.Syncer):
 
     def sync_new_local_issues (self, new_remote_issue):
         """ Determine *local* issues which are not yet synced to the
-            remote. Currently we don't sync any new issues from local
-            tracker to remote.
+            remote.
         """
         # Method for generating new remote issue, typically gets an
         # empty dictionary as parameter

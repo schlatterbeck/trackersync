@@ -51,6 +51,7 @@ from collections        import deque
 from zeep               import Client
 from zeep.transports    import Transport
 from zeep.helpers       import serialize_object
+from zeep.exceptions    import Fault
 
 from trackersync        import tracker_sync
 from trackersync        import jira_sync
@@ -258,6 +259,12 @@ class Problem (tracker_sync.Remote_Issue):
             rec ['Coordinator'] = {}
             rec ['Coordinator']['Contractor'] = {}
             rec ['Coordinator']['Contractor']['Address'] = {}
+            rec ['ForemostTestPart'] = {}
+            rec ['ForemostTestPart']['PartNumber'] = {}
+            rec ['ForemostGroupProject'] = {}
+            rec ['Origin'] = {}
+            # A new issue is never assigned
+            self.is_assigned = False
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         attributes = {}
@@ -351,7 +358,50 @@ class Problem (tracker_sync.Remote_Issue):
     def create (self):
         """ Create new remote issue
         """
-        raise NotImplementedError ("Creation in KPM not yet implemented")
+        head  = self.kpm.header.header ('CreateDevelopmentProblemRequest')
+        nv    = self.newvalues
+        coord = self.kpm.fac.Order    (** nv ['Coordinator'])
+        tpart = self.kpm.fac.TestPart (** nv ['ForemostTestPart'])
+        gpr   = None
+        orig  = None
+        if self.get ('ForemostGroupProject'):
+            gpr  = self.kpm.fac.GroupProject \
+                (** self.get ('ForemostGroupProject'))
+        if self.get ('Origin'):
+            orig = self.kpm.fac.Origin (** self.get ('Origin'))
+        l_id  = nv ['NewSupplierErrorNumber']
+        self.kpm.log.debug ('Create remote issue for "%s"' % l_id)
+        if self.kpm.dry_run:
+            self.kpm.log.debug ('Not creating: Dry run')
+            return 'Not-created'
+        # This consists of CoreProblem + a sequence
+        # The first part of CoreProblem is a ProblemReference
+        # We don't have any attributes from ProblemReference
+        prob  = self.kpm.fac.DevelopmentProblem \
+            ( ExternalProblemNumber = l_id
+            , Rating                = nv ['Rating']
+            , Description           = nv ['Description']
+            , ShortText             = nv ['ShortText']
+            , Origin                = orig
+            , Coordinator           = coord
+            # Here ends type CoreProblem
+            , StartOfProductionDate = nv.get ('StartOfProductionDate')
+            , ForemostGroupProject  = gpr
+            , Frequency             = nv.get ('Frequency')
+            , ForemostTestPart      = tpart
+            )
+        #import pdb; pdb.set_trace ()
+        r = self.kpm.client.service.CreateDevelopmentProblem \
+            ( UserAuthentification  = self.kpm.auth
+            , DevelopmentProblem    = prob
+            , _soapheaders          = head
+            )
+        #import pdb; pdb.set_trace ()
+        # If we cannot create the issue, this is a fatal error for now:
+        if self.kpm.check_error ('CreateDevelopmentProblem', r):
+            raise ValueError ('Got error on creation')
+        # FIXME: Need to retrieve created issue
+        return r ['ProblemNumber']
     # end def create
 
     def equal (self, lv, rv):
@@ -505,6 +555,7 @@ class KPM_WS (Log, Lock_Mixin):
         , verbose = False
         , debug   = False
         , lock    = None
+        , dry_run = False
         , ** kw
         ):
         self.cfg      = cfg
@@ -515,6 +566,7 @@ class KPM_WS (Log, Lock_Mixin):
         self.timeout  = timeout
         self.verbose  = verbose
         self.debug    = debug
+        self.dry_run  = dry_run
         self.session  = requests.Session ()
         if timeout:
             self.session.timeout = timeout
@@ -953,6 +1005,7 @@ def wstest ():
         , verbose = opt.verbose
         , debug   = opt.debug
         , lock    = opt.lock_name
+        , dry_run = True
         )
     head = KPM_Header (stage = 'Production')
     if opt.debug :
@@ -1101,6 +1154,7 @@ def main ():
         , lock      = opt.lock_name
         , timeout   = opt.timeout
         , log_level = log_level
+        , dry_run   = opt.dry_run or opt.remote_dry_run
         )
     url       = opt.url         or cfg.get ('LOCAL_URL', None)
     lpassword = opt.local_password or cfg.LOCAL_PASSWORD
@@ -1163,6 +1217,21 @@ def main ():
                         problem.sync (syncer)
                         nproblems += 1
         syncer.sync_new_local_issues (lambda x: Problem (kpm, x))
+    except Exception as err:
+        kpm.log_exception ()
+        if isinstance (err, Fault):
+            kpm.log.error \
+                ( 'Zeep Fault: "%s" code: %s actor: %s'
+                % (err.message, err.code, err.actor)
+                )
+            s = tostring (err.detail, pretty_print = True, encoding = 'unicode')
+            for line in s.split ('\n'):
+                kpm.log.error (line)
+        kpm.log.error \
+            ("Exception while syncing, synced %d KPM issues" % nproblems)
+        # Normally unlock is registered as an atexit handler.
+        # No idea why this is not called when a zeep exception occurs.
+        kpm.unlock ()
     except:
         kpm.log_exception ()
         kpm.log.error \
