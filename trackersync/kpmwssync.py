@@ -256,6 +256,8 @@ class Problem (tracker_sync.Remote_Issue):
         if not rec:
             self.allowed_actions = set ()
             # Initialize some hierarchical data structures for new issue
+            rec ['Creator'] = {}
+            rec ['Creator']['Address'] = {}
             rec ['Coordinator'] = {}
             rec ['Coordinator']['Contractor'] = {}
             rec ['Coordinator']['Contractor']['Address'] = {}
@@ -263,6 +265,11 @@ class Problem (tracker_sync.Remote_Issue):
             rec ['ForemostTestPart']['PartNumber'] = {}
             rec ['ForemostGroupProject'] = {}
             rec ['Origin'] = {}
+            # Some defaults:
+            rec ['Workflow']   = '42'
+            rec ['Visibility'] = '0'
+            rec ['Repeatable'] = 'XH'
+            rec ['Frequency']  = 'XG'
             # A new issue is never assigned
             self.is_assigned = False
         # We can restrict the attributes to be synced to an explicit
@@ -360,8 +367,9 @@ class Problem (tracker_sync.Remote_Issue):
         """
         head  = self.kpm.header.header ('CreateDevelopmentProblemRequest')
         nv    = self.newvalues
-        coord = self.kpm.fac.Order    (** nv ['Coordinator'])
-        tpart = self.kpm.fac.TestPart (** nv ['ForemostTestPart'])
+        creat = self.kpm.fac.Contractor (** nv ['Creator'])
+        coord = self.kpm.fac.Order      (** nv ['Coordinator'])
+        tpart = self.kpm.fac.TestPart   (** nv ['ForemostTestPart'])
         gpr   = None
         orig  = None
         if self.get ('ForemostGroupProject'):
@@ -377,13 +385,34 @@ class Problem (tracker_sync.Remote_Issue):
         # This consists of CoreProblem + a sequence
         # The first part of CoreProblem is a ProblemReference
         # We don't have any attributes from ProblemReference
-        prob  = self.kpm.fac.DevelopmentProblem \
+        keys = \
+            ( 'Exclaimer'
+            , 'ProblemDate', 'ProblemStatus', 'DescriptionNational'
+            , 'ActiveRole', 'MasterProblemNumber', 'ProblemLinkList'
+            , 'ProblemSlaveList', 'VBV', 'Section'
+            , 'AdditionalCriteriaList', 'ForemostTestVehicle', 'EProject'
+            , 'AuthorityToClose', 'AuthorityToOutgoingCheck'
+            , 'SpecialistCoordinator', 'Function', 'Kefa', 'Country'
+            , 'ModuleRelevant', 'Module', 'EngineeringStatus'
+            , 'SupplierStatus', 'EstimatedStartDate', 'Keyword'
+            , 'Supplier', 'FollowUp', 'TCB', 'CommitteeList'
+            , 'RefNrSupplier', 'LaunchPriority', 'TestOrderId'
+            , 'TestCaseId', 'VehicleSopId', 'RequirementId'
+            , 'TrafficLight', 'BSMRelevant', 'DriveType', 'ForecastDate'
+            , 'CyberSecurity', 'VerbundRelease', 'SollVerbundRelease'
+            , 'FixVerbundRelease', 'ProblemType'
+            )
+        kw = dict ((k, self.get (k)) for k in keys)
+        # The explicitly listed items are probably required or at least
+        # highly recommended.
+        prob = self.kpm.fac.DevelopmentProblem \
             ( ExternalProblemNumber = l_id
             , Workflow              = self.get ('Workflow')
             , Rating                = nv ['Rating']
             , Description           = nv ['Description']
             , ShortText             = nv ['ShortText']
             , Origin                = orig
+            , Creator               = creat
             , Coordinator           = coord
             # Here ends type CoreProblem
             , Visibility            = self.get ('Visibility')
@@ -392,14 +421,16 @@ class Problem (tracker_sync.Remote_Issue):
             , Frequency             = self.get ('Frequency')
             , Repeatable            = self.get ('Repeatable')
             , ForemostTestPart      = tpart
+            , **kw
             )
-        #import pdb; pdb.set_trace ()
+        #s = str (prob)
+        #for line in s.split ('\n'):
+        #    self.kpm.log.debug ('Problem: %s' % line)
         r = self.kpm.client.service.CreateDevelopmentProblem \
             ( UserAuthentification  = self.kpm.auth
             , DevelopmentProblem    = prob
             , _soapheaders          = head
             )
-        #import pdb; pdb.set_trace ()
         # If we cannot create the issue, this is a fatal error for now:
         if self.kpm.check_error ('CreateDevelopmentProblem', r):
             raise ValueError ('Got error on creation')
@@ -631,10 +662,13 @@ class KPM_WS (Log, Lock_Mixin):
             self.log.error ("%s%s: No MessageText found" % (c, rq))
             return 1
         txt = msg ['ResponseMessage']['MessageText']
-        if 'success' not in txt:
-            self.log.error ("%s%s: Error: %s" % (c, rq, txt))
-            return 1
-        return 0
+        if 'success' in txt:
+            return 0
+        if 'Method completed with warnings' in txt:
+            self.log.warn ("%s%s: Warning: %s" % (c, rq, txt))
+            return 0
+        self.log.error ("%s%s: Error: %s" % (c, rq, txt))
+        return 1
     # end def check_error
 
     def add_file (self, doc):
