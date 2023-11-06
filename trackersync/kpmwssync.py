@@ -379,15 +379,18 @@ class Problem (tracker_sync.Remote_Issue):
         # We don't have any attributes from ProblemReference
         prob  = self.kpm.fac.DevelopmentProblem \
             ( ExternalProblemNumber = l_id
+            , Workflow              = self.get ('Workflow')
             , Rating                = nv ['Rating']
             , Description           = nv ['Description']
             , ShortText             = nv ['ShortText']
             , Origin                = orig
             , Coordinator           = coord
             # Here ends type CoreProblem
-            , StartOfProductionDate = nv.get ('StartOfProductionDate')
+            , Visibility            = self.get ('Visibility')
+            , StartOfProductionDate = self.get ('StartOfProductionDate')
             , ForemostGroupProject  = gpr
-            , Frequency             = nv.get ('Frequency')
+            , Frequency             = self.get ('Frequency')
+            , Repeatable            = self.get ('Repeatable')
             , ForemostTestPart      = tpart
             )
         #import pdb; pdb.set_trace ()
