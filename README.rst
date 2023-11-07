@@ -191,6 +191,34 @@ that url, they need to be specified with the config items
 ``LOCAL_USERNAME`` and ``LOCAL_PASSWORD``. The type of local tracker
 needs to be selected with ``LOCAL_TRACKER``.
 
+Some interesting attributes for ``Sync_Attribute`` constructors:
+
+- The self explanatory ones are, e.g. ``local_name`` or ``remote_name``
+  specifying the attribute names in the local or remote tracker,
+  respectively.
+- The ``l_default`` and ``r_default`` specify the local and remote
+  default values, respectively. They apply when the local or remote
+  value is undefined.
+- The ``only_create`` flag applies to the sync to the remote side and
+  makes this rule apply only to remote issue creation. The
+  ``Sync_Attribute``, of course, must be one of the ``To_Remote``
+  variants.
+- Likewise the ``only_update`` applies to the sync to the remote side
+  and is *not* run during remote issue creation. It can be specified for
+  the ``To_Local`` variants.
+- The `l_only_create` flag is used to run a sync only on creation of the
+  local issue.
+- Likewise there is a ``l_only_update`` flag that specifies that the
+  sync should be run only when the local issue already exists.
+- The ``only_assigned`` flag specifies that the sync should be run only
+  if the remote issue is assigned to us. For KPM this is the case when
+  the remote issue is in our mailbox.
+- The ``after_create`` flag specifies that this sync -- *in addition to
+  running it normally* -- should be also run *after* creation of the
+  remote issue. This is typically only used to get the KPM
+  ``ProblemNumber`` into the local issue after creating the remote issue
+  (only then do we know the ``ProblemNumber``).
+
 KPMweb web service
 ++++++++++++++++++
 
