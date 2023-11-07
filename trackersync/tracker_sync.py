@@ -512,6 +512,7 @@ class Sync_Attribute (autosuper):
         , local_unset    = None
         , r_unreadable   = None
         , only_assigned  = False
+        , after_create   = False
         ):
         self.name           = local_name
         self.remote_name    = remote_name
@@ -535,6 +536,7 @@ class Sync_Attribute (autosuper):
         self.local_unset    = local_unset
         # Only run this sync attribute if the remote issue is assigned to us
         self.only_assigned  = only_assigned
+        self.after_create   = after_create
         if not self.imap and self.map:
             self.imap = dict ((v, k) for k, v in  map.items ())
         if not self.map and self.imap:
@@ -831,6 +833,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
         , name_map        = {}
         , content_map     = {}
         , only_assigned   = False
+        , after_create    = False
         ):
         self.name            = local_name
         self.remote_names    = remote_names
@@ -848,6 +851,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
         self.name_map        = name_map
         self.content_map     = content_map
         self.only_assigned   = only_assigned
+        self.after_create    = after_create
     # end def __init__
 
     def sync (self, syncer, id, remote_issue):
@@ -910,6 +914,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
         , l_only_update = False
         , l_only_create = False
         , only_assigned = False
+        , after_create  = False
         ):
         self.__super.__init__ \
             ( local_name
@@ -923,6 +928,7 @@ class Sync_Attribute_To_Local_Multilink (Sync_Attribute):
             , strip_prefix
             , l_only_update = l_only_update
             , only_assigned = only_assigned
+            , after_create  = after_create
             )
         self.l_only_create   = l_only_create
         self.use_r_default   = use_r_default
@@ -994,6 +1000,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
         , allowed_chars = None
         , r_unreadable  = None
         , only_assigned = False
+        , after_create  = False
         ):
         self.__super.__init__ \
             ( local_name
@@ -1009,6 +1016,7 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
             , allowed_chars = allowed_chars
             , r_unreadable  = r_unreadable
             , only_assigned = only_assigned
+            , after_create  = after_create
             )
         self.prefix = prefix
         if not prefix:
@@ -1855,6 +1863,18 @@ class Trackersync_Syncer (Log):
         rid = remote_issue.create ()
         if not rid:
             raise ValueError ("Didn't receive correct remote issue on creation")
+        # Now sync all 'To_Local' variants with 'after_create' set
+        for a in self.attributes:
+            if not a.after_create or not a.to_local:
+                continue
+            self.log_debug \
+                ( "sa: id:%s %s %s %s"
+                % (iid, a.__class__.__name__, a.name, a.remote_name)
+                )
+            if a.sync (self, iid, remote_issue):
+                self.log_info ("Not updating after remote create: %s" % iid)
+                do_sync = False
+                break
         self.update_issue (iid, rid, remote_issue)
     # end def sync_new_local_issue
 

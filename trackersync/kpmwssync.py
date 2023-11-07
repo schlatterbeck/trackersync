@@ -423,9 +423,9 @@ class Problem (tracker_sync.Remote_Issue):
             , ForemostTestPart      = tpart
             , **kw
             )
-        #s = str (prob)
-        #for line in s.split ('\n'):
-        #    self.kpm.log.debug ('Problem: %s' % line)
+        s = str (prob)
+        for line in s.split ('\n'):
+            self.kpm.log.debug ('Problem: %s' % line)
         r = self.kpm.client.service.CreateDevelopmentProblem \
             ( UserAuthentification  = self.kpm.auth
             , DevelopmentProblem    = prob
@@ -434,8 +434,9 @@ class Problem (tracker_sync.Remote_Issue):
         # If we cannot create the issue, this is a fatal error for now:
         if self.kpm.check_error ('CreateDevelopmentProblem', r):
             raise ValueError ('Got error on creation')
-        # FIXME: Need to retrieve created issue
-        return r ['ProblemNumber']
+        id = str (r ['ProblemNumber'])
+        self.set ('ProblemNumber', id, 'string')
+        return id
     # end def create
 
     def equal (self, lv, rv):
