@@ -51,6 +51,7 @@ from collections        import deque
 from zeep               import Client
 from zeep.transports    import Transport
 from zeep.helpers       import serialize_object
+from zeep.exceptions    import Fault
 
 from trackersync        import tracker_sync
 from trackersync        import jira_sync
@@ -79,6 +80,8 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
         """ Note that like for all Sync_Attribute classes the remote
             issue is the KPM issue.
         """
+        if self.only_assigned and not remote_issue.is_assigned:
+            return
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         kpm = remote_issue.kpm
@@ -144,6 +147,11 @@ class Config (Config_File):
             , KPM_PKCS12_PASSWORD = None
             , LOCAL_PROJECT       = None
             , LOCAL_ISSUETYPE     = None
+            # This is used when creating new remote issues for limiting
+            # the issues found by the local search, it should contain
+            # query parameters for a query URL for the local tracker
+            # used (e.g. jira).
+            , LOCAL_QUERY         = {}
             )
     # end def __init__
 
@@ -239,11 +247,31 @@ class Problem (tracker_sync.Remote_Issue):
 
     File_Attachment_Class = KPM_File_Attachment
 
-    def __init__ (self, kpm, id, rec, canceled = False, raw = False):
+    def __init__ (self, kpm, rec, canceled = False, raw = False):
         self.kpm         = kpm
         self.debug       = self.kpm.debug
         self.canceled    = canceled
         self.raw         = raw
+        # No actions allowed on new remote issue
+        if not rec:
+            self.allowed_actions = set ()
+            # Initialize some hierarchical data structures for new issue
+            rec ['Creator'] = {}
+            rec ['Creator']['Address'] = {}
+            rec ['Coordinator'] = {}
+            rec ['Coordinator']['Contractor'] = {}
+            rec ['Coordinator']['Contractor']['Address'] = {}
+            rec ['ForemostTestPart'] = {}
+            rec ['ForemostTestPart']['PartNumber'] = {}
+            rec ['ForemostGroupProject'] = {}
+            rec ['Origin'] = {}
+            # Some defaults:
+            rec ['Workflow']   = '42'
+            rec ['Visibility'] = '0'
+            rec ['Repeatable'] = 'XH'
+            rec ['Frequency']  = 'XG'
+            # A new issue is never assigned
+            self.is_assigned = False
         # We can restrict the attributes to be synced to an explicit
         # subset. The default is no restriction with attributes = {}
         attributes = {}
@@ -337,7 +365,78 @@ class Problem (tracker_sync.Remote_Issue):
     def create (self):
         """ Create new remote issue
         """
-        raise NotImplementedError ("Creation in KPM not yet implemented")
+        head  = self.kpm.header.header ('CreateDevelopmentProblemRequest')
+        nv    = self.newvalues
+        creat = self.kpm.fac.Contractor (** nv ['Creator'])
+        coord = self.kpm.fac.Order      (** nv ['Coordinator'])
+        tpart = self.kpm.fac.TestPart   (** nv ['ForemostTestPart'])
+        gpr   = None
+        orig  = None
+        if self.get ('ForemostGroupProject'):
+            gpr  = self.kpm.fac.GroupProject \
+                (** self.get ('ForemostGroupProject'))
+        if self.get ('Origin'):
+            orig = self.kpm.fac.Origin (** self.get ('Origin'))
+        l_id  = nv ['NewSupplierErrorNumber']
+        self.kpm.log.debug ('Create remote issue for "%s"' % l_id)
+        if self.kpm.dry_run:
+            self.kpm.log.debug ('Not creating: Dry run')
+            return 'Not-created'
+        # This consists of CoreProblem + a sequence
+        # The first part of CoreProblem is a ProblemReference
+        # We don't have any attributes from ProblemReference
+        keys = \
+            ( 'Exclaimer'
+            , 'ProblemDate', 'ProblemStatus', 'DescriptionNational'
+            , 'ActiveRole', 'MasterProblemNumber', 'ProblemLinkList'
+            , 'ProblemSlaveList', 'VBV', 'Section'
+            , 'AdditionalCriteriaList', 'ForemostTestVehicle', 'EProject'
+            , 'AuthorityToClose', 'AuthorityToOutgoingCheck'
+            , 'SpecialistCoordinator', 'Function', 'Kefa', 'Country'
+            , 'ModuleRelevant', 'Module', 'EngineeringStatus'
+            , 'SupplierStatus', 'EstimatedStartDate', 'Keyword'
+            , 'Supplier', 'FollowUp', 'TCB', 'CommitteeList'
+            , 'RefNrSupplier', 'LaunchPriority', 'TestOrderId'
+            , 'TestCaseId', 'VehicleSopId', 'RequirementId'
+            , 'TrafficLight', 'BSMRelevant', 'DriveType', 'ForecastDate'
+            , 'CyberSecurity', 'VerbundRelease', 'SollVerbundRelease'
+            , 'FixVerbundRelease', 'ProblemType'
+            )
+        kw = dict ((k, self.get (k)) for k in keys)
+        # The explicitly listed items are probably required or at least
+        # highly recommended.
+        prob = self.kpm.fac.DevelopmentProblem \
+            ( ExternalProblemNumber = l_id
+            , Workflow              = self.get ('Workflow')
+            , Rating                = nv ['Rating']
+            , Description           = nv ['Description']
+            , ShortText             = nv ['ShortText']
+            , Origin                = orig
+            , Creator               = creat
+            , Coordinator           = coord
+            # Here ends type CoreProblem
+            , Visibility            = self.get ('Visibility')
+            , StartOfProductionDate = self.get ('StartOfProductionDate')
+            , ForemostGroupProject  = gpr
+            , Frequency             = self.get ('Frequency')
+            , Repeatable            = self.get ('Repeatable')
+            , ForemostTestPart      = tpart
+            , **kw
+            )
+        s = str (prob)
+        for line in s.split ('\n'):
+            self.kpm.log.debug ('Problem: %s' % line)
+        r = self.kpm.client.service.CreateDevelopmentProblem \
+            ( UserAuthentification  = self.kpm.auth
+            , DevelopmentProblem    = prob
+            , _soapheaders          = head
+            )
+        # If we cannot create the issue, this is a fatal error for now:
+        if self.kpm.check_error ('CreateDevelopmentProblem', r):
+            raise ValueError ('Got error on creation')
+        id = str (r ['ProblemNumber'])
+        self.set ('ProblemNumber', id, 'string')
+        return id
     # end def create
 
     def equal (self, lv, rv):
@@ -491,6 +590,7 @@ class KPM_WS (Log, Lock_Mixin):
         , verbose = False
         , debug   = False
         , lock    = None
+        , dry_run = False
         , ** kw
         ):
         self.cfg      = cfg
@@ -501,6 +601,7 @@ class KPM_WS (Log, Lock_Mixin):
         self.timeout  = timeout
         self.verbose  = verbose
         self.debug    = debug
+        self.dry_run  = dry_run
         self.session  = requests.Session ()
         if timeout:
             self.session.timeout = timeout
@@ -562,10 +663,13 @@ class KPM_WS (Log, Lock_Mixin):
             self.log.error ("%s%s: No MessageText found" % (c, rq))
             return 1
         txt = msg ['ResponseMessage']['MessageText']
-        if 'success' not in txt:
-            self.log.error ("%s%s: Error: %s" % (c, rq, txt))
-            return 1
-        return 0
+        if 'success' in txt:
+            return 0
+        if 'Method completed with warnings' in txt:
+            self.log.warn ("%s%s: Warning: %s" % (c, rq, txt))
+            return 0
+        self.log.error ("%s%s: Error: %s" % (c, rq, txt))
+        return 1
     # end def check_error
 
     def add_file (self, doc):
@@ -756,7 +860,7 @@ class KPM_WS (Log, Lock_Mixin):
                         if sr is not None:
                             for k in self.supp_status_keys:
                                 ps_rec ['Supplier' + k] = sr [k]
-        p = Problem (self, id, rec, raw = raw)
+        p = Problem (self, rec, raw = raw)
         if p.id and old_rec:
             p.apply_old_values (old_rec)
         # If raw elements exist, parsing wasn't fully successful
@@ -939,6 +1043,7 @@ def wstest ():
         , verbose = opt.verbose
         , debug   = opt.debug
         , lock    = opt.lock_name
+        , dry_run = True
         )
     head = KPM_Header (stage = 'Production')
     if opt.debug :
@@ -1087,6 +1192,7 @@ def main ():
         , lock      = opt.lock_name
         , timeout   = opt.timeout
         , log_level = log_level
+        , dry_run   = opt.dry_run or opt.remote_dry_run
         )
     url       = opt.url         or cfg.get ('LOCAL_URL', None)
     lpassword = opt.local_password or cfg.LOCAL_PASSWORD
@@ -1104,7 +1210,7 @@ def main ():
     if url and cfg.get ('KPM_ATTRIBUTES'):
         try:
             syncer = local_trackers [opt.local_tracker] \
-                ('KPM', cfg.KPM_ATTRIBUTES, opt, log_level = log_level)
+                ('KPM', cfg.KPM_ATTRIBUTES, opt, cfg, log_level = log_level)
         except:
             kpm.log_exception ()
             kpm.log.error ("Exception before starting sync")
@@ -1144,9 +1250,26 @@ def main ():
                         syncer.log.warn \
                             ('KPM issue "%s" not found/readable' % id)
                     else:
+                        problem.is_assigned = False
                         syncer.log.warn ('Processing KPM issue "%s"' % id)
                         problem.sync (syncer)
                         nproblems += 1
+        syncer.sync_new_local_issues (lambda x: Problem (kpm, x))
+    except Exception as err:
+        kpm.log_exception ()
+        if isinstance (err, Fault):
+            kpm.log.error \
+                ( 'Zeep Fault: "%s" code: %s actor: %s'
+                % (err.message, err.code, err.actor)
+                )
+            s = tostring (err.detail, pretty_print = True, encoding = 'unicode')
+            for line in s.split ('\n'):
+                kpm.log.error (line)
+        kpm.log.error \
+            ("Exception while syncing, synced %d KPM issues" % nproblems)
+        # Normally unlock is registered as an atexit handler.
+        # No idea why this is not called when a zeep exception occurs.
+        kpm.unlock ()
     except:
         kpm.log_exception ()
         kpm.log.error \
