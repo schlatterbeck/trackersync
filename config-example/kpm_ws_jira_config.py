@@ -329,6 +329,7 @@ KPM_ATTRIBUTES = \
           , 'Repeatable'
           , 'Frequency'
           , 'Keyword'
+          , 'SollVerbundRelease'
           , 'StartOfProductionDate'
           , 'Creator.PersonalContractor.UserName'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName'
