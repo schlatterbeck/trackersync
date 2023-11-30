@@ -237,12 +237,6 @@ KPM_ATTRIBUTES = \
         , remote_name  = 'Visibility'
         , l_default    = '0'
         )
-    , jira_sync.Sync_Attribute_To_Remote_Default
-        ( local_name   = None
-        , only_create  = True
-        , remote_name  = 'Repeatable'
-        , l_default    = 'XH'
-        )
     # The Description is mandatory on remote issue creation
     , jira_sync.Sync_Attribute_To_Remote
         ( local_name   = 'description'
@@ -303,6 +297,7 @@ KPM_ATTRIBUTES = \
         , remote_name   = 'ForemostTestPart.Software'
         , r_default     = 'defaultversion'
         , use_r_default = True
+        , l_only_update = True
         )
     , jira_sync.Sync_Attribute_To_Local_Concatenate
         ( local_name      = 'description'
@@ -329,7 +324,9 @@ KPM_ATTRIBUTES = \
           , 'Repeatable'
           , 'Frequency'
           , 'Keyword'
-          , 'SollVerbundRelease'
+          , 'SollVerbundRelease.Major'
+          , 'SollVerbundRelease.Minor'
+          , 'SollVerbundRelease.Extend'
           , 'StartOfProductionDate'
           , 'Creator.PersonalContractor.UserName'
           , 'ProblemSolver.Contractor.PersonalContractor.UserName'
@@ -351,6 +348,9 @@ KPM_ATTRIBUTES = \
           , 'Origin.PhaseAddition'                   : None
           , 'Creator.PersonalContractor.UserName'    : 'Creator'
           , 'StartOfProductionDate'                  : 'Start of production'
+          , 'SollVerbundRelease.Major'               : 'Soll Verbund Release'
+          , 'SollVerbundRelease.Minor'               : None
+          , 'SollVerbundRelease.Extend'              : None
           , 'ProblemSolver.Contractor.PersonalContractor.UserName' :
             'Problem responsible'
           }
@@ -380,6 +380,7 @@ KPM_ATTRIBUTES = \
         ( local_name    = 'customfield_10036'
         , remote_name   = 'SupplierResponse'
         , only_assigned = True
+        , only_update   = True
         )
     # On some trackers the priority field may be writeable only during
     # creation of the Jira issue. In that case you want to make the
