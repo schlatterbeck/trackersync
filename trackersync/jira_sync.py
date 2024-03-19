@@ -411,39 +411,39 @@ class Jira_Syncer (tracker_sync.Syncer):
         if issue_type:
             crurl += '&issuetypeNames=%s' % issue_type
         cm = self.getitem ('issue', crurl)
-        for project in cm ['projects']:
-            if project_key and project ['key'] != project_key:
+        ml = self.multilinks_by_project [project_key] = {}
+        for type in cm ['values']:
+            if issue_type and type ['name'] != issue_type:
                 continue
-            pkey = project ['key']
-            ml = self.multilinks_by_project [pkey] = {}
-            for type in project ['issuetypes']:
-                if issue_type and type ['name'] != issue_type:
-                    continue
-                for fieldname in type ['fields']:
-                    entry = type ['fields'][fieldname]
-                    # New way of discovering fields
-                    if project_key and issue_type:
-                        self.parse_schema_entry (fieldname, entry)
-                    m = entry ['schema'].get ('items')
-                    if m in self.multilinks:
-                        if not entry.get ('allowedValues'):
-                            continue
-                        assert entry ['schema']['type'] == 'array'
-                        assert 'set' in entry ['operations']
-                        ml [m] = {}
-                        for av in entry ['allowedValues']:
-                            for k in ('key', 'name', 'value'):
-                                if k in av:
-                                    break
-                            else:
-                                raise KeyError ('No key attr found: %s' % av)
-                            if m in self.multilink_keyattr:
-                                assert self.multilink_keyattr [m] == k
-                            else:
-                                self.multilink_keyattr [m] = k
-                            vn = av [k]
-                            ml [m][vn] = dict \
-                                ((k, av [k]) for k in av if k != 'self')
+            # get fields
+            u  = 'createmeta/%(project_key)s/issuetypes/%(issue_id)s'
+            it = self.getitem ('issue', u)
+            if it ['total'] < it ['maxResults']:
+                raise NotImplemented ('Too many results for one query')
+            for entry in it ['values']:
+                # New way of discovering fields
+                if project_key and issue_type:
+                    self.parse_schema_entry (entry ['name'], entry)
+                m = entry ['schema'].get ('items')
+                if m in self.multilinks:
+                    if not entry.get ('allowedValues'):
+                        continue
+                    assert entry ['schema']['type'] == 'array'
+                    assert 'set' in entry ['operations']
+                    ml [m] = {}
+                    for av in entry ['allowedValues']:
+                        for k in ('key', 'name', 'value'):
+                            if k in av:
+                                break
+                        else:
+                            raise KeyError ('No key attr found: %s' % av)
+                        if m in self.multilink_keyattr:
+                            assert self.multilink_keyattr [m] == k
+                        else:
+                            self.multilink_keyattr [m] = k
+                        vn = av [k]
+                        ml [m][vn] = dict \
+                            ((k, av [k]) for k in av if k != 'self')
         # Some day find out if we can discover the schema via REST
         # These are custom schema options
         self.schema ['option'] = dict (id = 'string', value = 'string')
