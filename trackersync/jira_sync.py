@@ -416,7 +416,7 @@ class Jira_Syncer (tracker_sync.Syncer):
             if issue_type and type ['name'] != issue_type:
                 continue
             # get fields
-            type_id = type ['name']
+            type_id = type ['id']
             u  = 'createmeta/%(project_key)s/issuetypes/%(type_id)s' \
                % locals ()
             it = self.getitem ('issue', u)
