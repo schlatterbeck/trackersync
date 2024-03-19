@@ -405,9 +405,9 @@ class Jira_Syncer (tracker_sync.Syncer):
         # We build the multilinks_by_project on the fly here.
         self.multilinks_by_project = {}
         self.multilink_keyattr     = {}
-        crurl = 'createmeta/$(project)s/issuetypes?' \
+        crurl = 'createmeta/%(project_key)s/issuetypes?' \
                 'expand=projects.issuetypes.fields'  \
-                % (dict (project = project_key))
+                % locals ()
         if issue_type:
             crurl += '&issuetypeNames=%s' % issue_type
         cm = self.getitem ('issue', crurl)
