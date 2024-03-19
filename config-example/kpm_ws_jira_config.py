@@ -90,7 +90,6 @@ KPM_ATTRIBUTES = \
         , only_create  = True
         , remote_name  = None
         , update       = False
-        , invert       = True
         , value        = 'sync'
         )
     # We create remote issues only if our status is 'Created'
