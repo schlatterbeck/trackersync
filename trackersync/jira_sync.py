@@ -420,7 +420,7 @@ class Jira_Syncer (tracker_sync.Syncer):
             u  = 'createmeta/%(project_key)s/issuetypes/%(type_id)s' \
                % locals ()
             it = self.getitem ('issue', u)
-            if it ['total'] < it ['maxResults']:
+            if it ['total'] > it ['maxResults']:
                 raise NotImplementedError ('Too many results for one query')
             for entry in it ['values']:
                 # New way of discovering fields
