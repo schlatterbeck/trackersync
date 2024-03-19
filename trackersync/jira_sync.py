@@ -421,7 +421,7 @@ class Jira_Syncer (tracker_sync.Syncer):
                % locals ()
             it = self.getitem ('issue', u)
             if it ['total'] < it ['maxResults']:
-                raise NotImplemented ('Too many results for one query')
+                raise NotImplementedError ('Too many results for one query')
             for entry in it ['values']:
                 # New way of discovering fields
                 if project_key and issue_type:
