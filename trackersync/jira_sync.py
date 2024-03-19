@@ -416,7 +416,8 @@ class Jira_Syncer (tracker_sync.Syncer):
             if issue_type and type ['name'] != issue_type:
                 continue
             # get fields
-            u  = 'createmeta/%(project_key)s/issuetypes/%(issue_id)s'
+            u  = 'createmeta/%(project_key)s/issuetypes/%(issue_id)s' \
+               % locals ()
             it = self.getitem ('issue', u)
             if it ['total'] < it ['maxResults']:
                 raise NotImplemented ('Too many results for one query')
