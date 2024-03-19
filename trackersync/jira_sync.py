@@ -386,7 +386,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         self.schema_classes = set ()
         self.multilinks = set ()
         project_key = getattr (self.opt, 'project_key', None)
-        issue_type   = getattr (self.opt, 'issue_type', None)
+        issue_type  = getattr (self.opt, 'issue_type', None)
         for k in j:
             name = k ['id']
             self.parse_schema_entry (name, k)
@@ -397,17 +397,17 @@ class Jira_Syncer (tracker_sync.Syncer):
         s ['key'] = 'string'
         # Special hack to get all multilink values allowed.
         # Examples: versions, components
-        # We query /issue/createmeta?expand=projects.issuetypes.fields
-        # and find out all multilinks. Note that we *should* do this only
-        # for the default project we're using but we don't have the
-        # project in a sync type. The project could be selected with the
-        # additional parameter ?projectKeys=<key> in the request.
+        # We used to query /issue/createmeta?expand=projects.issuetypes.fields
+        # and find out all multilinks. This is deprecated and finally
+        # removed in Jira 9.0.
+        # We now do this only for for the default project which is
+        # configured in LOCAL_PROJECT (or command-line option project-key).
         # We build the multilinks_by_project on the fly here.
         self.multilinks_by_project = {}
         self.multilink_keyattr     = {}
-        crurl = 'createmeta?expand=projects.issuetypes.fields'
-        if project_key:
-            crurl += '&projectKeys=%s' % project_key
+        crurl = 'createmeta/$(project)s/issuetypes?' \
+                'expand=projects.issuetypes.fields'  \
+                % (dict (project = project_key))
         if issue_type:
             crurl += '&issuetypeNames=%s' % issue_type
         cm = self.getitem ('issue', crurl)
@@ -516,6 +516,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         """
         assert classname == 'issue'
         d = dict (expand = 'schema,names')
+        d.update (maxResults = '99999')
         if self.cfg.LOCAL_ISSUETYPE:
             d.update (issuetype = self.cfg.LOCAL_ISSUETYPE)
         if self.cfg.LOCAL_PROJECT:
