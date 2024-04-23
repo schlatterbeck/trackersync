@@ -1102,6 +1102,13 @@ def main ():
         , default = 'INFO'
         )
     cmd.add_argument \
+        ( "-M", "--no-mangle-filenames"
+        , help    = "Allow more than only ascii for file names"
+                    " Default=%(default)s"
+        , action  = 'store_true'
+        , default = False
+        )
+    cmd.add_argument \
         ( "-n", "--no-action"
         , help    = "Dry-run: Don't update any side of sync"
         , action  = 'store_true'

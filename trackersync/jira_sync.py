@@ -227,15 +227,18 @@ class Jira_Backend (autosuper):
             Some Jira instances are configured to only allow ascii
             filenames.
         """
-        fnb = fn.encode ('ascii', errors = 'replace')
-        return fnb.decode ('ascii')
+        fnb = fn
+        if self.mangle_filenames:
+            fnb = fn.encode ('ascii', errors = 'replace').decode ('ascii')
+        # Always replace '?' with '-', Jira doesn't allow '?'
+        fnb = fnb.replace ('?', '-')
+        return fnb
     # end def mangle_file_name
 
     def attach_file (self, other_file, name = None):
         cls   = Jira_File_Attachment
         fname = other_file.name
-        if self.mangle_filenames:
-            fname = self.mangle_file_name (other_file.name)
+        fname = self.mangle_file_name (other_file.name)
         fcp = tracker_sync.File_Attachment \
             ( other_file.issue
             , url     = getattr (other_file, 'url', None)
