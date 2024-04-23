@@ -128,11 +128,12 @@ class Jira_File_Attachment (tracker_sync.File_Attachment):
             return
         u = self.issue.url + '/issue/' + self.issue.id + '/attachments'
         h = {'X-Atlassian-Token': 'no-check'}
-        f = dict (file = (self.name, self.content, self.type))
+        t = self.type or 'application/octet-stream'
+        f = dict (file = (self.name, self.content, t))
         self.log.debug ('Jira send POST (file attachment): %s' % u)
         r = self.issue.session.post (u, files = f, headers = h)
         self.issue.log.debug \
-            ("Create attachment: %s %s" % (self.name, self.type))
+            ("Create attachment: name:%s type:%s" % (self.name, t))
         if not r.ok:
             self.issue.raise_error (r, 'Create attachment')
         j = r.json ()
