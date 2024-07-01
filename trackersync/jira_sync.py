@@ -416,7 +416,12 @@ class Jira_Syncer (tracker_sync.Syncer):
             crurl += '&issuetypeNames=%s' % issue_type
         cm = self.getitem ('issue', crurl)
         ml = self.multilinks_by_project [project_key] = {}
-        for type in cm ['values']:
+        if 'values' in cm:
+            ik = 'values'
+        else:
+            assert 'issueTypes' in cm
+            ik = 'issueTypes'
+        for type in cm [ik]:
             if issue_type and type ['name'] != issue_type:
                 continue
             # get fields
@@ -424,9 +429,13 @@ class Jira_Syncer (tracker_sync.Syncer):
             u  = 'createmeta/%(project_key)s/issuetypes/%(type_id)s' \
                % locals ()
             it = self.getitem ('issue', u)
-            if it ['total'] > it ['maxResults']:
+            if 'total' in it and it ['total'] > it ['maxResults']:
                 raise NotImplementedError ('Too many results for one query')
-            for entry in it ['values']:
+            if 'values' in it:
+                iterlist = it ['values']
+            else:
+                iterlist = it ['fields']
+            for entry in iterlist:
                 # New way of discovering fields
                 if project_key and issue_type:
                     self.parse_schema_entry (entry ['name'], entry)
@@ -675,9 +684,10 @@ class Jira_Syncer (tracker_sync.Syncer):
             self.raise_error (r, "Getitem %s %s" % (cls, id))
         j = r.json ()
         self.log.debug ('Jira receive: (content not logged)')
-        if 'fields' in j:
+        if 'fields' in j and isinstance (j ['fields'], dict):
             d = {}
             for n in j ['fields']:
+                assert isinstance (j ['fields'], dict)
                 v = j ['fields'][n]
                 if isinstance (v, dict) and ('id' in v or 'key' in v):
                     if 'id' in v:
@@ -820,9 +830,9 @@ class Jira_Syncer (tracker_sync.Syncer):
         for issue in self.filter ('issue', {}):
             iid = issue ['key']
             if iid in self.localissues:
-                print ('Found: %s' % iid)
+                #print ('Found: %s' % iid)
                 continue
-            print ('syncing %s' % iid)
+            #print ('syncing %s' % iid)
             self.localissues [iid] = self.Local_Issue_Class \
                 (self, iid, opt = self.opt)
             # Update oldvalues with fields we already have

@@ -61,6 +61,106 @@ try:
 except ImportError:
     Pkcs12Adapter = None
 
+class Process_Steps:
+    """ Additional information about problem that is carried in
+        'process steps' data structure in KPM.
+    """
+    # List of Process steps to fully retrieve
+    # Note: there is a 'SupplierResponse' kept in the sync data.
+    # The one stored here is with '_' in the name.
+    step_map = dict \
+        (( ('Aussage',                        'Aussagen')
+        ,  ('Antwort auf TV, RF, WK, FK, WA', 'Answer_to_Supplier')
+        ,  ('Rückfrage',                      'Supplier_Question')
+        ,  ('Information an Lieferanten',     'Supplier_Info')
+        ,  ('Lieferantenaussage',             'Supplier_Response')
+        ,  ('Analyse abgeschlossen',          'Analysis_All')
+        ))
+    rev_step_map = dict \
+        ((v, k) for k, v in step_map.items ())
+    # Flags if we keep only the latest item or the list, or both
+    #     Name                 keep latest, keep list
+    step_keep = dict \
+        ( Aussagen           = dict (latest = False, history = True)
+        , Answer_to_Supplier = dict (latest = False, history = True)
+        , Supplier_Question  = dict (latest = False, history = True)
+        , Supplier_Info      = dict (latest = False, history = True)
+        , Supplier_Response  = dict (latest = True,  history = True)
+        , Analysis_All       = dict (latest = True,  history = True)
+        )
+
+    def __init__ (self, parent, problem_id, actions):
+        self.parent       = parent
+        self.problem_id   = problem_id
+        self.log          = parent.log
+        self.steps        = []
+        self.latest_steps = latest = {}
+        self.history      = {}
+        self.latest       = {}
+        needed_actions = set (('GET_PROCESS_STEP_LIST', 'GET_PROCESS_STEPS'))
+        if not needed_actions.intersection (actions):
+            self.log.error ('Cannot get steps / step list for %s' % problem_id)
+            return
+        head = parent.header.header ('GetProcessStepListRequest')
+        info = parent.client.service.GetProcessStepList \
+            ( UserAuthentification = parent.auth
+            , ProblemNumber        = problem_id
+            , _soapheaders         = head
+            )
+        parent.check_error ('GetProcessStepList', info)
+        # Loop over steps and decide which to retrieve
+        steplist = set ()
+        for ps in info ['ProcessStepItem']:
+            assert int (ps ['ProblemNumber']) == int (problem_id)
+            pstype = ps ['ProcessStepTypeDescription']
+            psid   = ps ['ProcessStepId']
+            if pstype not in self.step_map:
+                continue
+            psname = self.step_map [pstype]
+            self.log.debug ("ID %s StepTypeDesc: %s" % (problem_id, pstype))
+            if self.step_keep [psname]['latest']:
+                # Only keep newest
+                if pstype not in latest or latest [pstype] < psid:
+                    latest [pstype] = psid
+            if pstype in self.step_map:
+                steplist.add (psid)
+        head = parent.header.header ('GetProcessStepsRequest')
+        info = parent.client.service.GetProcessSteps \
+            ( UserAuthentification = parent.auth
+            , ProblemNumber        = problem_id
+            , ProcessStepId        = list (steplist | set (latest.values ()))
+            , _soapheaders         = head
+            )
+        parent.check_error ('GetProcessStepList', info)
+        self.steps = info ['ProcessStep']
+        self.compute ()
+    # end def __init__
+
+    def compute (self):
+        for k in self.rev_step_map:
+            self.history [k] = []
+        for ps in self.steps:
+            pstype = ps ['ProcessStepTypeDescription']
+            psname = self.step_map [pstype]
+            psid   = ps ['ProcessStepId']
+            if self.step_keep [psname]['history']:
+                self.history [self.step_map [pstype]].append (ps)
+            if  (   self.step_keep [psname]['latest']
+                and self.latest_steps [pstype] == psid
+                ):
+                assert pstype not in self.latest
+                self.latest [pstype] = ps
+        # Sort each history by ProcessStepId
+        for k in self.history:
+            self.history [k].sort (key = lambda x: x ['ProcessStepId'])
+    # end def compute
+
+    def __bool__ (self):
+        return bool (self.steps)
+    # end def __bool__
+
+# end class Process_Steps
+
 class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
 
     def __init__ \
@@ -85,7 +185,7 @@ class Sync_Attribute_KPM_Message (tracker_sync.Sync_Attribute):
         if self.l_only_update and syncer.get_existing_id (id) is None:
             return
         kpm = remote_issue.kpm
-        kpm_attribute = kpm.retrieve_process_steps [self.kpm_process_step]
+        kpm_attribute = Process_Steps.step_map [self.kpm_process_step]
         lmsg = syncer.get_messages (id)
         # Get previously synced keys
         remote_issue.get_old_message_keys (syncer)
@@ -296,7 +396,7 @@ class Problem (tracker_sync.Remote_Issue):
         for k in old_rec:
             if k not in rec:
                 rec [k] = old_rec [k]
-            elif k in self.kpm.rev_process_steps:
+            elif k in Process_Steps.rev_step_map:
                 # Copy non-existing process steps
                 # Should really never happen
                 for pk in old_rec [k]:
@@ -456,8 +556,8 @@ class Problem (tracker_sync.Remote_Issue):
     # end def equal
 
     def get_old_message_keys (self, syncer):
-        for typ in self.kpm.retrieve_process_steps:
-            kpm_attribute = self.kpm.retrieve_process_steps [typ]
+        for typ in Process_Steps.step_map:
+            kpm_attribute = Process_Steps.step_map [typ]
             content = syncer.oldremote.get (kpm_attribute, {})
             if kpm_attribute not in self.record:
                 self.record [kpm_attribute] = {}
@@ -468,8 +568,8 @@ class Problem (tracker_sync.Remote_Issue):
                         self [kpm_attribute][k] = {}
                     self [kpm_attribute][k]['foreign_id'] = d ['foreign_id']
         self.msg_by_foreign_id = {}
-        for typ in self.kpm.retrieve_process_steps:
-            kpm_attribute = self.kpm.retrieve_process_steps [typ]
+        for typ in Process_Steps.step_map:
+            kpm_attribute = Process_Steps.step_map [typ]
             try:
                 d = self [kpm_attribute]
             except KeyError:
@@ -565,21 +665,42 @@ class KPM_Header (autosuper):
 
 # end class KPM_Header
 
+class Process_Step_Formatter:
+
+    def __init__ (self, step_history):
+        self.history = step_history
+    # end def __init__
+
+    def __str__ (self):
+        r = []
+        for ps in self.history:
+            date = ps ['CreationDate']
+            if '.' in date:
+                date = date.split ('.') [0]
+            txt  = ps ['Text']
+            uid  = ''
+            name = ''
+            n    = ''
+            if 'LastChanger' in ps:
+                uid  = ps ['LastChanger']['UserId']
+                name = ps ['LastChanger']['UserName']
+            elif 'Creator' in ps:
+                uid  = ps ['Creator']['UserId']
+                name = ps ['Creator']['UserName']
+            if name:
+                n = '%s (%s)' % (name, uid)
+            r.append ('%s %s:' % (date, n))
+            r.append (txt)
+            r.append ('')
+        return '\n'.join (r)
+    # end def __str__
+    __repr__ = __str__
+
+# end class Process_Step_Formatter
+
 class KPM_WS (Log, Lock_Mixin):
     """ Interactions with the KPM web service interface
     """
-    # List of Process steps to fully retrieve
-    # Note: there is a 'SupplierResponse' kept in the sync data.
-    # The one stored here is with '_' in the name.
-    retrieve_process_steps = dict \
-        (( ('Aussage',                        'Aussagen')
-        ,  ('Antwort auf TV, RF, WK, FK, WA', 'Answer_to_Supplier')
-        ,  ('Rückfrage',                      'Supplier_Question')
-        ,  ('Information an Lieferanten',     'Supplier_Info')
-        ,  ('Lieferantenaussage',             'Supplier_Response')
-        ))
-    rev_process_steps = dict \
-        ((v, k) for k, v in retrieve_process_steps.items ())
     # keys in SupplierResponse in ProcessStep of Type 'Lieferantenaussage'
     supp_status_keys = ('Status', 'ErrorNumber', 'VersionOk', 'DueDate')
 
@@ -702,7 +823,7 @@ class KPM_WS (Log, Lock_Mixin):
     # end def add_file
 
     def add_message (self, problem, msg, typ = 'Aussage'):
-        kpm_attribute = self.retrieve_process_steps [typ]
+        kpm_attribute = Process_Steps.step_map [typ]
         if typ == 'Aussage':
             if 'ADD_NOTICE' not in problem.allowed_actions:
                 self.log.error \
@@ -823,43 +944,45 @@ class KPM_WS (Log, Lock_Mixin):
         elif not old_rec:
             self.log.info ("No right to get problem data for %s" % id)
             return
-        pss = self.get_process_steps (id, actions)
+        pss = Process_Steps (self, id, actions)
         if not pss and old_rec and old_rec.get ('SupplierResponse'):
             old_rec ['__readable__'] = False
-        for rl in self.retrieve_process_steps:
-            recname = self.retrieve_process_steps [rl]
+        for rl in Process_Steps.step_map:
+            recname = Process_Steps.step_map [rl]
             rec [recname] = {}
-        for ps in pss:
-            pstype = ps ['ProcessStepTypeDescription']
-            psid   = ps ['ProcessStepId']
-            t_auss = 'Lieferantenaussage'
-            t_anal = 'Analyse abgeschlossen'
-            if pstype == t_auss and self.latest_steps [pstype] == psid:
-                rec ['__readable__'] = True
-                sr = ps ['SupplierResponse']
-                rec ['SupplierResponse'] = ps ['Text']
-                if sr is not None:
-                    for k in self.supp_status_keys:
-                        # The SupplierStatus is natively in data
-                        # retrieved via GetDevelopmentProblemData
-                        combined_k = 'Supplier' + k
-                        if combined_k not in rec:
-                            rec [combined_k] = sr [k]
-            if pstype == t_anal and self.latest_steps [pstype] == psid:
-                rec ['Analysis'] = ps ['Text']
-            for rl in self.retrieve_process_steps:
-                recname = self.retrieve_process_steps [rl]
-                if pstype == rl:
-                    rec [recname][psid] = ps_rec = dict \
-                        ( id      = psid
-                        , date    = ps ['CreationDate']
-                        , content = ps ['Text']
-                        )
-                    if pstype == 'Lieferantenaussage':
-                        sr = ps ['SupplierResponse']
-                        if sr is not None:
-                            for k in self.supp_status_keys:
-                                ps_rec ['Supplier' + k] = sr [k]
+        if 'Supplier_Response' in pss.latest:
+            ps = pss.latest ['Supplier_Response']
+            rec ['__readable__'] = True
+            sr = ps ['SupplierResponse']
+            rec ['SupplierResponse'] = ps ['Text']
+            if sr is not None:
+                for k in self.supp_status_keys:
+                    # The SupplierStatus is natively in data
+                    # retrieved via GetDevelopmentProblemData
+                    combined_k = 'Supplier' + k
+                    if combined_k not in rec:
+                        rec [combined_k] = sr [k]
+        if 'Analysis_All' in pss.latest:
+            rec ['Analysis'] = pss.latest ['Analysis_All']['Text']
+        if 'Analysis_All' in pss.history:
+            v = Process_Step_Formatter (pss.history ['Analysis_All'])
+            rec ['Analysis_History'] = str (v)
+
+        for recname in pss.history:
+            for ps in pss.history [recname]:
+                pstype = ps ['ProcessStepTypeDescription']
+                psid   = ps ['ProcessStepId']
+                rec [recname][psid] = ps_rec = dict \
+                    ( id      = psid
+                    , date    = ps ['CreationDate']
+                    , content = ps ['Text']
+                    )
+                if pstype == 'Lieferantenaussage':
+                    sr = ps ['SupplierResponse']
+                    if sr is not None:
+                        for k in self.supp_status_keys:
+                            ps_rec ['Supplier' + k] = sr [k]
+
         p = Problem (self, rec, raw = raw)
         if p.id and old_rec:
             p.apply_old_values (old_rec)
@@ -871,49 +994,6 @@ class KPM_WS (Log, Lock_Mixin):
         p.allowed_actions = actions
         return p
     # end def get_problem
-
-    def get_process_steps (self, problem_id, actions, relevant = None):
-        """ Get additional information about problem that is carried
-            only in process steps.
-        """
-        if relevant is None:
-            relevant = ('Lieferantenaussage', 'Analyse abgeschlossen')
-        relevant = set (relevant)
-        needed_actions = set (('GET_PROCESS_STEP_LIST', 'GET_PROCESS_STEPS'))
-        if not needed_actions.intersection (actions):
-            self.log.error ('Cannot get steps / step list for %s' % problem_id)
-            return []
-        head = self.header.header ('GetProcessStepListRequest')
-        info = self.client.service.GetProcessStepList \
-            ( UserAuthentification = self.auth
-            , ProblemNumber        = problem_id
-            , _soapheaders         = head
-            )
-        self.check_error ('GetProcessStepList', info)
-        # Loop over steps and decide which to retrieve
-        latest   = self.latest_steps = {}
-        steplist = []
-        for ps in info ['ProcessStepItem']:
-            assert int (ps ['ProblemNumber']) == int (problem_id)
-            pstype = ps ['ProcessStepTypeDescription']
-            psid   = ps ['ProcessStepId']
-            self.log.debug ("ID %s StepTypeDesc: %s" % (problem_id, pstype))
-            if pstype in relevant:
-                # Only keep newest
-                if pstype not in latest or latest [pstype] < psid:
-                    latest [pstype] = psid
-            if pstype in self.retrieve_process_steps:
-                steplist.append (psid)
-        head = self.header.header ('GetProcessStepsRequest')
-        info = self.client.service.GetProcessSteps \
-            ( UserAuthentification = self.auth
-            , ProblemNumber        = problem_id
-            , ProcessStepId        = steplist + list (latest.values ())
-            , _soapheaders         = head
-            )
-        self.check_error ('GetProcessStepList', info)
-        return info ['ProcessStep']
-    # end def get_process_steps
 
     def make_serializable (self, rec):
         """ This makes the returned data structure serializable (e.g.

@@ -878,7 +878,7 @@ class Sync_Attribute_To_Local_Concatenate (Sync_Attribute):
                         v.append (self.field_postfix)
             if k in self.content_map:
                 val = self.content_map [k].get (val, val)
-            v.append (val)
+            v.append (str (val))
         rv = ''.join (v)
         lv = syncer.get (id, self.name)
         if self.no_sync_necessary (lv, rv, remote_issue):
