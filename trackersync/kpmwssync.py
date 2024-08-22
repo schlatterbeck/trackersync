@@ -674,9 +674,7 @@ class Process_Step_Formatter:
     def __str__ (self):
         r = []
         for ps in self.history:
-            date = ps ['CreationDate']
-            if '.' in date:
-                date = date.split ('.') [0]
+            date = self.convert_date (ps ['CreationDate'])
             txt  = ps ['Text']
             uid  = ''
             name = ''
@@ -695,6 +693,19 @@ class Process_Step_Formatter:
         return '\n'.join (r)
     # end def __str__
     __repr__ = __str__
+
+    def convert_date (self, value):
+        """ Convert date from Process_Step representation
+        """
+        if not value:
+            return ''
+        try:
+            dt = datetime.strptime (value, "%Y-%m-%d-%H.%M.%S.%f")
+            return dt.strftime ('%Y-%m-%d %H.%M.%S')
+        except ValueError:
+            pass
+        return value
+    # end def convert_date
 
 # end class Process_Step_Formatter
 
