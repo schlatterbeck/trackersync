@@ -32,6 +32,9 @@ from __future__ import absolute_import
 from trackersync import jira_sync
 from trackersync import kpmwssync
 
+allowed_chars = \
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
+
 KPM_USERNAME   = 'user'
 KPM_SITE       = 'https://ws-gateway-cert.volkswagenag.com'
 KPM_WS         = KPM_SITE + '/PP/QM/GroupProblemManagementService/V3'
@@ -575,6 +578,14 @@ KPM_ATTRIBUTES = \
         , remote_name    = 'SupplierVersionOk'
         , join_multilink = True
         , only_assigned  = True
+        )
+    , jira_sync.Sync_Attribute_To_Local_Multistring
+        ( local_name    = 'labels'
+        , remote_name   =
+            'AdditionalCriteriaList.AdditionalCriteria.description'
+        , prefix        = 'KPM-criteria-'
+        , l_only_update = True
+        , allowed_chars = allowed_chars
         )
     , jira_sync.Sync_Attribute_Files
         ( l_only_update = True
