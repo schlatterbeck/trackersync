@@ -1024,6 +1024,16 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
         self.do_only_default = False
     # end def __init__
 
+    def _replace (self, s):
+        new_rv = []
+        for c in s:
+            if c in self.allowed_chars:
+                new_rv.append (c)
+            else:
+                new_rv.append ('_')
+        return ''.join (new_rv)
+    # end def _replace
+
     def sync (self, syncer, id, remote_issue):
         if self.only_assigned and not remote_issue.is_assigned:
             return
@@ -1037,31 +1047,35 @@ class Sync_Attribute_To_Local_Multistring (Sync_Attribute_To_Local):
             and not remote_issue.get ('__readable__', True)
             ):
             rval = self.r_unreadable
-        if self.imap:
-            rval = self.imap.get (rval, self.r_default)
-        elif rval is None and self.r_default:
-            rval = self.r_default
+        if isinstance (rval, list):
+            if self.imap:
+                rval = [self.imap.get (r, r) for r in rval]
+            if self.allowed_chars:
+                rval = [self._replace (r) for r in rval]
+        else:
+            if self.imap:
+                rval = self.imap.get (rval, self.r_default)
+            elif rval is None and self.r_default:
+                rval = self.r_default
         # Can't sync None values to local
         if rval is None:
             return
         if isinstance (rval, string_types) and self.allowed_chars:
-                new_rv = []
-                for c in rval:
-                    if c in self.allowed_chars:
-                        new_rv.append (c)
-                    else:
-                        new_rv.append ('_')
-                rval = ''.join (new_rv)
+            rval = self._replace (rval)
         lv = syncer.get (id, self.name)
         if isinstance (lv, list):
             lv = list (sorted (lv))
+            # Keep values without our prefix
             rv = [k for k in lv if not k.startswith (self.prefix)]
         else:
             assert not rv
             rv = []
-        if self.prefix and not isinstance (rval, str):
-            rval = str (rval)
-        rv.append (self.prefix + rval)
+        if self.prefix:
+            if isinstance (rval, list):
+                rval = [self.prefix + r for r in rval]
+            else:
+                rval = [self.prefix + str (rval)]
+        rv.extend (rval)
         rv = list (sorted (rv))
         if self.no_sync_necessary (lv, rv, remote_issue):
             return

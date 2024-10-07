@@ -443,25 +443,6 @@ class Problem (tracker_sync.Remote_Issue):
         return dt.strftime ('%Y-%m-%d-%H.%M.%S.%f')
     # end def convert_date
 
-    def file_attachments (self, name = None):
-        if self.attachments is None:
-            self.attachments = []
-            for d in self.kpm.document_list (self):
-                if d ['Suffix']:
-                    name = '.'.join ((d ['Name'], d ['Suffix']))
-                else:
-                    name = d ['Name']
-                f = KPM_File_Attachment \
-                    ( self
-                    , id          = d ['DocumentId']
-                    , name        = name
-                    , permission  = d ['AccessRight']
-                    , description = d ['Description']
-                    )
-                self.attachments.append (f)
-        return self.attachments
-    # end def file_attachments
-
     def create (self):
         """ Create new remote issue
         """
@@ -554,6 +535,46 @@ class Problem (tracker_sync.Remote_Issue):
             rv = rv.replace ('\xa0', ' ')
         return self.__super.equal (lv, rv)
     # end def equal
+
+    def file_attachments (self, name = None):
+        if self.attachments is None:
+            self.attachments = []
+            for d in self.kpm.document_list (self):
+                if d ['Suffix']:
+                    name = '.'.join ((d ['Name'], d ['Suffix']))
+                else:
+                    name = d ['Name']
+                f = KPM_File_Attachment \
+                    ( self
+                    , id          = d ['DocumentId']
+                    , name        = name
+                    , permission  = d ['AccessRight']
+                    , description = d ['Description']
+                    )
+                self.attachments.append (f)
+        return self.attachments
+    # end def file_attachments
+
+    def get (self, name, default = None):
+        try:
+            return self [name]
+        except KeyError:
+            pass
+        if name is None or not '.' in name:
+            return default
+        n, r = name.rsplit ('.', 1)
+        try:
+            v = self [n]
+        except KeyError:
+            return default
+        if isinstance (v, list):
+            if not len (v):
+                return v
+            if isinstance (v [0], dict):
+                v = [k [r] for k in v]
+                return v
+        return default
+    # end def get
 
     def get_old_message_keys (self, syncer):
         for typ in Process_Steps.step_map:
