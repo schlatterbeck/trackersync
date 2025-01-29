@@ -61,6 +61,20 @@ try:
 except ImportError:
     Pkcs12Adapter = None
 
+sanitize_dict = dict.fromkeys (range (0x20))
+for k in b'\r\n\t':
+    del sanitize_dict [k]
+
+def sanitize (s):
+    """ Sanitize strings which should be sent via XML: It seems e.g.
+        Jira accepts many control characters that are not serializable
+        to XML. The one we encountered so far is a vertical tab \0b.
+    >>> sanitize ('abcdef\\x00\\x01\\x02\\x0b\\r\\n\\x08\\x09\\x1f\x20huhu')
+    'abcdef\\r\\n\\t huhu'
+    """
+    return s.translate (sanitize_dict) 
+# end def sanitize
+
 class Process_Steps:
     """ Additional information about problem that is carried in
         'process steps' data structure in KPM.
@@ -496,8 +510,8 @@ class Problem (tracker_sync.Remote_Issue):
             ( ExternalProblemNumber = l_id
             , Workflow              = self.get ('Workflow')
             , Rating                = nv ['Rating']
-            , Description           = nv ['Description']
-            , ShortText             = nv ['ShortText']
+            , Description           = sanitize (nv ['Description'])
+            , ShortText             = sanitize (nv ['ShortText'])
             , Origin                = orig
             , Creator               = creat
             , Coordinator           = coord
@@ -879,7 +893,7 @@ class KPM_WS (Log, Lock_Mixin):
             r    = self.client.service.AddNotice \
                 ( UserAuthentification = self.auth
                 , ProblemNumber        = problem.ProblemNumber
-                , Notice               = msg.content
+                , Notice               = sanitize (msg.content)
                 , _soapheaders         = head
                 )
             err = self.check_error ('AddNotice', r)
@@ -898,7 +912,7 @@ class KPM_WS (Log, Lock_Mixin):
             r    = self.client.service.AddSupplierQuestion \
                 ( UserAuthentification = self.auth
                 , ProblemNumber        = problem.ProblemNumber
-                , SupplierQuestion     = msg.content
+                , SupplierQuestion     = sanitize (msg.content)
                 , _soapheaders         = head
                 )
             err = self.check_error ('AddSupplierQuestion', r)
