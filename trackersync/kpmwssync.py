@@ -871,6 +871,12 @@ class KPM_WS (Log, Lock_Mixin):
                 )
             err = self.check_error ('AddNotice', r)
         elif typ == 'Rückfrage':
+            # FIXME: We should check for the action being present in
+            # problem.allowed_actions (see above for ADD_NOTICE).
+            # The string from the error message when this fails is:
+            # Communication: AddSupplierQuestion: Error: The user has no
+            # permission to execute action: ADD_SUPPLIER_QUESTION
+            # So the string *probably* is 'ADD_SUPPLIER_QUESTION'
             self.log.info \
                 ( 'Allowed actions during supplier question: %s'
                 % problem.allowed_actions
