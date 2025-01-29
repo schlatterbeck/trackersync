@@ -252,6 +252,12 @@ class Config (Config_File):
             # query parameters for a query URL for the local tracker
             # used (e.g. jira).
             , LOCAL_QUERY         = {}
+            # This is a limit *in KPM*, so it should typically *not* be
+            # changed unless something in KPM changes. If a file
+            # attachment is too large, we only get 'Internal Error' back
+            # from KPM, so it makes more sense to check up front the
+            # size before trying.
+            , KPM_MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024 # 10MB
             )
     # end def __init__
 
@@ -832,21 +838,28 @@ class KPM_WS (Log, Lock_Mixin):
             self.log.error \
                 ('No permission to add document for %s' % issue.id)
             return
+        leng = len (doc.content)
+        if leng > self.cfg.KPM_MAX_ATTACHMENT_SIZE:
+            self.log.error \
+                ( 'Document %s is too large for KPM (%s > %s)'
+                % (doc.name, leng, self.cfg.KPM_MAX_ATTACHMENT_SIZE)
+                )
+            return
         head = self.header.header ('AddDocumentRequest')
         name, suffix = os.path.splitext (doc.name)
         # Max len of suffix is 4 and we don't want leading dots
         suffix = suffix.lstrip ('.')[:4]
-        doc = self.fac.Document \
+        kpmdoc = self.fac.Document \
             ( AccessRight          = "0"
             , Name                 = name
-            , Size                 = len (doc.content)
+            , Size                 = leng
             , Suffix               = suffix
             , Data                 = doc.content
             )
         ans = self.client.service.AddDocument \
             ( UserAuthentification = self.auth
             , ProblemNumber        = issue.id
-            , Document             = doc
+            , Document             = kpmdoc
             , _soapheaders         = head
             )
         if self.check_error ('AddDocument', ans):
