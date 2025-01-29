@@ -856,6 +856,7 @@ class KPM_WS (Log, Lock_Mixin):
 
     def add_message (self, problem, msg, typ = 'Aussage'):
         kpm_attribute = Process_Steps.step_map [typ]
+        err = 0
         if typ == 'Aussage':
             if 'ADD_NOTICE' not in problem.allowed_actions:
                 self.log.error \
@@ -868,8 +869,12 @@ class KPM_WS (Log, Lock_Mixin):
                 , Notice               = msg.content
                 , _soapheaders         = head
                 )
-            self.check_error ('AddNotice', r)
+            err = self.check_error ('AddNotice', r)
         elif typ == 'Rückfrage':
+            self.log.info \
+                ( 'Allowed actions during supplier question: %s'
+                % problem.allowed_actions
+                )
             head = self.header.header ('AddSupplierQuestionRequest')
             r    = self.client.service.AddSupplierQuestion \
                 ( UserAuthentification = self.auth
@@ -877,10 +882,13 @@ class KPM_WS (Log, Lock_Mixin):
                 , SupplierQuestion     = msg.content
                 , _soapheaders         = head
                 )
-            self.check_error ('AddSupplierQuestion', r)
+            err = self.check_error ('AddSupplierQuestion', r)
         else:
             raise NotImplementedError \
                 ('ProcessStepTypeDescription "%s" not implemented' % typ)
+        if err:
+            self.log.error ("add_message failed for %s" % problem.id)
+            return
         id = r ['ProcessStepId']
         id = self.fix_process_step_date (id)
         d = getattr (problem, kpm_attribute)
