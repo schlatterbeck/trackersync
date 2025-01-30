@@ -325,7 +325,7 @@ class Syncer (tracker_sync.Syncer):
     ext_names = dict.fromkeys \
         (('ext_attributes', 'ext_id', 'ext_status', 'ext_tracker'))
 
-    def __init__ (self, remote_name, attributes, opt):
+    def __init__ (self, remote_name, attributes, opt, **kw):
         # Check if url contains username/password part
         url = opt.url
         if '@' not in url:
@@ -341,7 +341,7 @@ class Syncer (tracker_sync.Syncer):
         self.tracker         = self.srv.lookup ('ext_tracker', remote_name)
         self.attachments     = None
         # This initializes schema and already need server connection
-        self.__super.__init__ (remote_name, attributes, opt)
+        self.__super.__init__ (remote_name, attributes, opt, **kw)
     # end def __init__
 
     def compute_schema (self):

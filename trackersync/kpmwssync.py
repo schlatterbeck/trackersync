@@ -759,25 +759,25 @@ class KPM_WS (Log, Lock_Mixin):
     def __init__ \
         ( self
         , cfg
-        , timeout = 300
-        , verbose = False
-        , debug   = False
-        , lock    = None
+        , opt
         , dry_run = False
         , ** kw
         ):
         self.cfg      = cfg
+        self.opt      = opt
         self.cert     = cfg.KPM_CERTPATH
         self.key      = cfg.KPM_KEYPATH
         self.wsdl     = cfg.KPM_WSDL
         self.url      = cfg.KPM_WS
-        self.timeout  = timeout
-        self.verbose  = verbose
-        self.debug    = debug
+        self.timeout  = opt.timeout
+        self.verbose  = opt.verbose
+        self.debug    = opt.debug
         self.dry_run  = dry_run
         self.session  = requests.Session ()
-        if timeout:
-            self.session.timeout = timeout
+        if 'log_level' not in kw:
+            kw ['log_level'] = getattr (logging, opt.log_level.upper ())
+        if self.timeout:
+            self.session.timeout = self.timeout
         if cfg.KPM_PKCS12_PATH:
             if not Pkcs12Adapter:
                 raise RuntimeError \
@@ -791,7 +791,7 @@ class KPM_WS (Log, Lock_Mixin):
         else:
             self.session.cert = (self.cert, self.key)
         transport   = Transport \
-            (session = self.session, operation_timeout = timeout)
+            (session = self.session, operation_timeout = self.timeout)
         self.client = Client (self.wsdl, transport = transport)
         self.client.settings.strict = False
         self.fac    = self.client.type_factory ('ns0')
@@ -799,10 +799,15 @@ class KPM_WS (Log, Lock_Mixin):
             (UserId = self.cfg.KPM_USERNAME)
         self.adr    = self.fac.Address \
             (OrganisationalUnit = self.cfg.KPM_OU, Plant = self.cfg.KPM_PLANT)
-        if lock:
-            self.lockfile = lock
+        if opt.lock_name:
+            self.lockfile = opt.lock_name
         self.header = KPM_Header (stage = self.cfg.KPM_STAGE)
         self.__super.__init__ (** kw)
+        if opt.log_file:
+            handler = logging.FileHandler (opt.log_file)
+            level   = getattr (logging, opt.file_log_level.upper ())
+            handler.setLevel (level)
+            self.log.addHandler (handler)
     # end def __init__
 
     def __iter__ (self):
@@ -1193,9 +1198,7 @@ def wstest ():
 
     kpm = KPM_WS \
         ( cfg     = cfg
-        , verbose = opt.verbose
-        , debug   = opt.debug
-        , lock    = opt.lock_name
+        , opt     = opt
         , dry_run = True
         )
     head = KPM_Header (stage = 'Production')
@@ -1236,6 +1239,13 @@ def main ():
         , default = False
         )
     cmd.add_argument \
+        ( "--file-log-level"
+        , help    = "Loglevel for logging to file, default=%(default)s,"
+                    " this is only relevant with --log-file option"
+        , default = 'INFO'
+        , choices = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
+        )
+    cmd.add_argument \
         ( "--issue-type"
         , help    = "Issue type of local tracker"
         )
@@ -1248,11 +1258,15 @@ def main ():
         , help    = "Local tracker, one of %s, default: jira"
                   % ', '.join (local_trackers.keys ())
         )
-    loglevels = set (('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'))
+    cmd.add_argument \
+        ( "--log-file"
+        , help    = "Log to file in addtion to syslog"
+        )
     cmd.add_argument \
         ( "--log-level"
         , help    = "Loglevel for logging backend, default=%(default)s"
         , default = 'INFO'
+        , choices = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
         )
     cmd.add_argument \
         ( "-M", "--no-mangle-filenames"
@@ -1331,14 +1345,7 @@ def main ():
                     "dangerous, you should not have two instances of "
                     "kpmsync writing to KPM."
         )
-    opt     = cmd.parse_args ()
-    if opt.log_level.upper () not in loglevels:
-        print \
-            ( "Error setting log-level, allowed are: %s"
-            % ','.join (sorted (loglevels))
-            )
-        sys.exit (1)
-    log_level = getattr (logging, opt.log_level.upper ())
+    opt       = cmd.parse_args ()
     config    = Config.config
     cfgpath   = Config.path
     if opt.config:
@@ -1347,11 +1354,7 @@ def main ():
     cfg = Config (path = cfgpath, config = config)
     kpm = KPM_WS \
         ( cfg       = cfg
-        , verbose   = opt.verbose
-        , debug     = opt.debug
-        , lock      = opt.lock_name
-        , timeout   = opt.timeout
-        , log_level = log_level
+        , opt       = opt
         , dry_run   = opt.dry_run or opt.remote_dry_run
         )
     url       = opt.url         or cfg.get ('LOCAL_URL', None)
@@ -1370,7 +1373,7 @@ def main ():
     if url and cfg.get ('KPM_ATTRIBUTES'):
         try:
             syncer = local_trackers [opt.local_tracker] \
-                ('KPM', cfg.KPM_ATTRIBUTES, opt, cfg, log_level = log_level)
+                ('KPM', cfg.KPM_ATTRIBUTES, opt, cfg, log = kpm.log)
         except:
             kpm.log_exception ()
             kpm.log.error ("Exception before starting sync")

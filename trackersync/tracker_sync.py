@@ -1413,6 +1413,9 @@ class Trackersync_Syncer (Log):
         self.oldremote       = {}
         self.update_state    = False # for migration of old roundup schema
         self.__super.__init__ (**kw)
+        # Override log and do not use the inherited one.
+        if 'log' in kw:
+            self.log = kw ['log']
         self.log.info         ('Starting sync')
         self.compute_schema   ()
         self.reinit           ()
