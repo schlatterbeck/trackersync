@@ -1023,8 +1023,9 @@ class KPM_WS (Log, Lock_Mixin):
             self.log.info ("No right to get problem data for %s" % id)
             return
         pss = Process_Steps (self, id, actions)
-        if not pss and old_rec and old_rec.get ('SupplierResponse'):
+        if not pss and old_rec:
             old_rec ['__readable__'] = False
+            return
         for rl in Process_Steps.step_map:
             recname = Process_Steps.step_map [rl]
             rec [recname] = {}
@@ -1412,6 +1413,15 @@ def main ():
                     if problem is None or problem.id is None:
                         syncer.log.warn \
                             ('KPM issue "%s" not found/readable' % id)
+                        # This attempts to set __readable__ and
+                        # associated sync rules
+                        rec = syncer.oldremote.copy ()
+                        rec ['__readable__'] = False
+                        problem = Problem (kpm, rec)
+                        problem.allowed_actions = set ()
+                        # Sync *only* the __readable__ attribute
+                        problem.attributes ['__readable__'] = True
+                        problem.sync (syncer)
                     else:
                         problem.is_assigned = False
                         syncer.log.warn ('Processing KPM issue "%s"' % id)
