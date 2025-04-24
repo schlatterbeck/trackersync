@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018-23 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-25 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -1761,7 +1761,10 @@ class Trackersync_Syncer (Log):
                 continue
             if a.strip_prefix:
                 remote_issue.strip_prefix (a.remote_name, a.strip_prefix)
-            if not attr or a.remote_name in attr:
+            # Perform local checks in any case even if attributes are
+            # restricted to a set.
+            check = Sync_Attribute_Check
+            if not attr or a.remote_name in attr or isinstance (a, check):
                 self.log_debug \
                     ( "sa: id:%s %s %s %s"
                     % (id, a.__class__.__name__, a.name, a.remote_name)
