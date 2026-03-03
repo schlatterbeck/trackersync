@@ -544,7 +544,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         self.log.debug ('Jira getitem send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300:
-            self.raise_error (r, "Filter %s %s" % (cls, id))
+            self.raise_error (r, "Filter %s %s" % (classname, id))
         j = r.json ()
         self.log.debug ('Jira receive: (content not logged)')
         return j ['issues']
