@@ -560,7 +560,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         jql.update (searchdict)
         url = self.url3 + '/search/jql'
         self.log.debug ('Jira getitem send POST to %s' % url)
-        jql = ' AND '.join ("%s = %s" % (k, v) for k, v in jql.items ())
+        jql = ' AND '.join ('%s = "%s"' % (k, v) for k, v in jql.items ())
         d.update (jql = jql)
         result = []
         while True:
