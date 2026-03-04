@@ -326,10 +326,20 @@ class Jira_Syncer (tracker_sync.Syncer):
     Local_Issue_Class = Jira_Local_Issue
     File_Attachment_Class = Jira_File_Attachment
     raise_error = Local_Issue_Class.raise_error
+    acpt_header = { 'accept': 'application/json' }
     json_header = { 'content-type': 'application/json' }
 
     def __init__ (self, remote_name, attributes, opt, cfg, **kw):
         self.url          = opt.url
+        # We build a version 3 api URL, this way we can replace the
+        # version 2 api bit-by-bit with version 3 calls.
+        if self.url.endswith ('2'):
+            self.url3 = self.url [:-1] + '3'
+        elif self.url.endswith ('2/'):
+            self.url3 = self.url [:-2] + '3'
+        else:
+            raise ValueError \
+                ('Expected a jira version 2 api url, got "%s%' % self.url)
         self.session      = requests.Session ()
         self.session.auth = (opt.local_username, opt.local_password)
         self.item_cache   = {}
@@ -374,7 +384,7 @@ class Jira_Syncer (tracker_sync.Syncer):
     # end def parse_schema_entry
 
     def compute_schema (self):
-        u = self.url + '/' + 'field'
+        u = self.url3 + '/' + 'field'
         self.log.debug ('Jira schema send GET: %s' % u)
         r = self.session.get (u)
         if not r.ok or not 200 <= r.status_code < 300:
@@ -527,27 +537,45 @@ class Jira_Syncer (tracker_sync.Syncer):
     # end def check_method
 
     def filter (self, classname, searchdict):
-        """ For now only filtering for issues is supported
+        """ Filter classname by given search dict
+            For now only filtering for issues is supported.
+            Note that this uses an API that needs repeated queries if
+            the number of query results exceeds a certain threshold.
+            So in the future we may make this an iterator.
         """
         assert classname == 'issue'
-        d = dict (expand = 'schema,names')
-        d.update (maxResults = '99999')
+        d = dict (fields = ['*all'])
+        # New API can return max 5000 results, so we need to iterate
+        # over returned results. The default is 50, we keep it.
+        # We can set this to '1' for testing the iteration below.
+        d.update (maxResults = '50')
+        jql = {}
         if self.cfg.LOCAL_ISSUETYPE:
-            d.update (issuetype = self.cfg.LOCAL_ISSUETYPE)
+            jql.update (issuetype = self.cfg.LOCAL_ISSUETYPE)
         if self.cfg.LOCAL_PROJECT:
-            d.update (project = self.cfg.LOCAL_PROJECT)
+            jql.update (project = self.cfg.LOCAL_PROJECT)
         # The following already *is* a dict:
         if self.cfg.LOCAL_QUERY:
-            d.update (self.cfg.LOCAL_QUERY)
-        d.update (searchdict)
-        u = self.url + '/search?' + urlencode (d)
-        self.log.debug ('Jira getitem send GET: %s' % u)
-        r = self.session.get (u)
-        if not r.ok or not 200 <= r.status_code < 300:
-            self.raise_error (r, "Filter %s %s" % (classname, id))
-        j = r.json ()
+            jql.update (self.cfg.LOCAL_QUERY)
+        jql.update (searchdict)
+        url = self.url3 + '/search/jql'
+        self.log.debug ('Jira getitem send POST to %s' % url)
+        jql = ' AND '.join ("%s = %s" % (k, v) for k, v in jql.items ())
+        d.update (jql = jql)
+        result = []
+        while True:
+            self.log.debug ('Jira getitem send POST: %s' % d)
+            r = self.session.post (url, json = d)
+            if not r.ok or not 200 <= r.status_code < 300:
+                self.raise_error (r, "Filter %s" % (classname))
+            j = r.json ()
+            result.extend (j ['issues'])
+            #self.log.debug ('json: %s' % j)
+            if j ['isLast']:
+                break
+            d ['nextPageToken'] = j ['nextPageToken']
         self.log.debug ('Jira receive: (content not logged)')
-        return j ['issues']
+        return result
     # end def filter
 
     def format_multilink (self, attrname, values, fancy = False):
