@@ -75,6 +75,24 @@ def sanitize (s):
     return s.translate (sanitize_dict) 
 # end def sanitize
 
+class Logging_Transport (Transport):
+    def __init__ (self, logname, *args, **kw):
+        self.logfile = open (logname, 'w')
+        return super ().__init__ (*args, **kw)
+    # end def __init__
+
+    def post (self, address, message, headers):
+        self.xml_request = message.decode ('utf-8')
+        print ('Request:', file = self.logfile)
+        print (self.xml_request, file = self.logfile)
+        response = super().post(address, message, headers)
+        self.response = response
+        print ('Response:', file = self.logfile)
+        print (self.response, file = self.logfile)
+        self.logfile.flush ()
+        return response
+# end class Logging_Transport
+
 class Process_Steps:
     """ Additional information about problem that is carried in
         'process steps' data structure in KPM.
@@ -790,8 +808,15 @@ class KPM_WS (Log, Lock_Mixin):
             self.session.mount (prefix, adapter)
         else:
             self.session.cert = (self.cert, self.key)
-        transport   = Transport \
-            (session = self.session, operation_timeout = self.timeout)
+        if opt.log_xml_to:
+            transport = Logging_Transport \
+                ( logname = opt.log_xml_to
+                , session = self.session
+                , operation_timeout = self.timeout
+                )
+        else:
+            transport = Transport \
+                (session = self.session, operation_timeout = self.timeout)
         self.client = Client (self.wsdl, transport = transport)
         self.client.settings.strict = False
         self.fac    = self.client.type_factory ('ns0')
@@ -1268,6 +1293,10 @@ def main ():
         , help    = "Loglevel for logging backend, default=%(default)s"
         , default = 'INFO'
         , choices = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
+        )
+    cmd.add_argument \
+        ( "--log-xml-to"
+        , help    = "Log Zeep (SOAP) XML data to given file"
         )
     cmd.add_argument \
         ( "-M", "--no-mangle-filenames"
