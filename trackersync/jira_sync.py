@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018-25 Dr. Ralf Schlatterbeck Open Source Consulting.
+# Copyright (C) 2018-26 Dr. Ralf Schlatterbeck Open Source Consulting.
 # Reichergasse 131, A-3411 Weidling.
 # Web: http://www.runtux.com Email: office@runtux.com
 # All rights reserved
@@ -560,7 +560,7 @@ class Jira_Syncer (tracker_sync.Syncer):
         jql.update (searchdict)
         url = self.url3 + '/search/jql'
         self.log.debug ('Jira getitem send POST to %s' % url)
-        jql = ' AND '.join ('%s = "%s"' % (k, v) for k, v in jql.items ())
+        jql = ' AND '.join ('"%s" = "%s"' % (k, v) for k, v in jql.items ())
         d.update (jql = jql)
         result = []
         while True:
