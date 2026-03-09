@@ -89,6 +89,7 @@ class Logging_Transport (Transport):
         self.response = response
         print ('Response:', file = self.logfile)
         print (self.response, file = self.logfile)
+        print (self.response.content.decode ('utf-8'), file = self.logfile)
         self.logfile.flush ()
         return response
 # end class Logging_Transport
