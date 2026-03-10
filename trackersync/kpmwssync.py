@@ -1147,7 +1147,9 @@ class KPM_WS (Log, Lock_Mixin):
             d ['Status'] = problem.SupplierStatus
         except AttributeError:
             pass
-        d ['VersionOk'] = problem.newvalues.get ('SupplierVersionOk', None)
+        # This needs to be the problem.SupplierVersionOk not the one from
+        # problem.newvalues, the latter is empty if unchanged.
+        d ['VersionOk'] = getattr (problem, 'SupplierVersionOk', None)
         sr = self.fac.SupplierResponse (** d)
         h = self.header.header ('AddSupplierResponseRequest')
         d = dict \
