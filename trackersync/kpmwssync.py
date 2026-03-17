@@ -1066,6 +1066,7 @@ class KPM_WS (Log, Lock_Mixin):
                     # retrieved via GetDevelopmentProblemData
                     combined_k = 'Supplier' + k
                     if combined_k not in rec:
+                        self.log.info ('%s: %s' % (combined_k, sr [k]))
                         rec [combined_k] = sr [k]
         if 'Analysis_All' in pss.latest:
             rec ['Analysis'] = pss.latest ['Analysis_All']['Text']
@@ -1133,11 +1134,10 @@ class KPM_WS (Log, Lock_Mixin):
         nv = set (problem.newvalues.keys ())
         # Only update if at least one of the attributes is in newvalues
         if response_attrs & nv:
-            self.log_verbose \
-                ('Updating supplier response for "%s"' % problem.id)
+            self.log.info ('Updating supplier response for "%s"' % problem.id)
             self.update_supplier_response (problem)
         else:
-            self.log_verbose \
+            self.log.info \
                 ('NOT updating supplier response for "%s"' % problem.id)
     # end def update
 
