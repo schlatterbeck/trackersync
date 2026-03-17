@@ -1133,7 +1133,12 @@ class KPM_WS (Log, Lock_Mixin):
         nv = set (problem.newvalues.keys ())
         # Only update if at least one of the attributes is in newvalues
         if response_attrs & nv:
+            self.log_verbose \
+                ('Updating supplier response for "%s"' % problem.id)
             self.update_supplier_response (problem)
+        else:
+            self.log_verbose \
+                ('NOT updating supplier response for "%s"' % problem.id)
     # end def update
 
     def update_supplier_response (self, problem):
