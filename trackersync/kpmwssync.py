@@ -89,7 +89,11 @@ class Logging_Transport (Transport):
         self.response = response
         print ('Response:', file = self.logfile)
         print (self.response, file = self.logfile)
-        print (self.response.content.decode ('utf-8'), file = self.logfile)
+        try:
+            print (self.response.content.decode ('utf-8'), file = self.logfile)
+        except UnicodeDecodeError:
+            print ('UTF-8 Decoding of response failed:', file = self.logfile)
+            print (repr (self.response.content), file = self.logfile)
         self.logfile.flush ()
         return response
 # end class Logging_Transport
