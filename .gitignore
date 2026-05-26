@@ -27,3 +27,4 @@ old*
 dist
 *venv
 *.egg-info
+.aider*
