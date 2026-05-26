@@ -529,11 +529,20 @@ class Problem (tracker_sync.Remote_Issue):
         kw = dict ((k, self.get (k)) for k in keys)
         # The explicitly listed items are probably required or at least
         # highly recommended.
+        # Serialize Description if it happens to be
+        # Atlassian Document Format (ADF)
+        desc = nv ['Description']
+        if isinstance (desc, str):
+            desc = sanitize (desc)
+        else:
+            assert isinstance (desc, dict)
+            adf  = jira_sync.ADF_Node (desc)
+            desc = adf.serialize ()
         prob = self.kpm.fac.DevelopmentProblem \
             ( ExternalProblemNumber = l_id
             , Workflow              = self.get ('Workflow')
             , Rating                = nv ['Rating']
-            , Description           = sanitize (nv ['Description'])
+            , Description           = desc
             , ShortText             = sanitize (nv ['ShortText'])
             , Origin                = orig
             , Creator               = creat

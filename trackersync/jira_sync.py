@@ -37,6 +37,7 @@ from   rsclib.autosuper     import autosuper
 from   rsclib.pycompat      import ustr, text_type
 from   trackersync          import tracker_sync
 from   urllib.parse         import urlencode
+from   math                 import log
 
 JSONDecodeError = json.decoder.JSONDecodeError
 
@@ -61,6 +62,89 @@ Sync_Attribute_To_Local_Multilink_Default = \
     tracker_sync.Sync_Attribute_To_Local_Multilink_Default
 Sync_Attribute_To_Local_Multistring = \
     tracker_sync.Sync_Attribute_To_Local_Multistring
+
+class ADF_Node:
+    """ Atlassian Document Format (ADF) is a recursive json structure
+        representing a rich text format. It has different node types.
+        We get the python dict representation of the json.
+        There currently is only a serialize method to get plain text
+        (without text attributes).
+    """
+    inline = set (( 'date', 'emoji', 'hardBreak', 'inlineCard'
+                  , 'mention', 'status', 'text',  'mediaInline'
+                 ))
+    def __init__ (self, adf):
+        self.is_inline = False
+        self.attr      = {}
+        self.content   = []
+        for k in adf:
+            if k == 'content':
+                for item in adf [k]:
+                    self.content.append (ADF_Node (item))
+            else:
+                self.attr [k] = adf [k]
+        if self.type in self.inline:
+            self.is_inline = True
+            assert not self.content
+    # end def __init__
+
+    def __getattr__ (self, k):
+        try:
+            return self.attr [k]
+        except KeyError:
+            if k == 'attrs':
+                return {}
+            raise AttributeError (k)
+    # end def __getattr__
+
+    def serialize_content \
+        (self, indent = 0, ind_o = 0, fmt = '', head = '', tail = ''):
+        r = []
+        para_seen = False
+        pfx = ''
+        for i, c in enumerate (self.content):
+            if c.is_inline:
+                assert not fmt and not head
+            if fmt:
+                head = fmt % (i + self.list_offset)
+            if i and not c.is_inline:
+                pfx = ' ' * ind_o
+            s = c.serialize (indent) or ''
+            r.append (pfx + head + s + tail)
+        return ''.join (r)
+    # end def serialize_content
+
+    def serialize (self, indent = 0):
+        tail = head = None
+        if 'title' in self.attr:
+            head = self.title + '\n' + ' ' * indent
+        if self.type == 'paragraph':
+            tail = '\n'
+        if self.type == 'bulletList':
+            return self.serialize_content \
+                (indent + 2, ind_o = indent, head = '- ')
+        if self.type == 'orderedList':
+            n    = len (self.content)
+            nl   = int (log (n) / log (10)) + 1
+            fmt  = '%%%sd. ' % nl
+            idi  = nl + 2
+            self.list_offset = self.attrs.get ('order', 1)
+            return self.serialize_content \
+                (indent + idi, ind_o = indent, fmt = fmt)
+        if 'text' in self.attr:
+            return self.attr ['text']
+        elif self.content or head or tail:
+            assert 'text' not in self.attr
+            s = self.serialize_content (indent, ind_o = indent)
+            return (head or '') + s + (tail or '')
+        elif self.type == 'hardBreak':
+            return '\n' + ' ' * indent
+        elif self.type == 'date':
+            dt = datetime.fromtimestamp (int (self.attrs.get ('timestamp', 0)))
+            return dt.strftime ('%Y-%m-%dT%H:%M:%S')
+    # end def serialize
+
+# end class ADF_Node
 
 def jira_utctime (jiratime):
     """ Time with numeric timestamp converted to UTC.
