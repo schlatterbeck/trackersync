@@ -497,11 +497,11 @@ class Syncer (tracker_sync.Syncer):
     # end def oldsync_iter
 
     def get_oldvalues (self, remote_id):
-        """ Get the sync status (e.g., old properties of last sync of 
+        """ Get the sync status (e.g., old properties of last sync of
             remote issue)
             Must return the (local) id if found and set self.oldremote
             (dictionary of old property values from last sync)
-        """ 
+        """
         assert \
             (  'ext_tracker_state' in self.schema
             or 'ext_tracker' in self.schema ['issue']

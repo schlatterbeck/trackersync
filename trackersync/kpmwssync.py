@@ -72,7 +72,7 @@ def sanitize (s):
     >>> sanitize ('abcdef\\x00\\x01\\x02\\x0b\\r\\n\\x08\\x09\\x1f\x20huhu')
     'abcdef\\r\\n\\t huhu'
     """
-    return s.translate (sanitize_dict) 
+    return s.translate (sanitize_dict)
 # end def sanitize
 
 class Logging_Transport (Transport):

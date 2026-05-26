@@ -440,7 +440,7 @@ class Remote_Issue (Backend_Common):
                 ("Multilevel not implemented for strip_prefix")
         if  (   propname in self.record
             and propname not in self.newvalues
-            and v.startswith (prefix) 
+            and v.startswith (prefix)
             ):
             l = len (prefix)
             v = v [l:]
@@ -1437,7 +1437,7 @@ class Trackersync_Syncer (Log):
     def attach_file (self, id, file, name):
         return self.localissues [id].attach_file (file, name)
     # end def attach_file
-    
+
     def compute_schema (self):
         """ Compute the schema. The schema is a dictionary of
             dictionaries. The top-level dictionary is indexed by class
@@ -1587,7 +1587,7 @@ class Trackersync_Syncer (Log):
             The path is a dot-separated transitive property.
             We return the value of the property or the default value for
             this classname and path.
-            
+
             Note that we convert date values to a string representation
             of the form %Y-%m-%d.%H:%M:%S where seconds are with 3
             decimal places, e.g.  2015-09-06.13:51:38.840
@@ -1911,7 +1911,7 @@ class Trackersync_Syncer (Log):
 
     def update_aux_classes (self, id, remote_id, remote_issue, classdict):
         """ Auxiliary classes, e.g. for KPM an item that links to issue
-            and holds additional attributes. 
+            and holds additional attributes.
             All of those must have a Link named 'issue' to the current issue.
             update_sync_db must come at the start of update_aux_classes
             because it may update attributes that are written by
