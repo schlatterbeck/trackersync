@@ -336,8 +336,11 @@ class Jira_Backend (autosuper):
             return
         f.dirty = True
         if self.attachments is None:
-            self.attachments = []
+            self.attachments  = []
+            self.file_by_name = {}
         self.attachments.append (f)
+        assert f.name not in self.file_by_name
+        self.file_by_name [f.name] = f
         self.dirty = True
     # end def attach_file
 
@@ -962,7 +965,8 @@ class Jira_Syncer (tracker_sync.Syncer):
         # May be None
         if self.localissues [id].attachments:
             for f in self.localissues [id].attachments:
-                if f.dirty:
+                # Only create if dirty and not yet created (no id)
+                if f.dirty and not f.id:
                     f.create ()
     # end def update_aux_classes
 

@@ -179,7 +179,7 @@ class Backend_Common (Log):
             use the default constructor.
             The file is *not* persisted yet, this is done by the create
             method of the generated file.
-            Note that some backend my need additionale attributes of a
+            Note that some backend may need additionale attributes of a
             file and will therefore re-implement this method and the
             corresponding File_Attachment class.
             Also persisting this is left to the backend.
